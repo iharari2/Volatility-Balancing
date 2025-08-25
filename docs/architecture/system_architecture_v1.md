@@ -18,7 +18,7 @@
 ```mermaid
 flowchart LR
   subgraph Frontend
-    WEB[Next.js App]\\nConfig / Positions / Timeline]
+    WEB["Next.js App\\nConfig / Positions / Timeline"]
   end
 
   subgraph Identity
@@ -204,4 +204,3 @@ Rel(api, broker, "Orders / Fills")
 
 ## 13) Non‑Goals (Next Versions)
 - Multi‑asset portfolio allocation; dynamic thresholds; DRIP; TWAP; tax‑lot optimization.
-
