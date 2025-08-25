@@ -80,23 +80,24 @@ flowchart LR
 ## 3) Core Sequence (Tick → Trade)
 ```mermaid
 sequenceDiagram
+  autonumber
   participant MD as Market Data
-  participant DEC as Decision Engine (Lambda)
-  participant ORD as Order Manager (Lambda)
+  participant DEC as Decision Engine
+  participant ORD as Order Manager
   participant BRK as Brokerage API
   participant DB as Postgres
 
-  MD->>DEC: PriceEvent{symbol, last, mid, age}
-  DEC->>DB: Load Position & Config
-  DEC->>DEC: Evaluate triggers; size order; trim to guardrails
-  alt Below min_notional or invalid
-    DEC-->>DB: Write Event(reason="skip")
+  MD->>DEC: PriceEvent (symbol,last,mid,age)
+  DEC->>DB: Load position and config
+  DEC->>DEC: Evaluate triggers / size order / trim guardrails
+  alt Skip (min_notional or invalid)
+    DEC-->>DB: Event: reason=skip
   else Send order
-    DEC-->>DB: Write Event(order_intent)
-    DEC->>ORD: OrderIntent{idempotency_key}
-    ORD->>BRK: Submit order (market/limit)
-    BRK-->>ORD: Fill{qty, price}
-    ORD->>DB: Update cash/fees/anchor; persist Events
+    DEC-->>DB: Event: order_intent
+    DEC->>ORD: OrderIntent (idempotency_key)
+    ORD->>BRK: Submit order (market or limit)
+    BRK-->>ORD: Fill (qty, price)
+    ORD->>DB: Update cash, fees, anchor; write events
   end
 ```
 
