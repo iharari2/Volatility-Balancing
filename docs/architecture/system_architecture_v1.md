@@ -18,7 +18,7 @@
 ```mermaid
 flowchart LR
   subgraph Frontend
-    WEB["Next.js App\\nConfig / Positions / Timeline"]
+    WEB["Next.js App\nConfig / Positions / Timeline"]
   end
 
   subgraph Identity
@@ -28,7 +28,7 @@ flowchart LR
   WEB -->|OIDC| COG
   WEB -->|HTTPS JSON| APIG[API Gateway]
 
-  subgraph Backend (Serverless FastAPI)
+  subgraph Backend["Backend - Serverless FastAPI"]
     API[FastAPI Router]
     DEC[Decision Engine]
     ORD[Order Manager]
@@ -37,15 +37,15 @@ flowchart LR
   end
 
   APIG --> API
-  API -->|emit events| EVT(EventBridge Bus)
+  API -->|emit events| EVT["EventBridge Bus"]
   EVT -->|PriceEvent| DEC
   EVT -->|ExDivEvent| DIV
   DEC -->|OrderIntent| ORD
 
-  subgraph Async Queues
-    Q1[SQS: price-events]
-    Q2[SQS: orders]
-    Q3[SQS: dividends]
+  subgraph Async_Queues["Async Queues"]
+    Q1["SQS: price-events"]
+    Q2["SQS: orders"]
+    Q3["SQS: dividends"]
   end
 
   EVT --> Q1
