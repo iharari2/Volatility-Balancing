@@ -18,7 +18,7 @@
 ```mermaid
 flowchart LR
   subgraph Frontend
-    WEB[Next.js App]\nConfig / Positions / Timeline
+    WEB[Next.js App]\\nConfig / Positions / Timeline
   end
 
   subgraph Identity
