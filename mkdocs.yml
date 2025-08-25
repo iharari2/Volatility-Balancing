@@ -1,0 +1,9 @@
+site_name: Volatility Balancing Docs
+theme:
+  name: material
+  features: [navigation.tabs, navigation.sections, content.code.copy]
+nav:
+  - Home: docs/index.md
+  - Dev:
+      - Test Plan: docs/dev/test-plan.md
+      - CI/CD: docs/dev/ci-cd.md

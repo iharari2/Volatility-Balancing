@@ -1,0 +1,72 @@
+cp scripts/bootstrap_docs.sh scripts/bootstrap_docs.sh.bak
+cat > scripts/bootstrap_docs.sh <<'BASH'
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_DIR="${1:-.}"
+BRANCH="${2:-docs/bootstrap}"
+
+cd "$REPO_DIR"
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo "Not a git repo"; exit 1; }
+
+mkdir -p docs/{product,architecture,adr,runbooks,api} .github scripts .github/workflows
+
+# ---------- docs/README.md ----------
+cat > docs/README.md <<'EOF_README'
+# Volatility Balancing — Docs Index
+Source of truth for specs. Changes land via Pull Request with reviewers: CTO (Architecture), PM (Product), QA (Testability).
+
+## Conventions
+Each file has front‑matter:
+---
+owner: <team-or-person>
+status: draft|review|approved|deprecated
+last_updated: YYYY-MM-DD
+related: []
+---
+Folders:
+- /product — PRDs & functional specs
+- /architecture — system/tech designs & API contracts
+- /adr — Architecture Decision Records
+- /runbooks — operational playbooks
+- /api — OpenAPI and API governance
+EOF_README
+
+# ---------- templates ----------
+cat > docs/product/PRD_TEMPLATE.md <<'EOF_PRD'
+---
+owner: PM Team
+status: draft
+last_updated: 2025-08-24
+related: []
+---
+# <Feature Name> — PRD
+## 1. Summary (What & Why)
+## 2. Goals / Non‑Goals
+## 3. User Stories & Acceptance Criteria
+## 4. Metrics
+## 5. UX Notes
+## 6. Risks & Compliance
+## 7. Open Questions
+EOF_PRD
+
+cat > docs/architecture/ARCH_TEMPLATE.md <<'EOF_ARCH'
+---
+owner: Platform Eng
+status: draft
+last_updated: 2025-08-24
+related: []
+---
+# <Feature Name> — Technical Design
+
+## 1. Overview
+## 2. Architecture Diagram
+```mermaid
+flowchart LR
+  WEB[Next.js] --> APIG[API Gateway]
+  APIG --> API[FastAPI]
+  API --> PG[(Postgres)]
+  API --> EVT(EventBridge)
+  EVT --> DEC[Decision Engine]
+  DEC --> ORD[Order Manager]
+  ORD --> BRK[Broker]

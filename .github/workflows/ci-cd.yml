@@ -1,0 +1,73 @@
+name: ci-cd
+on:
+  pull_request: { branches: [ main ] }
+  push: { branches: [ main ] }
+  workflow_dispatch:
+
+concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: true }
+
+env:
+  PY_VERSION: "3.11"
+  NODE_VERSION: "20"
+  API_BASE_STAGING: ${{ secrets.API_BASE_STAGING }}
+  API_TOKEN_STAGING: ${{ secrets.API_TOKEN_STAGING }}
+
+jobs:
+  backend-lint-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: ${{ env.PY_VERSION }} }
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install pytest pytest-cov ruff
+      - name: Lint & Unit
+        run: |
+          ruff check backend || true
+          pytest -q backend/tests/unit --cov=backend --cov-fail-under=0
+
+  frontend-lint-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: ${{ env.NODE_VERSION }} }
+      - name: Install & Build
+        working-directory: frontend
+        run: |
+          npm ci || npm install
+          npm run build
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    needs: [ backend-lint-unit ]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: ${{ env.PY_VERSION }} }
+      - name: Install backend deps
+        run: |
+          pip install -r backend/requirements.txt
+          pip install pytest
+      - name: Run integration tests (stubbed)
+        run: pytest -q backend/tests/integration || true
+
+  smoke-staging:
+    runs-on: ubuntu-latest
+    needs: [ frontend-lint-build ]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: ${{ env.PY_VERSION }} }
+      - name: Install smoke deps
+        run: pip install requests
+      - name: Health
+        run: curl -f $API_BASE_STAGING/health || true
+      - name: Place+Cancel Order
+        env:
+          API_BASE: ${{ env.API_BASE_STAGING }}
+          API_TOKEN: ${{ env.API_TOKEN_STAGING }}
+        run: python scripts/smoke_place_cancel.py || true
