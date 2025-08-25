@@ -87,17 +87,18 @@ sequenceDiagram
   participant BRK as Brokerage API
   participant DB as Postgres
 
-  MD->>DEC: PriceEvent (symbol,last,mid,age)
+  MD->>DEC: PriceEvent (symbol, last, mid, age)
   DEC->>DB: Load position and config
-  DEC->>DEC: Evaluate triggers / size order / trim guardrails
+  DEC->>DEC: Evaluate triggers, size order, trim guardrails
   alt Skip (min_notional or invalid)
-    DEC-->>DB: Event: reason=skip
+    DEC-->>DB: Event reason=skip
   else Send order
-    DEC-->>DB: Event: order_intent
-    DEC->>ORD: OrderIntent (idempotency_key)
+    DEC-->>DB: Event order_intent
+    DEC->>ORD: OrderIntent idempotency_key
     ORD->>BRK: Submit order (market or limit)
     BRK-->>ORD: Fill (qty, price)
-    ORD->>DB: Update cash, fees, anchor; write events
+    ORD->>DB: Update cash, fees, anchor
+    ORD->>DB: Persist events
   end
 ```
 
