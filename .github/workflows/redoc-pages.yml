@@ -1,0 +1,38 @@
+name: Redoc Pages
+on:
+  push:
+    paths:
+      - "docs/api/openapi.yaml"
+      - ".github/workflows/redoc-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm i -g redoc-cli@latest
+      - name: Generate Redoc HTML
+        run: |
+          mkdir -p site
+          redoc-cli bundle docs/api/openapi.yaml -o site/index.html
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with: { path: "site" }
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
