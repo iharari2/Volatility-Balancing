@@ -1,0 +1,113 @@
+openapi: 3.0.3
+info:
+  title: Volatility Balancing Trading API
+  version: 0.1.0
+  description: >
+    Early-stage API for semi-passive trading platform.
+    Covers evaluation, orders, events, and metrics.
+servers:
+  - url: https://api.volbalancing.dev
+paths:
+  /positions/{id}:
+    get:
+      summary: Get position card data
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Position details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Position"
+  /positions/{id}/evaluate:
+    post:
+      summary: Trigger evaluation for a position (internal/event-driven)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          description: Evaluation queued
+  /orders/callback:
+    post:
+      summary: Broker webhook for fills/cancels
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderCallback"
+      responses:
+        "200":
+          description: Acknowledged
+  /events:
+    get:
+      summary: Get event timeline for a position
+      parameters:
+        - name: position_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+  /metrics:
+    get:
+      summary: Get trading metrics
+      responses:
+        "200":
+          description: Metrics snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Metrics"
+components:
+  schemas:
+    Position:
+      type: object
+      properties:
+        id: { type: string }
+        symbol: { type: string }
+        price: { type: number }
+        anchor: { type: number }
+        next_action: { type: string }
+        projected_asset_pct: { type: number }
+    OrderCallback:
+      type: object
+      properties:
+        order_id: { type: string }
+        status: { type: string, enum: [filled, canceled, rejected] }
+        qty: { type: number }
+        price: { type: number }
+        commission_bps: { type: number }
+    Event:
+      type: object
+      properties:
+        id: { type: string }
+        position_id: { type: string }
+        type: { type: string }
+        message: { type: string }
+        created_at: { type: string, format: date-time }
+    Metrics:
+      type: object
+      properties:
+        slippage_bps: { type: number }
+        guardrail_time_pct: { type: number }
+        min_notional_skips: { type: integer }
+        turnover: { type: number }
+        fee_drag: { type: number }
