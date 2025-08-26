@@ -1,0 +1,13 @@
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-select = ["I"]      # import sorting
+ignore = ["E501"]          # line length handled by black
+fix = true
+
+[tool.ruff.lint.isort]
+known-first-party = ["backend"]
