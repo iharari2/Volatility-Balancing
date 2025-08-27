@@ -1,383 +1,211 @@
-# Volatility Balancing (MVP)
-Semi-passive, mean-reversion paper-trading platform on blue-chip equities.# Docs‑as‑Code Repo Bootstrap
+# Volatility Balancing — API Scaffold
 
-## Directory Layout
-
-## Repo layout
-- **/frontend** – web UI
-- **/backend** – FastAPI services (domain, ports, adapters, services, api)
-- **/infra** – IaC & deployment
-- **/scripts** – dev utilities
-- **/docs** – PRDs, architecture, ADRs, runbooks, OpenAPI
-
-### Docs
-- `/docs/product` – PRDs & acceptance criteria
-- `/docs/architecture` – designs, sequence diagrams, API contract docs
-- `/docs/adr` – Architecture Decision Records
-- `/docs/runbooks` – build/run/ops playbooks
-- `/docs/api` – OpenAPI specs + governance rules
-
-### Backend structure
-See `/backend/app` for domain/ports/adapters/services/api breakdown.
-
-```
-/docs
-  /product
-    PRD_TEMPLATE.md
-  /architecture
-    ARCH_TEMPLATE.md
-    SEQUENCE_EXAMPLE.md
-  /adr
-    ADR_TEMPLATE.md
-  /runbooks
-    RUNBOOK_TEMPLATE.md
-  /api
-    OPENAPI_README.md
-  README.md
-
-/.github
-  PULL_REQUEST_TEMPLATE_docs.md
-/README.md
-/.editorconfig
-/.gitignore
-/.pre-commit-config.yaml
-/LICENSE
-
-/docs/                     # All human-facing docs live here
-  /product/                # PRDs & functional specs
-  /architecture/           # system/tech designs & API *contracts* docs
-  /adr/                    # Architecture Decision Records
-  /runbooks/               # operational playbooks (build/run/support)
-  /api/                    # OpenAPI YAML/JSON + API governance docs
-  index.md                 # docs landing page
-
-/backend/                  # Server code (FastAPI, services, adapters)
-  /app/                    # <-- keep "app" *inside* backend, not top-level
-    /api/                  # FastAPI routers + DTOs
-    /services/             # orchestration (order, strategy, settlement)
-    /domain/               # pure domain (models, rules)
-    /ports/                # interfaces
-    /adapters/             # memory/db/redis/broker implementations
-    /config.py
-    /main.py               # ASGI entrypoint
-  /tests/
-    /unit/
-    /integration/
-  pyproject.toml
-  uv.lock | poetry.lock
-
-/frontend/                 # Web UI code
-  /src/
-  /public/
-  package.json
-  vite.config.ts
-
-/infra/                    # IaC + deployment
-  /k8s/                    # manifests/helm
-  /terraform/              # infra provisioning
-  /environments/           # staging/prod overlays
-  /scripts/                # infra-related helpers (kubectl, tf wrappers)
-
-/scripts/                  # Dev scripts (lint, format, data, one-offs)
-  makefile targets map here (or keep a Makefile at root)
-
-/tools/                    # (optional) shared dev tooling, codegen, linters
-
-/.github/
-  /workflows/              # CI/CD pipelines
-  CODEOWNERS
-
-
-Backend internal layout 
-/backend/app/
-  /domain/
-    models.py         # Position, Order, Trade, Event, enums
-    rules/
-      guardrails.py
-      triggers.py
-      tax.py
-  /ports/
-    repositories.py   # PositionRepo, OrderRepo, TradeRepo, EventRepo
-    services.py       # IdempotencyPort, PricingPort, EventBusPort, ClockPort
-  /adapters/
-    memory/           # in-memory repos & idempotency
-    db/               # future SQLAlchemy repos
-    redis/            # idempotency SETNX
-    broker/           # execution stub/real
-  /services/
-    order_service.py      # submit->validate->execute->settle->events
-    strategy_service.py   # evaluate triggers, max-per-day, idempotent keys
-    settlement_service.py # dividends, fees; apply to position
-    evaluation_service.py # KPIs, guardrail status
-  /api/
-    dto.py               # Pydantic schemas
-    routes_orders.py     # /v1/positions/{id}/orders
-    routes_positions.py
-    routes_health.py
-    mappers.py
-  main.py
-
-
+A thin FastAPI service exposing a REST API over a simple domain (Positions, Orders, Events) with **idempotent** order submission. It’s structured by layers (app/domain/application/infrastructure) and ships with unit + integration tests.
 
 ---
 
-## /docs/README.md
+## TL;DR (Dev Loop)
 
-````markdown
-# Volatility Balancing — Docs Index
-
-**Source of truth** for specs. Changes land via Pull Request (PR) with reviewers: **CTO** (Architecture), **PM** (Product), **QA** (Testability).
-
-## Conventions
-- All docs in **Markdown** with Mermaid diagrams.
-- Each file includes front‑matter:
-  ```yaml
-  ---
-  owner: <team-or-person>
-  status: draft|review|approved|deprecated
-  last_updated: YYYY-MM-DD
-  related: [links to PRDs/ADRs/Issues]
-  ---
-````
-
-* Link issues as `#123` and PRs as `!45` (or GitHub `#45`).
-
-## Folders
-
-* `/product` — PRDs & functional specs
-* `/architecture` — system/tech designs & API contracts
-* `/adr` — Architecture Decision Records
-* `/runbooks` — operational playbooks
-* `/api` — OpenAPI and API governance
-
-## Review Workflow (Docs PRs)
-
-1. Author opens PR changing docs + code if applicable.
-2. PM reviews **What/Why**; CTO reviews **How/Security**.
-3. Merge only when PRD & Arch diffs are consistent; create/append ADR if decision changed.
-
-````
-
----
-
-## /docs/product/PRD_TEMPLATE.md
-```markdown
----
-owner: PM Team
-status: draft
-last_updated: 2025-08-24
-related: ["/docs/architecture/ARCH_TEMPLATE.md", "ADR-0001"]
----
-# <Feature Name> — PRD
-
-## 1. Summary (What & Why)
-- One paragraph stating the user problem and business goal.
-
-## 2. Goals / Non‑Goals
-- **Goals:** …
-- **Out of scope:** …
-
-## 3. User Stories & Acceptance Criteria
-- As an <investor>, I want … so that …
-- **AC:** Given … When … Then …
-
-## 4. Metrics / Success
-- e.g., % time within guardrails, hit rate, fee drag.
-
-## 5. UX Notes
-- Screens affected, states, empty/error states.
-- Link to wireframes.
-
-## 6. Risks & Compliance
-- PCI/PII impact, disclosures, rate limits, auditability.
-
-## 7. Open Questions
-- …
-````
-
----
-
-## /docs/architecture/ARCH\_TEMPLATE.md
-
-````markdown
----
-owner: Platform Eng
-status: draft
-last_updated: 2025-08-24
-related: ["../product/PRD_TEMPLATE.md", "../adr/ADR_TEMPLATE.md"]
----
-# <Feature Name> — Technical Design
-
-## 1. Overview
-- Brief context and decision summary.
-
-## 2. Architecture Diagram
-```mermaid
-flowchart LR
-  WEB[Next.js] --> APIG[API Gateway]
-  APIG --> API[FastAPI]
-  API --> PG[(Postgres)]
-  API --> EVT(EventBridge)
-  EVT --> DEC[Decision Engine]
-  DEC --> ORD[Order Manager]
-  ORD --> BRK[Broker]
-````
-
-## 3. Data Model
-
-* Tables/fields, indexes; migration plan.
-
-## 4. API Contracts
-
-* Endpoints, request/response JSON; error codes.
-
-## 5. Sequence / Lifecycle
-
-* Key interactions and timeouts.
-
-## 6. Security & Compliance
-
-* AuthN/Z, scopes, secrets, encryption, audit.
-
-## 7. Observability
-
-* Logs, metrics, tracing, DLQs.
-
-## 8. Rollout Plan
-
-* Flags, phases, backout, runbook links.
-
-## 9. Alternatives Considered
-
-* Summarize options with trade‑offs.
-
-````
-
----
-
-## /docs/architecture/SEQUENCE_EXAMPLE.md
-```markdown
-# Sequence Examples (Mermaid)
-
-## Tick → Trade
-```mermaid
-sequenceDiagram
-  participant MD as Market Data
-  participant DEC as Decision Engine
-  participant ORD as Order Manager
-  participant BRK as Brokerage
-  participant DB as Postgres
-  MD->>DEC: PriceEvent
-  DEC->>DB: Load position & config
-  DEC->>DEC: Evaluate triggers & size
-  alt Skip
-    DEC-->>DB: Event(reason="min_notional")
-  else Send order
-    DEC-->>ORD: OrderIntent
-    ORD->>BRK: Submit
-    BRK-->>ORD: Fill
-    ORD->>DB: Update cash/anchor/events
-  end
-````
-
-````
-
----
-
-## /docs/adr/ADR_TEMPLATE.md
-```markdown
----
-owner: Architecture
-status: approved|proposed
-last_updated: 2025-08-24
-related: []
----
-# ADR-XXXX: <Decision Title>
-
-## Context
-- What problem are we solving?
-
-## Decision
-- The choice made (e.g., **Modular monolith on AWS Lambda with FastAPI**).
-
-## Consequences
-- Positive/negative outcomes, risks, follow‑ups.
-
-## Alternatives
-- Options considered and why not chosen.
-
-## References
-- Links to PRs, issues, benchmarks.
-````
-
----
-
-## /docs/runbooks/RUNBOOK\_TEMPLATE.md
-
-```markdown
----
-owner: SRE/Platform
-status: draft
-last_updated: 2025-08-24
----
-# <Runbook Name>
-
-## Summary
-- When to use this, severity, primary on‑call.
-
-## Preconditions
-- Feature flags, credentials, tools required.
-
-## Procedure
-1) …
-2) …
-
-## Validation & Rollback
-- How to confirm success, rollback steps.
-
-## Dashboards & Alerts
-- Links to CloudWatch, Grafana.
-```
-
----
-
-## /docs/api/OPENAPI\_README.md
-
-```markdown
-# API Governance
-- All external HTTP APIs must be captured in **OpenAPI 3.0** under `/docs/api/openapi.yaml`.
-- Changes require a docs PR; CI validates schema.
-
-## Local Preview
-- Use Redocly or Swagger‑UI to render.
-
-## Versioning
-- SemVer on endpoints; breaking changes require major bump and deprecation notes in PRD.
-```
-
----
-
-## /.github/PULL\_REQUEST\_TEMPLATE\_docs.md
-
-```markdown
-## Docs Checklist
-- [ ] PRD updated (What/Why)
-- [ ] Architecture updated (How)
-- [ ] ADR added/updated (Decision)
-- [ ] Runbook updated (Operate)
-- [ ] Diagrams (Mermaid) render locally
-- [ ] Security/Compliance reviewed
-
-## Links
-- PRD:
-- Arch:
-- ADR:
-- Runbook:
-```
-
-## Quick Start
 ```bash
-make up setup migrate
-make run-api     # http://localhost:8000
-make run-web     # http://localhost:3000
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+python -m uvicorn --app-dir backend app.main:app --reload
+# in another terminal (same venv):
+python -m pytest -q
+python -m ruff check backend
+python -m mypy backend
+If you prefer Make:
+
+bash
+Copy
+Edit
+make venv install dev     # run server with reload
+make test lint type fmt   # tests, lint, types, autofix
+Project Structure
+bash
+Copy
+Edit
+backend/
+  app/               # FastAPI wiring (routes, DI container)
+  domain/            # Entities (dataclasses), ports (protocols), errors, value objects
+  application/       # Use cases (Flows A–E), DTOs (Pydantic)
+  infrastructure/    # Adapters (memory, sql, redis, market)
+  tests/             # unit + integration tests
+pyproject.toml       # deps + pytest/mypy/ruff config
+Makefile             # handy targets (run, dev, test, fmt, type)
+Domain → Python dataclasses (no runtime validation): fast, minimal, library-agnostic.
+
+DTOs / API models → Pydantic v2 models (validation + serialization).
+
+Adapters → In-memory by default; SQL/Redis/Market stubs provided.
+
+API Reference
+Base URL: http://localhost:8000
+
+Health
+GET /healthz → {"status":"ok"}
+
+GET /v1/healthz → {"status":"ok","version":"v1"}
+
+Positions
+POST /v1/positions
+
+Body: {"ticker": "ZIM", "qty": 0.0, "cash": 10000.0}
+
+201 → {"id","ticker","qty","cash"}
+
+GET /v1/positions/{position_id}
+
+200 → position details, or 404 position_not_found
+
+GET /v1/positions/{position_id}/events
+
+200 → {"position_id","events":[...]}
+
+POST /v1/positions/{position_id}/evaluate
+
+Placeholder: returns {"position_id","proposals":[]}
+
+Orders (Flow A: Idempotent submit)
+POST /v1/positions/{position_id}/orders
+
+Headers: Idempotency-Key: <key> (required)
+
+Body: {"side":"BUY"|"SELL","qty": float>0}
+
+First request for a given (key + body): 201 Created
+{ "order_id": "...", "accepted": true, "position_id": "..." }
+
+Replay (same key + same body): 200 OK, same order_id
+
+Mismatched body for same key: 409 Conflict (idempotency_signature_mismatch)
+
+Unknown position: 404 position_not_found
+
+POST /v1/orders/{order_id}/fill (Flow C: simplistic fill)
+
+Body: {"price": >0, "filled_qty": >0, "commission": >=0}
+
+200 → {"order_id","status":"filled","position_qty","position_cash"}
+
+404 → order_not_found (or position_not_found behind it)
+
+Curl Smoke (copy/paste)
+bash
+Copy
+Edit
+# Create a position
+POS=$(curl -s -X POST localhost:8000/v1/positions \
+  -H 'Content-Type: application/json' \
+  -d '{"ticker":"ZIM","qty":0,"cash":10000}' \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
+echo "$POS"
+
+# First submit -> 201 Created
+curl -i -X POST "http://localhost:8000/v1/positions/$POS/orders" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: k1" \
+  -d '{"side":"BUY","qty":1.5}'
+
+# Replay same key+body -> 200 OK, same order_id
+curl -i -X POST "http://localhost:8000/v1/positions/$POS/orders" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: k1" \
+  -d '{"side":"BUY","qty":1.5}'
+
+# Mismatch (same key, different body) -> 409 Conflict
+curl -i -X POST "http://localhost:8000/v1/positions/$POS/orders" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: k1" \
+  -d '{"side":"SELL","qty":2.0}'
+
+# See audit events
+curl -s "http://localhost:8000/v1/positions/$POS/events" | sed 's/},{/},\n{/g'
+Architecture & Flows
+app/: FastAPI routers (positions.py, orders.py), DI container (di.py), and main.py.
+
+application/: Use cases
+
+SubmitOrderUC (Flow A): idempotent order submission.
+
+EvaluatePositionUC (Flow B): placeholder for proposal generation.
+
+ExecuteOrderUC (Flow C): simplistic fills updating position balances.
+
+ProcessDividendUC (Flow D): cash credit with tax (placeholder).
+
+domain/:
+
+Entities: Order, Position, Event (dataclasses).
+
+Ports: repository protocols (interfaces).
+
+Errors & value objects (guardrails, triggers).
+
+infrastructure/:
+
+In-memory repos (default), plus stubs for SQL (SQLAlchemy) and Redis idempotency.
+
+infrastructure/time/clock.py for testable time.
+
+Why dataclasses vs Pydantic?
+
+Dataclasses for domain (no validation overhead, library-agnostic).
+
+Pydantic for API DTOs (validation + JSON schema/OpenAPI).
+
+Conversion is trivial (dataclasses.asdict() and model.model_dump()).
+
+Switching Persistence (optional)
+Default: in-memory repos via app/di.py.
+
+Redis idempotency:
+
+pip install '.[redis]'
+
+In app/di.py, swap InMemoryIdempotencyRepo for RedisIdempotencyRepo and pass a Redis client.
+
+SQL (SQLite/Postgres):
+
+pip install '.[sql]'
+
+Configure engine in infrastructure/persistence/sql/models.py
+
+Use SQLPositionsRepo / SQLOrdersRepo in app/di.py.
+
+The SQL and Redis adapters are basic and intended as starting points.
+
+Testing & Quality
+bash
+Copy
+Edit
+python -m pytest -q          # run tests
+python -m ruff check backend # lint
+python -m mypy backend       # types
+pyproject.toml configures pytest to use backend as PYTHONPATH. If you run into path issues, use:
+
+bash
+Copy
+Edit
+PYTHONPATH=backend python -m pytest -q
+Troubleshooting
+“No module named app” (pytest)
+Run tests with python -m pytest or ensure pyproject.toml has:
+
+toml
+Copy
+Edit
+[tool.pytest.ini_options]
+pythonpath = ["backend"]
+addopts = "-q"
+Idempotency 400 (“missing idempotency key”)
+The route expects idempotency_key: Optional[str] = Header(None) → send Idempotency-Key: <value> (hyphen, not underscore).
+
+404 with //orders
+Your $POS variable is empty. Echo it before use: echo "$POS".
+
+Port already in use
+pkill -f uvicorn or use another port: -–port 8001.
+
 ```

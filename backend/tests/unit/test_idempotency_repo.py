@@ -1,4 +1,3 @@
-import pytest
 from infrastructure.persistence.memory.idempotency_repo_mem import InMemoryIdempotencyRepo
 
 def test_reserve_new_then_put_then_replay():

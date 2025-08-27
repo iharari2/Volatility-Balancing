@@ -3,10 +3,13 @@
 # =========================
 from typing import Optional
 
-try:
-    import redis  # type: ignore
-except Exception:  # pragma: no cover
-    redis = None  # type: ignore
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import redis  # only for type checking
+else:
+    redis = None  # at runtime when not installed
+
 
 from domain.ports.idempotency_repo import IdempotencyRepo
 
@@ -19,7 +22,9 @@ class RedisIdempotencyRepo(IdempotencyRepo):
       - {ns}:idemp:{key}:order -> order_id
     """
 
-    def __init__(self, client: "redis.Redis", namespace: str = "vb", ttl_seconds: int = 48 * 3600) -> None:
+    def __init__(
+        self, client: "redis.Redis", namespace: str = "vb", ttl_seconds: int = 48 * 3600
+    ) -> None:
         if redis is None:  # pragma: no cover
             raise RuntimeError("redis not installed. Install with extras: pip install '.[redis]'")
         self.client = client
@@ -63,4 +68,3 @@ class RedisIdempotencyRepo(IdempotencyRepo):
                 self.client.delete(*keys)
             if cursor == 0:
                 break
-

@@ -3,7 +3,7 @@
 # =========================
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-
+from dataclasses import asdict
 from app.di import container
 
 router = APIRouter(tags=["positions"])
@@ -53,5 +53,4 @@ def evaluate_position(position_id: str):
 @router.get("/positions/{position_id}/events")
 def list_events(position_id: str, limit: int = 100):
     events = container.events.list_for_position(position_id, limit=limit)
-    return {"position_id": position_id, "events": [e.model_dump() for e in events]}
-
+    return {"position_id": position_id, "events": [asdict(e) for e in events]}

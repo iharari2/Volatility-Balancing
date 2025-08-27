@@ -1,7 +1,6 @@
 # pyproject.toml
 # =========================
-# (Place at repo root)
-"""
+
 [project]
 name = "volatility-balancing"
 version = "0.1.0"
@@ -38,4 +37,32 @@ line-length = 100
 pythonpath = ["backend"]
 addopts = "-q"
 
-"""
+[tool.mypy]
+python_version = "3.12"
+mypy_path = ["backend"]           # tell mypy our source root
+namespace_packages = true
+explicit_package_bases = true
+warn_unused_ignores = true
+
+# Be strict on our app code by default; we’ll relax 3rd-party+tests below
+check_untyped_defs = true
+
+# Silence third-party “missing stubs” noise
+[[tool.mypy.overrides]]
+module = [
+  "pytest",
+  "fastapi.*",
+  "pydantic.*",
+  "httpx.*",
+  "uvicorn.*",
+  "sqlalchemy.*",
+  "yfinance",
+  "pandas.*",
+  "redis",
+]
+ignore_missing_imports = true
+
+# Keep tests out of the way for now (optional)
+[[tool.mypy.overrides]]
+module = ["backend.tests.*"]
+ignore_errors = true
