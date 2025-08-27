@@ -3,6 +3,23 @@ Semi-passive, mean-reversion paper-trading platform on blue-chip equities.# Docs
 
 ## Directory Layout
 
+## Repo layout
+- **/frontend** – web UI
+- **/backend** – FastAPI services (domain, ports, adapters, services, api)
+- **/infra** – IaC & deployment
+- **/scripts** – dev utilities
+- **/docs** – PRDs, architecture, ADRs, runbooks, OpenAPI
+
+### Docs
+- `/docs/product` – PRDs & acceptance criteria
+- `/docs/architecture` – designs, sequence diagrams, API contract docs
+- `/docs/adr` – Architecture Decision Records
+- `/docs/runbooks` – build/run/ops playbooks
+- `/docs/api` – OpenAPI specs + governance rules
+
+### Backend structure
+See `/backend/app` for domain/ports/adapters/services/api breakdown.
+
 ```
 /docs
   /product
@@ -20,7 +37,87 @@ Semi-passive, mean-reversion paper-trading platform on blue-chip equities.# Docs
 
 /.github
   PULL_REQUEST_TEMPLATE_docs.md
-```
+/README.md
+/.editorconfig
+/.gitignore
+/.pre-commit-config.yaml
+/LICENSE
+
+/docs/                     # All human-facing docs live here
+  /product/                # PRDs & functional specs
+  /architecture/           # system/tech designs & API *contracts* docs
+  /adr/                    # Architecture Decision Records
+  /runbooks/               # operational playbooks (build/run/support)
+  /api/                    # OpenAPI YAML/JSON + API governance docs
+  index.md                 # docs landing page
+
+/backend/                  # Server code (FastAPI, services, adapters)
+  /app/                    # <-- keep "app" *inside* backend, not top-level
+    /api/                  # FastAPI routers + DTOs
+    /services/             # orchestration (order, strategy, settlement)
+    /domain/               # pure domain (models, rules)
+    /ports/                # interfaces
+    /adapters/             # memory/db/redis/broker implementations
+    /config.py
+    /main.py               # ASGI entrypoint
+  /tests/
+    /unit/
+    /integration/
+  pyproject.toml
+  uv.lock | poetry.lock
+
+/frontend/                 # Web UI code
+  /src/
+  /public/
+  package.json
+  vite.config.ts
+
+/infra/                    # IaC + deployment
+  /k8s/                    # manifests/helm
+  /terraform/              # infra provisioning
+  /environments/           # staging/prod overlays
+  /scripts/                # infra-related helpers (kubectl, tf wrappers)
+
+/scripts/                  # Dev scripts (lint, format, data, one-offs)
+  makefile targets map here (or keep a Makefile at root)
+
+/tools/                    # (optional) shared dev tooling, codegen, linters
+
+/.github/
+  /workflows/              # CI/CD pipelines
+  CODEOWNERS
+
+
+Backend internal layout 
+/backend/app/
+  /domain/
+    models.py         # Position, Order, Trade, Event, enums
+    rules/
+      guardrails.py
+      triggers.py
+      tax.py
+  /ports/
+    repositories.py   # PositionRepo, OrderRepo, TradeRepo, EventRepo
+    services.py       # IdempotencyPort, PricingPort, EventBusPort, ClockPort
+  /adapters/
+    memory/           # in-memory repos & idempotency
+    db/               # future SQLAlchemy repos
+    redis/            # idempotency SETNX
+    broker/           # execution stub/real
+  /services/
+    order_service.py      # submit->validate->execute->settle->events
+    strategy_service.py   # evaluate triggers, max-per-day, idempotent keys
+    settlement_service.py # dividends, fees; apply to position
+    evaluation_service.py # KPIs, guardrail status
+  /api/
+    dto.py               # Pydantic schemas
+    routes_orders.py     # /v1/positions/{id}/orders
+    routes_positions.py
+    routes_health.py
+    mappers.py
+  main.py
+
+
 
 ---
 

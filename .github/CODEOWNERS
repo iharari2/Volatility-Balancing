@@ -1,4 +1,13 @@
+# .github/CODEOWNERS
+/docs/product/      @product-manager @ilan @iharari2
+/docs/architecture/ @lead-architect  @ilan @iharari2
+/docs/adr/          @lead-architect @iharari2
+/backend/           @backend-leads @iharari2
+/frontend/          @frontend-leads @iharari2
+/infra/             @devops-leads @iharari2
+
 /backend/   @iharari2
 /frontend/  @iharari2
 /.policy/   @iharari2
 /.github/   @iharari2
+

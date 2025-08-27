@@ -1,13 +1,41 @@
-[tool.black]
-line-length = 100
-target-version = ["py311"]
+# pyproject.toml
+# =========================
+# (Place at repo root)
+"""
+[project]
+name = "volatility-balancing"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.111",
+  "uvicorn>=0.30",
+  "pydantic>=2.7",
+  "typing-extensions>=4.10",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2",
+  "httpx>=0.27",
+  "ruff>=0.5",
+  "mypy>=1.10",
+]
+redis = [
+  "redis>=5.0"
+]
+sql = [
+  "sqlalchemy>=2.0"
+]
+market = [
+  "yfinance>=0.2",
+  "pandas>=2.0"
+]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
-extend-select = ["I"]      # import sorting
-ignore = ["E501"]          # line length handled by black
-fix = true
 
-[tool.ruff.lint.isort]
-known-first-party = ["backend"]
+[tool.pytest.ini_options]
+pythonpath = ["backend"]
+addopts = "-q"
+
+"""

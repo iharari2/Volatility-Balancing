@@ -3,24 +3,32 @@
 
   // ---- Python ----
   "python.formatting.provider": "none",
-  "[python]": {
-    "editor.defaultFormatter": "ms-python.black-formatter"
-  },
+  "[python]": { "editor.defaultFormatter": "ms-python.black-formatter" },
   "black-formatter.args": ["--line-length", "100"],
-  "ruff.logLevel": "error",
+
+  // Ruff (linter/fixer)
   "ruff.lint.run": "onSave",
   "ruff.fixAll": true,
+  "ruff.logLevel": "error",
+
+  // Make "from app..." resolve (we're treating backend/ as source root)
+  "python.analysis.extraPaths": ["backend"],
+  "python.envFile": "${workspaceFolder}/.env",
+
+  // VS Code terminal inherits PYTHONPATH so uvicorn/pytest work there too
+  "terminal.integrated.env.windows": { "PYTHONPATH": "backend" },
+  "terminal.integrated.env.linux":   { "PYTHONPATH": "backend" },
+  "terminal.integrated.env.osx":     { "PYTHONPATH": "backend" },
 
   // ---- Web (TS/JS/JSON/MD/CSS) ----
-  "[javascript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
-  "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
-  "[typescriptreact]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
-  "[javascriptreact]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
-  "[json]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
-  "[markdown]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
-  "[css]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[javascript]":        { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[typescript]":        { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[typescriptreact]":   { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[javascriptreact]":   { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[json]":              { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[markdown]":          { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[css]":               { "editor.defaultFormatter": "esbenp.prettier-vscode" },
 
-  // Keep Prettier in control for web files
   "prettier.printWidth": 100,
   "prettier.singleQuote": true,
   "prettier.trailingComma": "all"
