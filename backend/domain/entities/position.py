@@ -2,7 +2,7 @@
 # backend/domain/entities/position.py
 # =========================
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 
 from domain.value_objects.guardrails import GuardrailPolicy
 
@@ -14,6 +14,5 @@ class Position:
     qty: float = 0.0
     cash: float = 0.0
     guardrails: GuardrailPolicy = field(default_factory=GuardrailPolicy)
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
-
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))

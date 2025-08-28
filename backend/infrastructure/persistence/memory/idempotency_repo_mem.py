@@ -25,9 +25,9 @@ class InMemoryIdempotencyRepo(IdempotencyRepo):
         if key in self._sig_by_key:
             existing_sig = self._sig_by_key[key]
             if existing_sig == signature_hash:
-                return self._order_by_key.get(key)  # replay path (may be None before put)
+                # if order_id not set yet → in-progress sentinel
+                return self._order_by_key.get(key) or "in_progress"
             return f"conflict:{existing_sig}"
-        # reserve
         self._sig_by_key[key] = signature_hash
         return None
 

@@ -3,13 +3,14 @@
 # =========================
 from __future__ import annotations
 from datetime import datetime, timezone, time
-from typing import Optional, cast
+from typing import Optional, cast, Iterable, List
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import func
+from sqlalchemy import func, desc
 
 from domain.entities.order import Order, OrderSide, OrderStatus
 from domain.ports.orders_repo import OrdersRepo
 from .models import OrderModel
+
 
 
 __all__ = ["SQLOrdersRepo"]  # <- explicit export
@@ -77,3 +78,26 @@ class SQLOrdersRepo(OrdersRepo):
         with self._sf() as s:
             s.query(OrderModel).delete()
             s.commit()
+
+    def list_for_position(self, position_id: str, limit: int = 100) -> Iterable[Order]:
+        with self._sf() as s:
+            rows: List[OrderModel] = (
+                s.query(OrderModel)
+                .filter(OrderModel.position_id == position_id)
+                .order_by(desc(OrderModel.created_at))
+                .limit(limit)
+                .all()
+            )
+            return [
+                Order(
+                    id=r.id,
+                    position_id=r.position_id,
+                    side=r.side,  # type: ignore
+                    qty=r.qty,
+                    status=r.status,  # type: ignore
+                    idempotency_key=r.idempotency_key,
+                    created_at=r.created_at,
+                    updated_at=r.updated_at,
+                )
+                for r in rows
+            ]

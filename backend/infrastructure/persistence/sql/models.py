@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Optional
 
 from sqlalchemy import (
     String,
@@ -44,10 +43,10 @@ class OrderModel(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     position_id: Mapped[str] = mapped_column(String, nullable=False)
-    side: Mapped[str] = mapped_column(String, nullable=False)  # "BUY" | "SELL"
+    side: Mapped[str] = mapped_column(String, nullable=False)
     qty: Mapped[float] = mapped_column(Float, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False, default="submitted")
-    idempotency_key: Mapped[Optional[str]] = mapped_column(String, unique=True, nullable=True)
+    idempotency_key: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
@@ -55,7 +54,10 @@ class OrderModel(Base):
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
 
-    __table_args__ = (UniqueConstraint("idempotency_key", name="uq_orders_idempotency_key"),)
+    __table_args__ = (
+        UniqueConstraint("position_id", "idempotency_key", name="uq_orders_pos_idempotency"),
+        Index("ix_orders_position_created_at", "position_id", "created_at"),
+    )
 
 
 class EventModel(Base):

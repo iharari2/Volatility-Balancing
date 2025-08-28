@@ -1,7 +1,7 @@
 # =========================
 # backend/infrastructure/persistence/redis/idempotency_repo_redis.py
 # =========================
-from typing import Tuple, List, Optional, cast
+from typing import Optional, Any, cast
 
 from typing import TYPE_CHECKING
 
@@ -22,9 +22,9 @@ class RedisIdempotencyRepo(IdempotencyRepo):
       - {ns}:idemp:{key}:order -> order_id
     """
 
-    def __init__(
-        self, client: "redis.Redis", namespace: str = "vb", ttl_seconds: int = 48 * 3600
-    ) -> None:
+    # Type the client as Any so we can support both sync and asyncio Redis without
+    # dragging their complex generic types into our code. We cast return values below.
+    def __init__(self, client: Any, namespace: str = "vb", ttl_seconds: int = 48 * 3600) -> None:
         if redis is None:  # pragma: no cover
             raise RuntimeError("redis not installed. Install with extras: pip install '.[redis]'")
         self.client = client
@@ -38,22 +38,19 @@ class RedisIdempotencyRepo(IdempotencyRepo):
         return f"{self.ns}:idemp:{key}:order"
 
     def get_order_id(self, key: str) -> Optional[str]:
-        raw = self.client.get(self._k_order(key))
-        val = cast(Optional[bytes], raw)
-        return val.decode() if val else None
+        val = self.client.get(self._k_order(key))
+        b = cast(Optional[bytes], val)
+        return b.decode() if b is not None else None
 
     def reserve(self, key: str, signature_hash: str) -> Optional[str]:
-        # Try to set the signature if not exists (NX). If set -> new reservation.
-        ok = self.client.set(self._k_sig(key), signature_hash, nx=True, ex=self.ttl)
-        if bool(ok):
-            return None
-        # Already reserved: compare stored signature
-        raw = self.client.get(self._k_sig(key))
-        existing = cast(Optional[bytes], raw)
-        existing_sig = existing.decode() if existing else None
+        if self.client.set(self._k_sig(key), signature_hash, nx=True, ex=self.ttl):
+            return None  # NEW
+        existing = self.client.get(self._k_sig(key))
+        existing_b = cast(Optional[bytes], existing)
+        existing_sig = existing_b.decode() if existing_b is not None else None
         if existing_sig == signature_hash:
-            # Replay path: return order_id if already recorded (maybe None pre-put)
-            return self.get_order_id(key)
+            oid = self.client.get(self._k_order(key))
+            return oid.decode() if oid else "in_progress"
         return f"conflict:{existing_sig}"
 
     def put(self, key: str, order_id: str, signature_hash: str) -> None:
@@ -67,7 +64,7 @@ class RedisIdempotencyRepo(IdempotencyRepo):
         pattern = f"{self.ns}:idemp:*"
         while True:
             scan_res = self.client.scan(cursor=cursor, match=pattern, count=500)
-            cursor, keys = cast(Tuple[int, List[bytes]], scan_res)
+            cursor, keys = cast(tuple[int, list[bytes]], scan_res)
             if keys:
                 self.client.delete(*keys)
             if cursor == 0:
