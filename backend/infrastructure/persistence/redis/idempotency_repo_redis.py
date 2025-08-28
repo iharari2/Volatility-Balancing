@@ -1,7 +1,7 @@
 # =========================
 # backend/infrastructure/persistence/redis/idempotency_repo_redis.py
 # =========================
-from typing import Optional
+from typing import Tuple, List, Optional, cast
 
 from typing import TYPE_CHECKING
 
@@ -38,15 +38,18 @@ class RedisIdempotencyRepo(IdempotencyRepo):
         return f"{self.ns}:idemp:{key}:order"
 
     def get_order_id(self, key: str) -> Optional[str]:
-        val = self.client.get(self._k_order(key))
+        raw = self.client.get(self._k_order(key))
+        val = cast(Optional[bytes], raw)
         return val.decode() if val else None
 
     def reserve(self, key: str, signature_hash: str) -> Optional[str]:
         # Try to set the signature if not exists (NX). If set -> new reservation.
-        if self.client.set(self._k_sig(key), signature_hash, nx=True, ex=self.ttl):
+        ok = self.client.set(self._k_sig(key), signature_hash, nx=True, ex=self.ttl)
+        if bool(ok):
             return None
         # Already reserved: compare stored signature
-        existing = self.client.get(self._k_sig(key))
+        raw = self.client.get(self._k_sig(key))
+        existing = cast(Optional[bytes], raw)
         existing_sig = existing.decode() if existing else None
         if existing_sig == signature_hash:
             # Replay path: return order_id if already recorded (maybe None pre-put)
@@ -63,7 +66,8 @@ class RedisIdempotencyRepo(IdempotencyRepo):
         cursor = 0
         pattern = f"{self.ns}:idemp:*"
         while True:
-            cursor, keys = self.client.scan(cursor=cursor, match=pattern, count=500)
+            scan_res = self.client.scan(cursor=cursor, match=pattern, count=500)
+            cursor, keys = cast(Tuple[int, List[bytes]], scan_res)
             if keys:
                 self.client.delete(*keys)
             if cursor == 0:

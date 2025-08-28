@@ -15,6 +15,8 @@ Provides-Extra: redis
 Requires-Dist: redis>=5.0; extra == "redis"
 Provides-Extra: sql
 Requires-Dist: sqlalchemy>=2.0; extra == "sql"
+Requires-Dist: alembic>=1.13; extra == "sql"
+Requires-Dist: psycopg[binary]>=3.1; extra == "sql"
 Provides-Extra: market
 Requires-Dist: yfinance>=0.2; extra == "market"
 Requires-Dist: pandas>=2.0; extra == "market"
