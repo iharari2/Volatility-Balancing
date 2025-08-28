@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 .env
 *.sqlite
+.pytest_cache/
+.mypy_cache/
+vb.sqlite
