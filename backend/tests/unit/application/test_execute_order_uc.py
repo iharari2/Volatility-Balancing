@@ -26,12 +26,12 @@ def test_fill_buy_increases_qty_and_decreases_cash():
     pos = container.positions.create(ticker="AAA", qty=0.0, cash=1000.0)
     oid = _submit_buy_order(pos.id, qty=2.0)
     uc = ExecuteOrderUC(container.positions, container.orders, container.events, container.clock)
-    r = uc.execute(
-        order_id=oid, request=FillOrderRequest(price=10.0, filled_qty=2.0, commission=1.0)
-    )
+    r = uc.execute(order_id=oid, request=FillOrderRequest(qty=2.0, price=10.0, commission=1.0))
+    pos_after = container.positions.get(pos.id)
+    assert pos_after.qty == 2.0
+    assert pos_after.cash == 1000.0 - (2.0 * 10.0) - 1.0  # price*qty + commission
+    assert r.filled_qty == 2.0
     assert r.status == "filled"
-    assert r.position_qty == 2.0
-    assert r.position_cash == pytest.approx(1000.0 - (2 * 10.0) - 1.0)
 
 
 def test_fill_sell_rejects_if_insufficient_qty():
@@ -39,9 +39,12 @@ def test_fill_sell_rejects_if_insufficient_qty():
     # craft a SELL order directly
     from domain.entities.order import Order
 
-    container.orders.save(Order(id="ord_sell", position_id=pos.id, side="SELL", qty=1.0))
+    container.orders.save(
+        Order(
+            id="ord_sell", position_id=pos.id, side="SELL", qty=1.0, idempotency_key="test-sell-1"
+        )
+    )
+
     uc = ExecuteOrderUC(container.positions, container.orders, container.events, container.clock)
     with pytest.raises(GuardrailBreach):
-        uc.execute(
-            order_id="ord_sell", request=FillOrderRequest(price=5.0, filled_qty=2.0, commission=0.0)
-        )
+        uc.execute(order_id="ord_sell", request=FillOrderRequest(qty=2.0, price=5.0))

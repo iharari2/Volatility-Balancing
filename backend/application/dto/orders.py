@@ -1,30 +1,27 @@
-# =========================
 # backend/application/dto/orders.py
-# =========================
-from typing import Literal
-from pydantic import BaseModel, Field
+from __future__ import annotations
+from pydantic import BaseModel
+from domain.value_objects.types import OrderSide, OrderFillStatus
+
 
 class CreateOrderRequest(BaseModel):
-    side: Literal["BUY", "SELL"]
-    qty: float = Field(gt=0)
+    side: OrderSide
+    qty: float
+
 
 class CreateOrderResponse(BaseModel):
     order_id: str
     accepted: bool
     position_id: str
 
+
 class FillOrderRequest(BaseModel):
-    price: float = Field(gt=0)
-    filled_qty: float = Field(gt=0)
-    commission: float = Field(ge=0, default=0.0)
+    qty: float
+    price: float
+    commission: float = 0.0
+
 
 class FillOrderResponse(BaseModel):
     order_id: str
-    status: str
-    position_qty: float
-    position_cash: float
-
-class OrderProposal(BaseModel):
-    side: Literal["BUY", "SELL"]
-    qty: float
-    rationale: str
+    status: OrderFillStatus
+    filled_qty: float = 0.0

@@ -6,12 +6,14 @@
   "[python]": { "editor.defaultFormatter": "ms-python.black-formatter" },
   "black-formatter.args": ["--line-length", "100"],
 
+
   // Ruff (linter/fixer)
   "ruff.lint.run": "onSave",
   "ruff.fixAll": true,
   "ruff.logLevel": "error",
 
   // Make "from app..." resolve (we're treating backend/ as source root)
+  "python.defaultInterpreterPath": ".venv/bin/python",
   "python.analysis.extraPaths": ["backend"],
   "python.envFile": "${workspaceFolder}/.env",
 

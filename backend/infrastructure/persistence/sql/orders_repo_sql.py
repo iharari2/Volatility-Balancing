@@ -7,10 +7,11 @@ from typing import Optional, cast, Iterable, List
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import func, desc
 
-from domain.entities.order import Order, OrderSide, OrderStatus
+
 from domain.ports.orders_repo import OrdersRepo
 from .models import OrderModel
-
+from domain.entities.order import Order
+from domain.value_objects.types import OrderStatus, OrderSide
 
 
 __all__ = ["SQLOrdersRepo"]  # <- explicit export

@@ -41,10 +41,11 @@ addopts = "-q"
 
 [tool.mypy]
 python_version = "3.12"
-mypy_path = ["backend"]           # tell mypy our source root
+mypy_path = "backend"
+strict_optional = true
 namespace_packages = true
 explicit_package_bases = true
-warn_unused_ignores = true
+warn_unused_ignores = true 
 
 # Be strict on our app code by default; we’ll relax 3rd-party+tests below
 check_untyped_defs = true
