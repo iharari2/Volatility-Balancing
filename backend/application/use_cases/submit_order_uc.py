@@ -20,7 +20,14 @@ class SubmitOrderUC:
     Returns (CreateOrderResponse, replay: bool)
     """
 
-    def __init__(self, positions: PositionsRepo, orders: OrdersRepo, idempotency: IdempotencyRepo, events: EventsRepo, clock) -> None:
+    def __init__(
+        self,
+        positions: PositionsRepo,
+        orders: OrdersRepo,
+        idempotency: IdempotencyRepo,
+        events: EventsRepo,
+        clock,
+    ) -> None:
         self.positions = positions
         self.orders = orders
         self.idempotency = idempotency
@@ -33,29 +40,37 @@ class SubmitOrderUC:
         raw = str(sorted(payload.items())).encode()
         return hashlib.sha256(raw).hexdigest()
 
-    def execute(self, position_id: str, request: CreateOrderRequest, idempotency_key: str) -> Tuple[CreateOrderResponse, bool]:
+    def execute(
+        self, position_id: str, request: CreateOrderRequest, idempotency_key: str
+    ) -> Tuple[CreateOrderResponse, bool]:
         # 1) Check position
         pos = self.positions.get(position_id)
         if not pos:
             raise KeyError("position_not_found")
 
-        # 2) Signature + idempotency
+        # 2) Compute signature, then build a per-position scoped key
         sig = self._signature(position_id, request)
-        existing = self.idempotency.reserve(idempotency_key, sig)
-        if existing is not None:
-            # If reserved for another signature, signal conflict
-            if existing.startswith("conflict:"):
-                raise IdempotencyConflict("idempotency_signature_mismatch")
-            # Replay path
-            return CreateOrderResponse(order_id=existing, accepted=True, position_id=position_id), True
+        scoped_key = f"{position_id}:{idempotency_key}"
 
-        # 3) Daily cap (simple count)
+        # Reserve idempotency
+        existing = self.idempotency.reserve(scoped_key, sig)
+        if existing is not None:
+            if isinstance(existing, str) and existing.startswith("conflict:"):
+                raise IdempotencyConflict("idempotency_signature_mismatch")
+            return (
+                CreateOrderResponse(order_id=existing, accepted=True, position_id=position_id),
+                True,
+            )
+
+        # 3) Guardrails (daily cap) as you already have...
         today = self.clock.now().date()
-        if self.orders.count_for_position_on_day(position_id, today) >= pos.guardrails.max_orders_per_day:
-            # Release not implemented in-memory; in real impl, release reservation here
+        if (
+            self.orders.count_for_position_on_day(position_id, today)
+            >= pos.guardrails.max_orders_per_day
+        ):
             raise IdempotencyConflict("daily_order_cap_exceeded")
 
-        # 4) Create order
+        # 4) Create + persist order
         order_id = f"ord_{uuid.uuid4().hex[:8]}"
         order = Order(
             id=order_id,
@@ -63,11 +78,17 @@ class SubmitOrderUC:
             side=request.side,
             qty=request.qty,
             status="submitted",
-            idempotency_key=idempotency_key,
-            request_signature={"position_id": position_id, "side": request.side, "qty": request.qty},
+            idempotency_key=idempotency_key,  # keep the raw client key on the entity/row
+            request_signature={
+                "position_id": position_id,
+                "side": request.side,
+                "qty": request.qty,
+            },
         )
         self.orders.save(order)
-        self.idempotency.put(idempotency_key, order_id, sig)
+
+        # Write final idempotency outcome using the same scoped key
+        self.idempotency.put(scoped_key, order_id, sig)
 
         # 5) Event
         evt = Event(
@@ -82,4 +103,3 @@ class SubmitOrderUC:
         self.events.append(evt)
 
         return CreateOrderResponse(order_id=order_id, accepted=True, position_id=position_id), False
-

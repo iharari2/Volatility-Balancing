@@ -42,6 +42,12 @@ type:
 cov:
 	. .venv/bin/activate && $(PY) -m pytest --cov=$(SRC) -q || true
 
+migrate:
+	. .venv/bin/activate && SQL_URL=$(SQL_URL) alembic upgrade head
+
+db-up:
+	docker compose up -d db redis
+
 clean:
 	find $(SRC) -name "__pycache__" -type d -exec rm -rf {} + ; find . -name "*.pyc" -delete
 
