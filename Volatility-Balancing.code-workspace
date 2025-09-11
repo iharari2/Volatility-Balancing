@@ -1,0 +1,20 @@
+{
+	"folders": [
+		{
+			"path": "\\\\wsl.localhost\\Ubuntu\\home\\iharari\\Volatility-Balancing"
+		}
+	],
+	"settings": {
+		"ruff.lint.run": "onSave",
+		"ruff.fixAll": true,
+		"terminal.integrated.env.windows": {
+			"PYTHONPATH": "backend"
+		},
+		"terminal.integrated.env.linux": {
+			"PYTHONPATH": "backend"
+		},
+		"terminal.integrated.env.osx": {
+			"PYTHONPATH": "backend"
+		}
+	}
+}
