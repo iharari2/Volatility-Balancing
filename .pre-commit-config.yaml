@@ -1,0 +1,21 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.8
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: bash -lc 'PYTHONPATH=backend mypy backend'
+        language: system
+        pass_filenames: false
+
+      - id: pytest
+        name: pytest
+        entry: bash -lc 'PYTHONPATH=backend pytest -q'
+        language: system
+        pass_filenames: false

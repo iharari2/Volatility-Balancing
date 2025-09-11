@@ -2,7 +2,7 @@
 # backend/domain/ports/orders_repo.py
 # =========================
 from typing import Protocol, Iterable, Optional
-from datetime import date
+from datetime import date, datetime
 from domain.entities.order import Order
 
 
@@ -12,3 +12,6 @@ class OrdersRepo(Protocol):
     def count_for_position_on_day(self, position_id: str, day: date) -> int: ...
     def list_for_position(self, position_id: str, limit: int = 100) -> Iterable[Order]: ...
     def clear(self) -> None: ...
+    def count_for_position_between(
+        self, position_id: str, start: datetime, end: datetime
+    ) -> int: ...

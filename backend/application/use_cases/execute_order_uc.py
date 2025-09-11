@@ -6,14 +6,29 @@ from uuid import uuid4
 
 from application.dto.orders import FillOrderRequest, FillOrderResponse
 from domain.entities.event import Event
-from domain.ports.positions_repo import PositionsRepo
-from domain.ports.orders_repo import OrdersRepo
+from domain.errors import GuardrailBreach
 from domain.ports.events_repo import EventsRepo
+from domain.ports.orders_repo import OrdersRepo
+from domain.ports.positions_repo import PositionsRepo
 from infrastructure.time.clock import Clock
-from domain.errors import GuardrailBreach  # NEW
 
 
 class ExecuteOrderUC:
+    """
+    Applies an executed fill to a Position and emits events.
+
+    Notes
+    -----
+    * Commission is taken from FillOrderRequest (default 0.0 if omitted).
+    * "Below-min" order policy (min_qty / min_notional) is evaluated first.
+      - action_below_min == "reject": order is marked rejected and an event is added.
+      - action_below_min == "hold":   no position change; a 'skipped' event is added.
+    * SELL guardrail: reject if requested fill exceeds current position qty.
+    * After-fill guardrails: uses pos.guardrails.check_after_fill(...) to validate
+      resulting cash/qty, etc. If invalid -> GuardrailBreach + event.
+    * On success: updates position, marks order filled, appends 'order_filled' event.
+    """
+
     def __init__(
         self,
         positions: PositionsRepo,
@@ -35,6 +50,7 @@ class ExecuteOrderUC:
         if not pos:
             raise KeyError("position_not_found")
 
+        # Normalize/round qty by order policy
         policy = pos.order_policy
         q_req = abs(request.qty)
         q_req = policy.round_qty(q_req)
@@ -47,15 +63,16 @@ class ExecuteOrderUC:
         )
 
         now = self.clock.now()
-        uid = uuid4().hex[:8]  # NEW: short unique suffix for event IDs
+        uid = uuid4().hex[:8]  # unique suffix for event IDs
 
+        # Below-min policy
         if below_min:
             if policy.action_below_min == "reject":
                 order.status = "rejected"
                 self.orders.save(order)
                 self.events.append(
                     Event(
-                        id=f"evt_reject_{order.id}_{uid}",  # NEW: unique
+                        id=f"evt_reject_{order.id}_{uid}",
                         position_id=order.position_id,
                         type="fill_rejected_below_min",
                         inputs={"qty": q_req, "price": request.price},
@@ -69,7 +86,7 @@ class ExecuteOrderUC:
                 # "hold"
                 self.events.append(
                     Event(
-                        id=f"evt_skip_{order.id}_{uid}",  # NEW: unique
+                        id=f"evt_skip_{order.id}_{uid}",
                         position_id=order.position_id,
                         type="fill_skipped_below_min",
                         inputs={"qty": q_req, "price": request.price},
@@ -80,7 +97,7 @@ class ExecuteOrderUC:
                 )
                 return FillOrderResponse(order_id=order.id, status="skipped", filled_qty=0.0)
 
-        # NEW: SELL guardrail — reject if not enough qty BEFORE any 'filled' event
+        # SELL guardrail: insufficient qty before applying any changes
         if order.side == "SELL" and q_req > pos.qty:
             self.events.append(
                 Event(
@@ -95,7 +112,35 @@ class ExecuteOrderUC:
             )
             raise GuardrailBreach("insufficient_qty")
 
-        # Apply fill
+        # Validate after-fill guardrails (cash/qty allocation, etc.)
+        ok, why = pos.guardrails.check_after_fill(
+            qty_now=pos.qty,
+            cash_now=pos.cash,
+            side=order.side,
+            fill_qty=q_req,
+            price=request.price,
+            commission=commission,
+        )
+        if not ok:
+            self.events.append(
+                Event(
+                    id=f"evt_gr_{order.id}_{uid}",
+                    position_id=order.position_id,
+                    type="guardrail_breach",
+                    inputs={
+                        "side": order.side,
+                        "qty": q_req,
+                        "price": request.price,
+                        "commission": commission,
+                    },
+                    outputs={"order_id": order.id, "reason": why},
+                    ts=now,
+                    message=f"guardrail breach: {why}",
+                )
+            )
+            raise GuardrailBreach(why)
+
+        # Apply the fill
         if order.side == "BUY":
             pos.qty += q_req
             pos.cash -= (q_req * request.price) + commission
@@ -105,12 +150,13 @@ class ExecuteOrderUC:
             pos.cash += (q_req * request.price) - commission
 
         self.positions.save(pos)
+
         order.status = "filled"
         self.orders.save(order)
 
         self.events.append(
             Event(
-                id=f"evt_filled_{order.id}_{uid}",  # NEW: unique
+                id=f"evt_filled_{order.id}_{uid}",
                 position_id=order.position_id,
                 type="order_filled",
                 inputs={"qty": q_req, "price": request.price},

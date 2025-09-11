@@ -1,24 +1,23 @@
-# =========================
 # backend/application/use_cases/submit_order_uc.py
-# =========================
+from __future__ import annotations
+
 import hashlib
 import uuid
-from typing import Dict, Any, Tuple
+from typing import Any, Dict
 
 from application.dto.orders import CreateOrderRequest, CreateOrderResponse
 from domain.entities.order import Order
 from domain.entities.event import Event
-from domain.ports.positions_repo import PositionsRepo
-from domain.ports.orders_repo import OrdersRepo
-from domain.ports.idempotency_repo import IdempotencyRepo
-from domain.ports.events_repo import EventsRepo
 from domain.errors import IdempotencyConflict
+from domain.ports.events_repo import EventsRepo
+from domain.ports.idempotency_repo import IdempotencyRepo
+from domain.ports.orders_repo import OrdersRepo
+from domain.ports.positions_repo import PositionsRepo
+from infrastructure.time.clock import Clock
 
 
 class SubmitOrderUC:
-    """Flow A: Idempotent order submission.
-    Returns (CreateOrderResponse, replay: bool)
-    """
+    """Idempotent order submission flow that returns a CreateOrderResponse."""
 
     def __init__(
         self,
@@ -26,7 +25,7 @@ class SubmitOrderUC:
         orders: OrdersRepo,
         idempotency: IdempotencyRepo,
         events: EventsRepo,
-        clock,
+        clock: Clock,
     ) -> None:
         self.positions = positions
         self.orders = orders
@@ -42,27 +41,28 @@ class SubmitOrderUC:
 
     def execute(
         self, position_id: str, request: CreateOrderRequest, idempotency_key: str
-    ) -> Tuple[CreateOrderResponse, bool]:
-        # 1) Check position
+    ) -> CreateOrderResponse:
+        # 1) Validate position
         pos = self.positions.get(position_id)
         if not pos:
             raise KeyError("position_not_found")
 
-        # 2) Compute signature, then build a per-position scoped key
+        # 2) Signature + per-position scoped key
         sig = self._signature(position_id, request)
         scoped_key = f"{position_id}:{idempotency_key}"
 
-        # Reserve idempotency
+        # Try to reserve idempotency key; the repo should return:
+        # - None if reserved OK
+        # - existing order_id if same signature was already processed
+        # - a string starting with "conflict:" if same key but different signature
         existing = self.idempotency.reserve(scoped_key, sig)
-        if existing is not None:
-            if isinstance(existing, str) and existing.startswith("conflict:"):
+        if isinstance(existing, str):
+            if existing.startswith("conflict:"):
                 raise IdempotencyConflict("idempotency_signature_mismatch")
-            return (
-                CreateOrderResponse(order_id=existing, accepted=True, position_id=position_id),
-                True,
-            )
+            # existing is an order_id for the same signature → return same response
+            return CreateOrderResponse(order_id=existing, accepted=True, position_id=position_id)
 
-        # 3) Guardrails (daily cap) as you already have...
+        # 3) Daily cap guardrail
         today = self.clock.now().date()
         if (
             self.orders.count_for_position_on_day(position_id, today)
@@ -70,7 +70,7 @@ class SubmitOrderUC:
         ):
             raise IdempotencyConflict("daily_order_cap_exceeded")
 
-        # 4) Create + persist order
+        # 4) Create order
         order_id = f"ord_{uuid.uuid4().hex[:8]}"
         order = Order(
             id=order_id,
@@ -78,7 +78,7 @@ class SubmitOrderUC:
             side=request.side,
             qty=request.qty,
             status="submitted",
-            idempotency_key=idempotency_key,  # keep the raw client key on the entity/row
+            idempotency_key=idempotency_key,
             request_signature={
                 "position_id": position_id,
                 "side": request.side,
@@ -87,7 +87,7 @@ class SubmitOrderUC:
         )
         self.orders.save(order)
 
-        # Write final idempotency outcome using the same scoped key
+        # Finalize idempotency outcome
         self.idempotency.put(scoped_key, order_id, sig)
 
         # 5) Event
@@ -102,4 +102,4 @@ class SubmitOrderUC:
         )
         self.events.append(evt)
 
-        return CreateOrderResponse(order_id=order_id, accepted=True, position_id=position_id), False
+        return CreateOrderResponse(order_id=order_id, accepted=True, position_id=position_id)

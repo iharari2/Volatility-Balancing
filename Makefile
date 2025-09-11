@@ -54,3 +54,8 @@ clean:
 help:
 	@echo "Targets: venv install run dev test lint fmt type cov clean"
 
+.PHONY: fmt lint type test prepush
+
+prepush: fmt lint test
+	@echo "All good ✅"
+

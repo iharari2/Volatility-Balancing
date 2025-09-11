@@ -1,17 +1,19 @@
 from __future__ import annotations
+
 from typing import Iterable
-from sqlalchemy.orm import sessionmaker
+
 from sqlalchemy import select
+from sqlalchemy.orm import Session, sessionmaker
 
 from domain.entities.event import Event
 from domain.ports.events_repo import EventsRepo
 from .models import EventModel
 
-__all__ = ["SQLEventsRepo"]  # <- explicit export
+__all__ = ["SQLEventsRepo"]
 
 
 class SQLEventsRepo(EventsRepo):
-    def __init__(self, session_factory: sessionmaker) -> None:
+    def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self._sf = session_factory
 
     def append(self, event: Event) -> None:
@@ -37,7 +39,7 @@ class SQLEventsRepo(EventsRepo):
                 .order_by(EventModel.ts.desc())
                 .limit(limit)
             )
-            rows = s.execute(stmt).scalars().all()
+            rows: list[EventModel] = list(s.execute(stmt).scalars().all())
             return [
                 Event(
                     id=r.id,

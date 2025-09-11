@@ -4,6 +4,7 @@
 # backend/app/routes/positions.py  (only the relevant bits)
 
 from typing import Optional, cast
+from typing import Any, Dict
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app.di import container
@@ -60,7 +61,7 @@ def _to_domain_policy(op: Optional[OrderPolicyIn]) -> OrderPolicy:
 
 
 @router.post("/positions", response_model=CreatePositionResponse, status_code=201)
-def create_position(payload: CreatePositionRequest):
+def create_position(payload: CreatePositionRequest) -> CreatePositionResponse:
     pos_repo = container.positions
     pos = pos_repo.create(ticker=payload.ticker, qty=payload.qty, cash=payload.cash)
 
@@ -79,7 +80,7 @@ def create_position(payload: CreatePositionRequest):
 
 
 @router.get("/positions/{position_id}")
-def get_position(position_id: str):
+def get_position(position_id: str) -> Dict[str, Any]:
     pos = container.positions.get(position_id)
     if not pos:
         raise HTTPException(404, detail="position_not_found")
@@ -92,7 +93,7 @@ def get_position(position_id: str):
 
 
 @router.post("/positions/{position_id}/evaluate")
-def evaluate_position(position_id: str):
+def evaluate_position(position_id: str) -> Dict[str, Any]:
     # Flow B placeholder: return empty proposals for now
     if not container.positions.get(position_id):
         raise HTTPException(404, detail="position_not_found")
@@ -100,6 +101,6 @@ def evaluate_position(position_id: str):
 
 
 @router.get("/positions/{position_id}/events")
-def list_events(position_id: str, limit: int = 100):
+def list_events(position_id: str, limit: int = 100) -> Dict[str, Any]:
     events = container.events.list_for_position(position_id, limit=limit)
     return {"position_id": position_id, "events": [asdict(e) for e in events]}

@@ -2,7 +2,7 @@
 # backend/infrastructure/persistence/memory/orders_repo_mem.py
 # =========================
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime
 from typing import Dict, Optional, Iterable
 
 from domain.entities.order import Order
@@ -37,3 +37,11 @@ class InMemoryOrdersRepo(OrdersRepo):
         self._items.clear()
         self._count_index.clear()
         self._by_position.clear()  # NEW
+
+    def count_for_position_between(self, position_id: str, start: datetime, end: datetime) -> int:
+        # Count orders created within [start, end)
+        return sum(
+            1
+            for o in self._items.values()
+            if o.position_id == position_id and start <= o.created_at < end
+        )

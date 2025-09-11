@@ -1,25 +1,35 @@
 # =========================
-# /backend/infrastructure/persistence/sql/orders_repo_sql.py
+# backend/infrastructure/persistence/sql/orders_repo_sql.py
 # =========================
 from __future__ import annotations
-from datetime import datetime, timezone, time
-from typing import Optional, cast, Iterable, List
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import func, desc
 
+from datetime import datetime, timezone, time, date
+from typing import Optional, Iterable, List, cast
 
-from domain.ports.orders_repo import OrdersRepo
-from .models import OrderModel
+from sqlalchemy import desc, func, select
+from sqlalchemy.orm import Session, sessionmaker
+
 from domain.entities.order import Order
-from domain.value_objects.types import OrderStatus, OrderSide
+from domain.ports.orders_repo import OrdersRepo
+from domain.value_objects.types import OrderSide, OrderStatus
+from .models import OrderModel
 
-
-__all__ = ["SQLOrdersRepo"]  # <- explicit export
+__all__ = ["SQLOrdersRepo"]
 
 
 class SQLOrdersRepo(OrdersRepo):
-    def __init__(self, session_factory: sessionmaker) -> None:
+    def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self._sf = session_factory
+
+    def count_for_position_between(self, position_id: str, start: datetime, end: datetime) -> int:
+        with self._sf() as s:
+            stmt = select(func.count(OrderModel.id)).where(
+                OrderModel.position_id == position_id,
+                OrderModel.created_at >= start,
+                OrderModel.created_at < end,
+                OrderModel.status.in_(("submitted", "filled", "rejected")),
+            )
+            return int(s.scalar(stmt) or 0)
 
     def get(self, order_id: str) -> Optional[Order]:
         with self._sf() as s:
@@ -58,11 +68,11 @@ class SQLOrdersRepo(OrdersRepo):
                 obj.side = order.side
                 obj.qty = order.qty
                 obj.status = order.status
-                obj.idempotency_key = order.idempotency_key
+                obj.idempotency_key = order.idempotency_key or ""
                 obj.updated_at = order.updated_at
             s.commit()
 
-    def count_for_position_on_day(self, position_id: str, day) -> int:
+    def count_for_position_on_day(self, position_id: str, day: date) -> int:
         start = datetime.combine(day, time.min).replace(tzinfo=timezone.utc)
         end = datetime.combine(day, time.max).replace(tzinfo=timezone.utc)
         with self._sf() as s:
@@ -93,9 +103,9 @@ class SQLOrdersRepo(OrdersRepo):
                 Order(
                     id=r.id,
                     position_id=r.position_id,
-                    side=r.side,  # type: ignore
+                    side=cast(OrderSide, r.side),
                     qty=r.qty,
-                    status=r.status,  # type: ignore
+                    status=cast(OrderStatus, r.status),
                     idempotency_key=r.idempotency_key,
                     created_at=r.created_at,
                     updated_at=r.updated_at,

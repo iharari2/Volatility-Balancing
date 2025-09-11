@@ -26,9 +26,8 @@ class Position:
     max_alloc: float
     last_price: float = 0.0
 
-
-def nav(self) -> float:
-    return self.cash + self.asset_qty * self.last_price
+    def nav(self) -> float:
+        return self.cash + self.asset_qty * self.last_price
 
 
 @dataclass
@@ -61,3 +60,15 @@ class Event:
     type: str
     ts: datetime
     payload: Dict[str, Any]
+
+
+def clamp(n: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, n))
+
+
+def pct(amount: float, total: float) -> float:
+    if total == 0:
+        return 0.0
+    # ensure float, not Any
+    val: float = amount / total
+    return val
