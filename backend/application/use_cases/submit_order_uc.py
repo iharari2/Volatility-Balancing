@@ -68,7 +68,8 @@ class SubmitOrderUC:
             self.orders.count_for_position_on_day(position_id, today)
             >= pos.guardrails.max_orders_per_day
         ):
-            raise IdempotencyConflict("daily_order_cap_exceeded")
+            from domain.errors import GuardrailBreach
+            raise GuardrailBreach("daily_order_cap_exceeded")
 
         # 4) Create order
         order_id = f"ord_{uuid.uuid4().hex[:8]}"

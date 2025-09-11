@@ -7,8 +7,6 @@ from domain.errors import GuardrailBreach
 
 
 def _submit_buy_order(pos_id: str, qty: float = 2.0):
-    from application.use_cases.submit_order_uc import SubmitOrderUC
-    from application.dto.orders import CreateOrderRequest
 
     uc = SubmitOrderUC(
         container.positions,
@@ -53,7 +51,7 @@ def test_fill_sell_rejects_if_insufficient_qty():
         uc.execute(order_id="ord_sell", request=FillOrderRequest(qty=2.0, price=5.0))
 
 
-def test_buy_commission_decreases_cash(container):
+def test_buy_commission_decreases_cash():
     pos = container.positions.create(ticker="AAA", qty=0.0, cash=1000.0)
     oid = container.orders.create(position_id=pos.id, side="BUY", qty=2.0, idempotency_key="buy-1")
 
@@ -66,7 +64,7 @@ def test_buy_commission_decreases_cash(container):
     assert pos_after.cash == 979.0
 
 
-def test_sell_commission_reduces_proceeds(container):
+def test_sell_commission_reduces_proceeds():
     pos = container.positions.create(ticker="BBB", qty=5.0, cash=0.0)
     oid = container.orders.create(
         position_id=pos.id, side="SELL", qty=2.0, idempotency_key="sell-1"
@@ -81,7 +79,7 @@ def test_sell_commission_reduces_proceeds(container):
     assert pos_after.cash == 18.5
 
 
-def test_commission_defaults_to_zero(container):
+def test_commission_defaults_to_zero():
     pos = container.positions.create(ticker="CCC", qty=0.0, cash=100.0)
     oid = container.orders.create(position_id=pos.id, side="BUY", qty=1.0, idempotency_key="buy-2")
     uc = ExecuteOrderUC(container.positions, container.orders, container.events, container.clock)

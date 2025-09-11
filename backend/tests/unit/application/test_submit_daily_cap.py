@@ -55,22 +55,18 @@ def test_daily_cap_at_fill_is_enforced():
     pos.guardrails.max_orders_per_day = 1
     container.positions.save(pos)
 
-    # Submit two orders
+    # Submit first order (should pass)
     first = _submit(container, pos.id, side="BUY", qty=1.0, idemp="fillcap-1")
-    second = _submit(container, pos.id, side="BUY", qty=1.0, idemp="fillcap-2")
 
+    # Second submit should breach the cap at submit time
+    with pytest.raises(GuardrailBreach):
+        _submit(container, pos.id, side="BUY", qty=1.0, idemp="fillcap-2")
+
+    # Fill the first order (should work)
     exec_uc = ExecuteOrderUC(
         container.positions, container.orders, container.events, container.clock
     )
-
-    # First fill should pass
     r1 = exec_uc.execute(
         order_id=first, request=FillOrderRequest(qty=1.0, price=10.0, commission=0.0)
     )
     assert r1.status == "filled"
-
-    # Second fill should breach the cap
-    with pytest.raises(GuardrailBreach):
-        exec_uc.execute(
-            order_id=second, request=FillOrderRequest(qty=1.0, price=10.0, commission=0.0)
-        )
