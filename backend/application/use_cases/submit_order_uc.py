@@ -69,6 +69,7 @@ class SubmitOrderUC:
             >= pos.guardrails.max_orders_per_day
         ):
             from domain.errors import GuardrailBreach
+
             raise GuardrailBreach("daily_order_cap_exceeded")
 
         # 4) Create order

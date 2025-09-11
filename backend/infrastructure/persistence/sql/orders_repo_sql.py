@@ -31,6 +31,22 @@ class SQLOrdersRepo(OrdersRepo):
             )
             return int(s.scalar(stmt) or 0)
 
+    def create(self, *, position_id: str, side: OrderSide, qty: float, idempotency_key: str) -> str:
+        """Create a submitted order and return its generated ID."""
+        from uuid import uuid4
+
+        order_id = f"ord_{uuid4().hex[:8]}"
+        order = Order(
+            id=order_id,
+            position_id=position_id,
+            side=side,
+            qty=qty,
+            status="submitted",
+            idempotency_key=idempotency_key,
+        )
+        self.save(order)
+        return order_id
+
     def get(self, order_id: str) -> Optional[Order]:
         with self._sf() as s:
             row = s.get(OrderModel, order_id)

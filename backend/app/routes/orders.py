@@ -19,7 +19,7 @@ from application.use_cases.execute_order_uc import ExecuteOrderUC
 router = APIRouter(tags=["orders"])
 
 
-@router.post("/v1/positions/{position_id}/orders", response_model=CreateOrderResponse)
+@router.post("/positions/{position_id}/orders", response_model=CreateOrderResponse)
 def submit_order(
     position_id: str,
     payload: CreateOrderRequest,
