@@ -34,10 +34,12 @@ def test_daily_cap_at_submit_is_enforced():
     # If your Position/GuardrailPolicy doesn't default this, set and save:
     pos.guardrails.max_orders_per_day = 2
     container.positions.save(pos)
-    
+
     # Verify the position was saved correctly
     pos_after = container.positions.get(pos.id)
-    assert pos_after.guardrails.max_orders_per_day == 2, f"Expected 2, got {pos_after.guardrails.max_orders_per_day}"
+    assert (
+        pos_after.guardrails.max_orders_per_day == 2
+    ), f"Expected 2, got {pos_after.guardrails.max_orders_per_day}"
 
     # Act: submit up to the cap
     _submit(container, pos.id, side="BUY", qty=1.0, idemp="cap-1")
@@ -58,10 +60,12 @@ def test_daily_cap_at_fill_is_enforced():
     pos = container.positions.create(ticker="CAPF", qty=0.0, cash=10_000.0)
     pos.guardrails.max_orders_per_day = 1
     container.positions.save(pos)
-    
+
     # Verify the position was saved correctly
     pos_after = container.positions.get(pos.id)
-    assert pos_after.guardrails.max_orders_per_day == 1, f"Expected 1, got {pos_after.guardrails.max_orders_per_day}"
+    assert (
+        pos_after.guardrails.max_orders_per_day == 1
+    ), f"Expected 1, got {pos_after.guardrails.max_orders_per_day}"
 
     # Submit first order (should pass)
     first = _submit(container, pos.id, side="BUY", qty=1.0, idemp="fillcap-1")

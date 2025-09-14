@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session, sessionmaker
 from domain.entities.position import Position
 from domain.ports.positions_repo import PositionsRepo
 from domain.value_objects.order_policy import OrderPolicy
-from domain.value_objects.guardrails import GuardrailPolicy
 from .models import PositionModel
 
 
@@ -30,12 +29,7 @@ def _to_entity(m: PositionModel) -> Position:
             qty_step=m.op_qty_step or 0.0,
             action_below_min=m.op_action_below_min or "hold",
         ),
-        # Coalesce nullable guardrails columns to defaults
-        guardrails=GuardrailPolicy(
-            min_stock_alloc_pct=m.gr_min_stock_alloc_pct or 0.0,
-            max_stock_alloc_pct=m.gr_max_stock_alloc_pct or 1.0,
-            max_orders_per_day=m.gr_max_orders_per_day or 5,
-        ),
+        # guardrails remain whatever the entity default is (not persisted yet)
     )
 
 
@@ -53,9 +47,6 @@ def _new_row_from_entity(p: Position) -> PositionModel:
         op_lot_size=p.order_policy.lot_size,
         op_qty_step=p.order_policy.qty_step,
         op_action_below_min=p.order_policy.action_below_min,
-        gr_min_stock_alloc_pct=p.guardrails.min_stock_alloc_pct,
-        gr_max_stock_alloc_pct=p.guardrails.max_stock_alloc_pct,
-        gr_max_orders_per_day=p.guardrails.max_orders_per_day,
     )
 
 
@@ -71,10 +62,6 @@ def _apply_entity_to_row(row: PositionModel, p: Position) -> None:
     row.op_lot_size = p.order_policy.lot_size
     row.op_qty_step = p.order_policy.qty_step
     row.op_action_below_min = p.order_policy.action_below_min
-
-    row.gr_min_stock_alloc_pct = p.guardrails.min_stock_alloc_pct
-    row.gr_max_stock_alloc_pct = p.guardrails.max_stock_alloc_pct
-    row.gr_max_orders_per_day = p.guardrails.max_orders_per_day
 
 
 class SQLPositionsRepo(PositionsRepo):
