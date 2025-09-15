@@ -15,6 +15,7 @@ from application.dto.orders import (
 )
 from application.use_cases.submit_order_uc import SubmitOrderUC
 from application.use_cases.execute_order_uc import ExecuteOrderUC
+from application.use_cases.evaluate_position_uc import EvaluatePositionUC
 
 router = APIRouter(tags=["orders"])
 
@@ -53,6 +54,98 @@ def fill_order(order_id: str, payload: FillOrderRequest) -> FillOrderResponse:
     except KeyError:
         # Normalize to HTTP 404 for missing order
         raise HTTPException(404, detail="order_not_found")
+
+
+@router.post("/positions/{position_id}/orders/auto-size")
+def submit_auto_sized_order(
+    position_id: str,
+    current_price: float,
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+) -> Dict[str, Any]:
+    """Submit an order with automatic sizing based on volatility triggers and guardrails."""
+
+    # First, evaluate the position to get the order proposal
+    eval_uc = EvaluatePositionUC(
+        positions=container.positions,
+        events=container.events,
+        clock=container.clock,
+    )
+
+    try:
+        evaluation = eval_uc.evaluate(position_id, current_price)
+    except KeyError:
+        raise HTTPException(404, detail="position_not_found")
+
+    if not evaluation["trigger_detected"]:
+        return {
+            "position_id": position_id,
+            "current_price": current_price,
+            "order_submitted": False,
+            "reason": "No trigger detected - no order needed",
+            "evaluation": evaluation,
+        }
+
+    order_proposal = evaluation["order_proposal"]
+
+    # Check if the order is valid
+    if not order_proposal["validation"]["valid"]:
+        return {
+            "position_id": position_id,
+            "current_price": current_price,
+            "order_submitted": False,
+            "reason": "Order validation failed",
+            "rejections": order_proposal["validation"]["rejections"],
+            "evaluation": evaluation,
+        }
+
+    # Create the order using the proposal
+    order_request = CreateOrderRequest(
+        side=order_proposal["side"],
+        qty=order_proposal["trimmed_qty"],
+        price=current_price,
+    )
+
+    # Submit the order
+    submit_uc = SubmitOrderUC(
+        positions=container.positions,
+        orders=container.orders,
+        events=container.events,
+        idempotency=container.idempotency,
+        clock=container.clock,
+    )
+
+    try:
+        order_response = submit_uc.execute(
+            position_id=position_id,
+            request=order_request,
+            idempotency_key=(idempotency_key or ""),
+        )
+
+        return {
+            "position_id": position_id,
+            "current_price": current_price,
+            "order_submitted": True,
+            "order_id": order_response.order_id,
+            "order_details": order_response,
+            "sizing_details": {
+                "raw_qty": order_proposal["raw_qty"],
+                "trimmed_qty": order_proposal["trimmed_qty"],
+                "notional": order_proposal["notional"],
+                "commission": order_proposal["commission"],
+                "trimming_reason": order_proposal["trimming_reason"],
+                "post_trade_asset_pct": order_proposal["post_trade_asset_pct"],
+            },
+            "evaluation": evaluation,
+        }
+
+    except Exception as e:
+        return {
+            "position_id": position_id,
+            "current_price": current_price,
+            "order_submitted": False,
+            "reason": f"Order submission failed: {str(e)}",
+            "evaluation": evaluation,
+        }
 
 
 @router.get("/positions/{position_id}/orders")
