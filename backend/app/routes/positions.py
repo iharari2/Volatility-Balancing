@@ -11,6 +11,7 @@ from app.di import container
 from dataclasses import asdict
 from domain.value_objects.order_policy import OrderPolicy
 from domain.value_objects.types import ActionBelowMin
+from application.use_cases.evaluate_position_uc import EvaluatePositionUC
 
 router = APIRouter(prefix="/v1")
 
@@ -93,11 +94,35 @@ def get_position(position_id: str) -> Dict[str, Any]:
 
 
 @router.post("/positions/{position_id}/evaluate")
-def evaluate_position(position_id: str) -> Dict[str, Any]:
-    # Flow B placeholder: return empty proposals for now
+def evaluate_position(position_id: str, current_price: float) -> Dict[str, Any]:
+    """Evaluate position for volatility triggers."""
     if not container.positions.get(position_id):
         raise HTTPException(404, detail="position_not_found")
-    return {"position_id": position_id, "proposals": []}
+
+    uc = EvaluatePositionUC(
+        positions=container.positions,
+        events=container.events,
+        clock=container.clock,
+    )
+
+    return uc.evaluate(position_id, current_price)
+
+
+@router.post("/positions/{position_id}/anchor")
+def set_anchor_price(position_id: str, price: float) -> Dict[str, Any]:
+    """Set the anchor price for volatility trading."""
+    pos = container.positions.get(position_id)
+    if not pos:
+        raise HTTPException(404, detail="position_not_found")
+
+    pos.set_anchor_price(price)
+    container.positions.save(pos)
+
+    return {
+        "position_id": position_id,
+        "anchor_price": price,
+        "message": f"Anchor price set to ${price:.2f}",
+    }
 
 
 @router.get("/positions/{position_id}/events")

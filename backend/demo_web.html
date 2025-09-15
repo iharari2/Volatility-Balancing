@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Volatility Trading System Demo</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #fafafa;
+        }
+        .section h3 {
+            margin-top: 0;
+            color: #34495e;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        button:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+        }
+        input, select {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        .result {
+            background-color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .success { border-left: 4px solid #27ae60; }
+        .error { border-left: 4px solid #e74c3c; }
+        .warning { border-left: 4px solid #f39c12; }
+        .trigger { border-left: 4px solid #e67e22; }
+        .no-trigger { border-left: 4px solid #95a5a6; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Volatility Trading System Demo</h1>
+        
+        <div class="section">
+            <h3>1. Create Position</h3>
+            <button onclick="createPosition()">Create New Position</button>
+            <div id="positionResult" class="result" style="display:none;"></div>
+        </div>
+
+        <div class="section">
+            <h3>2. Set Anchor Price</h3>
+            <input type="number" id="anchorPrice" value="150" step="0.01" placeholder="Anchor Price">
+            <button onclick="setAnchor()" id="setAnchorBtn" disabled>Set Anchor Price</button>
+            <div id="anchorResult" class="result" style="display:none;"></div>
+        </div>
+
+        <div class="section">
+            <h3>3. Test Volatility Triggers</h3>
+            <input type="number" id="testPrice" value="145" step="0.01" placeholder="Test Price">
+            <button onclick="evaluatePrice()" id="evaluateBtn" disabled>Evaluate Price</button>
+            <button onclick="testMultiplePrices()" id="testMultipleBtn" disabled>Test Multiple Prices</button>
+            <div id="evaluationResult" class="result" style="display:none;"></div>
+        </div>
+
+        <div class="section">
+            <h3>4. View Events</h3>
+            <button onclick="showEvents()" id="eventsBtn" disabled>Show Audit Trail</button>
+            <div id="eventsResult" class="result" style="display:none;"></div>
+        </div>
+
+        <div class="section">
+            <h3>5. Position Status</h3>
+            <button onclick="showPosition()" id="positionBtn" disabled>Show Position Details</button>
+            <div id="positionStatus" class="result" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+        let positionId = null;
+        const baseUrl = 'http://localhost:8000/v1';
+
+        function showResult(elementId, content, type = 'success') {
+            const element = document.getElementById(elementId);
+            element.style.display = 'block';
+            element.className = `result ${type}`;
+            element.textContent = content;
+        }
+
+        function hideResult(elementId) {
+            document.getElementById(elementId).style.display = 'none';
+        }
+
+        async function createPosition() {
+            try {
+                const response = await fetch(`${baseUrl}/positions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ticker: 'AAPL',
+                        qty: 0,
+                        cash: 10000
+                    })
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    positionId = data.id;
+                    showResult('positionResult', 
+                        `✅ Position Created Successfully!\n` +
+                        `ID: ${data.id}\n` +
+                        `Ticker: ${data.ticker}\n` +
+                        `Cash: $${data.cash.toLocaleString()}\n` +
+                        `Shares: ${data.qty}`, 'success');
+                    
+                    // Enable other buttons
+                    document.getElementById('setAnchorBtn').disabled = false;
+                    document.getElementById('evaluateBtn').disabled = false;
+                    document.getElementById('testMultipleBtn').disabled = false;
+                    document.getElementById('eventsBtn').disabled = false;
+                    document.getElementById('positionBtn').disabled = false;
+                } else {
+                    showResult('positionResult', `❌ Error: ${data.detail}`, 'error');
+                }
+            } catch (error) {
+                showResult('positionResult', `❌ Network Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function setAnchor() {
+            if (!positionId) return;
+            
+            const price = parseFloat(document.getElementById('anchorPrice').value);
+            try {
+                const response = await fetch(`${baseUrl}/positions/${positionId}/anchor?price=${price}`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    showResult('anchorResult', 
+                        `✅ Anchor Price Set!\n` +
+                        `Price: $${data.anchor_price}\n` +
+                        `Message: ${data.message}\n\n` +
+                        `Buy Trigger: ≤ $${(price * 0.97).toFixed(2)} (3% below)\n` +
+                        `Sell Trigger: ≥ $${(price * 1.03).toFixed(2)} (3% above)`, 'success');
+                } else {
+                    showResult('anchorResult', `❌ Error: ${data.detail}`, 'error');
+                }
+            } catch (error) {
+                showResult('anchorResult', `❌ Network Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function evaluatePrice() {
+            if (!positionId) return;
+            
+            const price = parseFloat(document.getElementById('testPrice').value);
+            try {
+                const response = await fetch(`${baseUrl}/positions/${positionId}/evaluate?current_price=${price}`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    const type = data.trigger_detected ? 'trigger' : 'no-trigger';
+                    const icon = data.trigger_detected ? '🚨' : '✅';
+                    const triggerType = data.trigger_detected ? data.trigger_type : 'None';
+                    
+                    showResult('evaluationResult', 
+                        `${icon} Evaluation Result\n` +
+                        `Price: $${data.current_price}\n` +
+                        `Anchor: $${data.anchor_price}\n` +
+                        `Trigger Detected: ${data.trigger_detected}\n` +
+                        `Trigger Type: ${triggerType}\n` +
+                        `Reasoning: ${data.reasoning}`, type);
+                } else {
+                    showResult('evaluationResult', `❌ Error: ${data.detail}`, 'error');
+                }
+            } catch (error) {
+                showResult('evaluationResult', `❌ Network Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testMultiplePrices() {
+            if (!positionId) return;
+            
+            const prices = [145, 152, 155, 140, 160];
+            let results = '🧪 Testing Multiple Prices\n\n';
+            
+            for (const price of prices) {
+                try {
+                    const response = await fetch(`${baseUrl}/positions/${positionId}/evaluate?current_price=${price}`, {
+                        method: 'POST'
+                    });
+                    
+                    const data = await response.json();
+                    if (response.ok) {
+                        const icon = data.trigger_detected ? '🚨' : '✅';
+                        const triggerType = data.trigger_detected ? data.trigger_type : 'None';
+                        results += `$${price}: ${icon} ${triggerType} - ${data.reasoning}\n`;
+                    } else {
+                        results += `$${price}: ❌ Error - ${data.detail}\n`;
+                    }
+                } catch (error) {
+                    results += `$${price}: ❌ Network Error - ${error.message}\n`;
+                }
+            }
+            
+            showResult('evaluationResult', results, 'success');
+        }
+
+        async function showEvents() {
+            if (!positionId) return;
+            
+            try {
+                const response = await fetch(`${baseUrl}/positions/${positionId}/events`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    let eventsText = `📋 Audit Trail (${data.events.length} events)\n\n`;
+                    
+                    data.events.forEach((event, index) => {
+                        eventsText += `${index + 1}. ${event.type.toUpperCase()}\n`;
+                        eventsText += `   Time: ${new Date(event.ts).toLocaleString()}\n`;
+                        eventsText += `   Message: ${event.message}\n`;
+                        if (event.inputs && Object.keys(event.inputs).length > 0) {
+                            eventsText += `   Inputs: ${JSON.stringify(event.inputs, null, 2)}\n`;
+                        }
+                        if (event.outputs && Object.keys(event.outputs).length > 0) {
+                            eventsText += `   Outputs: ${JSON.stringify(event.outputs, null, 2)}\n`;
+                        }
+                        eventsText += '\n';
+                    });
+                    
+                    showResult('eventsResult', eventsText, 'success');
+                } else {
+                    showResult('eventsResult', `❌ Error: ${data.detail}`, 'error');
+                }
+            } catch (error) {
+                showResult('eventsResult', `❌ Network Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function showPosition() {
+            if (!positionId) return;
+            
+            try {
+                const response = await fetch(`${baseUrl}/positions/${positionId}`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const totalValue = (data.qty * 150) + data.cash; // Assuming $150 current price
+                    showResult('positionStatus', 
+                        `📊 Position Details\n` +
+                        `ID: ${data.id}\n` +
+                        `Ticker: ${data.ticker}\n` +
+                        `Shares: ${data.qty}\n` +
+                        `Cash: $${data.cash.toLocaleString()}\n` +
+                        `Anchor Price: $${data.anchor_price || 'Not set'}\n` +
+                        `Total Value: $${totalValue.toLocaleString()}`, 'success');
+                } else {
+                    showResult('positionStatus', `❌ Error: ${data.detail}`, 'error');
+                }
+            } catch (error) {
+                showResult('positionStatus', `❌ Network Error: ${error.message}`, 'error');
+            }
+        }
+    </script>
+</body>
+</html>
+

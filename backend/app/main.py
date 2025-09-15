@@ -10,5 +10,5 @@ API_PREFIX = "/v1"
 
 app = FastAPI(title="Volatility Balancing API", version="v1")
 app.include_router(health_router, prefix=API_PREFIX)
-app.include_router(positions_router, prefix=API_PREFIX)
+app.include_router(positions_router)  # positions_router already has /v1 prefix
 app.include_router(orders_router, prefix=API_PREFIX)

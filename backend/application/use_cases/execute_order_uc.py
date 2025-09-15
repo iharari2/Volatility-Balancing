@@ -154,6 +154,9 @@ class ExecuteOrderUC:
         order.status = "filled"
         self.orders.save(order)
 
+        # Update anchor price after successful execution
+        pos.set_anchor_price(request.price)
+
         self.events.append(
             Event(
                 id=f"evt_filled_{order.id}_{uid}",
@@ -163,6 +166,19 @@ class ExecuteOrderUC:
                 outputs={"order_id": order.id},
                 ts=now,
                 message=f"order filled ({order.side} {q_req})",
+            )
+        )
+
+        # Log anchor price update
+        self.events.append(
+            Event(
+                id=f"evt_anchor_{order.id}_{uid}",
+                position_id=order.position_id,
+                type="anchor_updated",
+                inputs={"old_anchor": pos.anchor_price, "new_anchor": request.price},
+                outputs={"anchor_price": request.price},
+                ts=now,
+                message=f"Anchor price updated to ${request.price:.2f}",
             )
         )
 
