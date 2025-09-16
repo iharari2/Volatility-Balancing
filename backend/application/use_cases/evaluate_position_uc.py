@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Dict, Any, Optional, Tuple
 from domain.ports.positions_repo import PositionsRepo
 from domain.ports.events_repo import EventsRepo
+from domain.ports.market_data import MarketDataRepo
 from domain.entities.event import Event
 from infrastructure.time.clock import Clock
 from uuid import uuid4
@@ -17,10 +18,12 @@ class EvaluatePositionUC:
         self,
         positions: PositionsRepo,
         events: EventsRepo,
+        market_data: MarketDataRepo,
         clock: Clock,
     ) -> None:
         self.positions = positions
         self.events = events
+        self.market_data = market_data
         self.clock = clock
 
     def evaluate(self, position_id: str, current_price: float) -> Dict[str, Any]:
@@ -73,6 +76,105 @@ class EvaluatePositionUC:
             "trigger_type": trigger_result.get("side"),
             "order_proposal": order_proposal,
             "reasoning": trigger_result["reasoning"],
+        }
+
+    def evaluate_with_market_data(self, position_id: str) -> Dict[str, Any]:
+        """Evaluate position using real-time market data with after-hours support."""
+
+        # Get position
+        position = self.positions.get(position_id)
+        if not position:
+            raise KeyError("position_not_found")
+
+        # Check if we have an anchor price
+        if not position.anchor_price:
+            return {
+                "position_id": position_id,
+                "current_price": None,
+                "anchor_price": None,
+                "trigger_detected": False,
+                "reasoning": "No anchor price set - cannot evaluate triggers",
+                "market_data": None,
+            }
+
+        # Get real-time market data
+        price_data = self.market_data.get_reference_price(position.ticker)
+        if not price_data:
+            return {
+                "position_id": position_id,
+                "current_price": None,
+                "anchor_price": position.anchor_price,
+                "trigger_detected": False,
+                "reasoning": "Unable to fetch market data",
+                "market_data": None,
+            }
+
+        # Validate price data with after-hours setting
+        validation = self.market_data.validate_price(
+            price_data, allow_after_hours=position.order_policy.allow_after_hours
+        )
+
+        # If validation fails, return early
+        if not validation["valid"]:
+            return {
+                "position_id": position_id,
+                "current_price": price_data.price,
+                "anchor_price": position.anchor_price,
+                "trigger_detected": False,
+                "reasoning": f"Market data validation failed: {', '.join(validation['rejections'])}",
+                "market_data": {
+                    "price": price_data.price,
+                    "source": price_data.source.value,
+                    "timestamp": price_data.timestamp.isoformat(),
+                    "is_market_hours": price_data.is_market_hours,
+                    "validation": validation,
+                },
+            }
+
+        # Check triggers with real market price
+        trigger_result = self._check_triggers(position, price_data.price)
+
+        # Check for auto-rebalancing needs (if no trigger detected)
+        rebalance_proposal = None
+        if not trigger_result["triggered"]:
+            rebalance_proposal = self._check_auto_rebalancing(position, price_data.price)
+            if rebalance_proposal:
+                trigger_result["triggered"] = True
+                trigger_result["side"] = rebalance_proposal["side"]
+                trigger_result["reasoning"] = rebalance_proposal["reasoning"]
+                trigger_result["order_proposal"] = rebalance_proposal
+
+        # If trigger detected, calculate order size and validate
+        order_proposal = None
+        if trigger_result["triggered"] and not rebalance_proposal:
+            order_proposal = self._calculate_order_proposal(
+                position, price_data.price, trigger_result["side"]
+            )
+            trigger_result["order_proposal"] = order_proposal
+
+        # Log event
+        self._log_evaluation_event(position, price_data.price, trigger_result)
+
+        return {
+            "position_id": position_id,
+            "current_price": price_data.price,
+            "anchor_price": position.anchor_price,
+            "trigger_detected": trigger_result["triggered"],
+            "trigger_type": trigger_result.get("side"),
+            "order_proposal": order_proposal,
+            "reasoning": trigger_result["reasoning"],
+            "market_data": {
+                "price": price_data.price,
+                "source": price_data.source.value,
+                "timestamp": price_data.timestamp.isoformat(),
+                "bid": price_data.bid,
+                "ask": price_data.ask,
+                "volume": price_data.volume,
+                "is_market_hours": price_data.is_market_hours,
+                "is_fresh": price_data.is_fresh,
+                "is_inline": price_data.is_inline,
+                "validation": validation,
+            },
         }
 
     def _check_triggers(self, position, current_price: float) -> Dict[str, Any]:
@@ -305,12 +407,15 @@ class EvaluatePositionUC:
                 "Order quantity too small (less than 0.001 shares)"
             )
 
-        # Check market hours (simplified - assume 9:30 AM to 4:00 PM ET, Monday-Friday)
+        # Check market hours (respect after-hours setting)
         if not self._is_market_hours():
-            validation_result["valid"] = False
-            validation_result["rejections"].append(
-                "Market is closed - trading only during market hours"
-            )
+            if not position.order_policy.allow_after_hours:
+                validation_result["valid"] = False
+                validation_result["rejections"].append(
+                    "Market is closed - after-hours trading disabled"
+                )
+            else:
+                validation_result["warnings"].append("Trading after market hours")
 
         # Check for duplicate orders (simplified - check if there's a recent order for this position)
         if self._has_recent_order(position.id):

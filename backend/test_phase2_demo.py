@@ -57,7 +57,7 @@ def create_position() -> str:
     if response.status_code == 201:
         result = response.json()
         print_result("Position Created", result)
-        return result["position_id"]
+        return result["id"]  # Changed from "position_id" to "id"
     else:
         print(f"Error creating position: {response.status_code} - {response.text}")
         return None

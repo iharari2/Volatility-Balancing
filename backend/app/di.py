@@ -7,6 +7,7 @@ from domain.ports.positions_repo import PositionsRepo
 from domain.ports.orders_repo import OrdersRepo
 from domain.ports.events_repo import EventsRepo
 from domain.ports.idempotency_repo import IdempotencyRepo
+from domain.ports.market_data import MarketDataRepo
 
 from infrastructure.time.clock import Clock
 
@@ -15,6 +16,7 @@ from infrastructure.persistence.memory.positions_repo_mem import InMemoryPositio
 from infrastructure.persistence.memory.orders_repo_mem import InMemoryOrdersRepo
 from infrastructure.persistence.memory.events_repo_mem import InMemoryEventsRepo
 from infrastructure.persistence.memory.idempotency_repo_mem import InMemoryIdempotencyRepo
+from infrastructure.market.yfinance_adapter import YFinanceAdapter
 
 # SQL bits (imported unconditionally; OK since deps are installed)
 from sqlalchemy.orm import sessionmaker
@@ -36,10 +38,12 @@ class _Container:
     orders: OrdersRepo
     events: EventsRepo
     idempotency: IdempotencyRepo
+    market_data: MarketDataRepo
     clock: Clock
 
     def __init__(self) -> None:
         self.clock = Clock()
+        self.market_data = YFinanceAdapter()
 
         persistence = os.getenv("APP_PERSISTENCE", "memory").lower()
         events_backend = os.getenv("APP_EVENTS", "memory").lower()

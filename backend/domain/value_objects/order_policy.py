@@ -20,6 +20,9 @@ class OrderPolicy:
     rebalance_ratio: float = 1.6667  # r from spec
     commission_rate: float = 0.0001  # 0.01% from spec
 
+    # Market hours configuration
+    allow_after_hours: bool = False  # Default: trading only during market hours
+
     def round_qty(self, q: float) -> float:
         if self.qty_step and self.qty_step > 0:
             steps = round(q / self.qty_step)
