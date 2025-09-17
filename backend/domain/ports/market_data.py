@@ -66,3 +66,4 @@ class MarketDataRepo(ABC):
         """Get reference price following the specification policy."""
         pass
 
+
