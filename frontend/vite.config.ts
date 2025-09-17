@@ -9,7 +9,7 @@ export default defineConfig({
     host: '0.0.0.0', // Allow external connections
     proxy: {
       '/api': {
-        target: 'http://172.17.245.65:8000', // WSL backend IP
+        target: 'http://localhost:8000', // Local backend
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '/v1'),
       },

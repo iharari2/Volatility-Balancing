@@ -4,12 +4,12 @@
 import os
 import pytest
 
-# Make sure tests use SQLite + auto create
-os.environ.setdefault("APP_PERSISTENCE", "sql")
-os.environ.setdefault("APP_EVENTS", "sql")
+# Make sure tests use in-memory for faster execution
+os.environ.setdefault("APP_PERSISTENCE", "memory")
+os.environ.setdefault("APP_EVENTS", "memory")
 os.environ.setdefault("APP_IDEMPOTENCY", "memory")
 os.environ.setdefault("SQL_URL", "sqlite:///./vb_test.sqlite")
-os.environ.setdefault("APP_AUTO_CREATE", "1")
+os.environ.setdefault("APP_AUTO_CREATE", "0")
 
 from starlette.testclient import TestClient
 from app.main import app
@@ -18,6 +18,8 @@ from app.di import container
 
 @pytest.fixture()
 def client():
+    # Reset container to ensure clean state
+    container.reset()
     return TestClient(app)
 
 

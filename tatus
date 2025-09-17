@@ -1,0 +1,4 @@
+warning: in the working copy of 'backend/app/routes/orders.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/application/use_cases/evaluate_position_uc.py', LF will be replaced by CRLF the next time Git touches it
+backend/app/routes/orders.py
+backend/application/use_cases/evaluate_position_uc.py

@@ -79,6 +79,9 @@ def test_daily_cap_at_fill_is_enforced():
         container.positions, container.orders, container.events, container.clock
     )
     r1 = exec_uc.execute(
-        order_id=first, request=FillOrderRequest(qty=1.0, price=10.0, commission=0.0)
+        order_id=first,
+        request=FillOrderRequest(
+            qty=1.0, price=100.0, commission=0.0
+        ),  # 1.0 * 100.0 = 100.0 notional
     )
     assert r1.status == "filled"

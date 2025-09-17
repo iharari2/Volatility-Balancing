@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Plus, Search, Filter } from 'lucide-react';
 import { usePositions, useCreatePosition } from '../hooks/usePositions';
 import PositionCard from '../components/PositionCard';
+import CreatePositionForm from '../components/CreatePositionForm';
 import { CreatePositionRequest } from '../types';
 
 export default function Positions() {
@@ -9,21 +10,13 @@ export default function Positions() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
-  const [formData, setFormData] = useState<CreatePositionRequest>({
-    ticker: 'AAPL',
-    qty: 0,
-    cash: 10000,
-  });
-
   const { data: positions = [], isLoading } = usePositions();
   const createPosition = useCreatePosition();
 
-  const handleCreatePosition = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreatePosition = async (data: CreatePositionRequest) => {
     try {
-      await createPosition.mutateAsync(formData);
+      await createPosition.mutateAsync(data);
       setShowCreateForm(false);
-      setFormData({ ticker: 'AAPL', qty: 0, cash: 10000 });
     } catch (error) {
       console.error('Failed to create position:', error);
     }
@@ -134,66 +127,12 @@ export default function Positions() {
               className="fixed inset-0 bg-gray-500 bg-opacity-75"
               onClick={() => setShowCreateForm(false)}
             />
-            <div className="relative bg-white rounded-lg p-6 w-full max-w-md">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Create New Position</h3>
-
-              <form onSubmit={handleCreatePosition} className="space-y-4">
-                <div>
-                  <label className="label">Ticker Symbol</label>
-                  <input
-                    type="text"
-                    value={formData.ticker}
-                    onChange={(e) =>
-                      setFormData({ ...formData, ticker: e.target.value.toUpperCase() })
-                    }
-                    className="input"
-                    placeholder="e.g., AAPL"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="label">Initial Cash</label>
-                  <input
-                    type="number"
-                    value={formData.cash}
-                    onChange={(e) => setFormData({ ...formData, cash: Number(e.target.value) })}
-                    className="input"
-                    min="0"
-                    step="0.01"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="label">Initial Shares (optional)</label>
-                  <input
-                    type="number"
-                    value={formData.qty}
-                    onChange={(e) => setFormData({ ...formData, qty: Number(e.target.value) })}
-                    className="input"
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-
-                <div className="flex space-x-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowCreateForm(false)}
-                    className="btn btn-secondary flex-1"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={createPosition.isPending}
-                    className="btn btn-primary flex-1"
-                  >
-                    {createPosition.isPending ? 'Creating...' : 'Create Position'}
-                  </button>
-                </div>
-              </form>
+            <div className="relative bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <CreatePositionForm
+                onSubmit={handleCreatePosition}
+                onCancel={() => setShowCreateForm(false)}
+                isLoading={createPosition.isPending}
+              />
             </div>
           </div>
         </div>

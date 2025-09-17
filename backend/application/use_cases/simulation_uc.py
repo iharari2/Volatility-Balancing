@@ -2,7 +2,7 @@
 # backend/application/use_cases/simulation_uc.py
 # =========================
 from __future__ import annotations
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 
@@ -93,6 +93,24 @@ class SimulationUC:
             start_date = start_date.replace(tzinfo=timezone.utc)
         if end_date.tzinfo is None:
             end_date = end_date.replace(tzinfo=timezone.utc)
+
+        # Fetch historical data first - use a shorter range for 1-minute data
+        # yfinance only allows 8 days of 1-minute data per request
+        days_diff = (end_date - start_date).days
+        if days_diff > 7:
+            # For longer periods, use daily data
+            fetch_start = start_date - timedelta(days=1)
+            fetch_end = end_date + timedelta(days=1)
+        else:
+            # For shorter periods, use 1-minute data
+            fetch_start = start_date - timedelta(hours=1)
+            fetch_end = end_date + timedelta(hours=1)
+
+        print(f"Fetching historical data for {ticker} from {fetch_start} to {fetch_end}")
+        historical_data = self.market_data.fetch_historical_data(ticker, fetch_start, fetch_end)
+
+        if not historical_data:
+            raise ValueError(f"No price data available for {ticker} in date range")
 
         # Get simulation data
         sim_data = self.market_data.get_simulation_data(

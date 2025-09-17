@@ -18,6 +18,22 @@ class InMemoryOrdersRepo(OrdersRepo):
     def get(self, order_id: str) -> Optional[Order]:
         return self._items.get(order_id)
 
+    def create(self, position_id: str, side: str, qty: float, idempotency_key: str) -> str:
+        """Create a new order and return its ID."""
+        from domain.entities.order import Order
+        import uuid
+        
+        order_id = f"ord_{uuid.uuid4().hex[:8]}"
+        order = Order(
+            id=order_id,
+            position_id=position_id,
+            side=side,
+            qty=qty,
+            idempotency_key=idempotency_key
+        )
+        self.save(order)
+        return order_id
+
     def save(self, order: Order) -> None:
         is_new = order.id not in self._items
         self._items[order.id] = order

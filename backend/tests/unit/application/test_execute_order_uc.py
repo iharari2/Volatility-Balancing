@@ -27,10 +27,12 @@ def test_fill_buy_increases_qty_and_decreases_cash():
     pos = container.positions.create(ticker="AAA", qty=0.0, cash=1000.0)
     oid = _submit_buy_order(pos.id, qty=2.0)
     uc = ExecuteOrderUC(container.positions, container.orders, container.events, container.clock)
-    r = uc.execute(order_id=oid, request=FillOrderRequest(qty=2.0, price=10.0, commission=1.0))
+    r = uc.execute(
+        order_id=oid, request=FillOrderRequest(qty=2.0, price=50.0, commission=1.0)
+    )  # 2.0 * 50.0 = 100.0 notional
     pos_after = container.positions.get(pos.id)
     assert pos_after.qty == 2.0
-    assert pos_after.cash == 1000.0 - (2.0 * 10.0) - 1.0  # price*qty + commission
+    assert pos_after.cash == 1000.0 - (2.0 * 50.0) - 1.0  # price*qty + commission
     assert r.filled_qty == 2.0
     assert r.status == "filled"
 
@@ -48,7 +50,9 @@ def test_fill_sell_rejects_if_insufficient_qty():
 
     uc = ExecuteOrderUC(container.positions, container.orders, container.events, container.clock)
     with pytest.raises(GuardrailBreach):
-        uc.execute(order_id="ord_sell", request=FillOrderRequest(qty=2.0, price=5.0))
+        uc.execute(
+            order_id="ord_sell", request=FillOrderRequest(qty=2.0, price=50.0)
+        )  # 2.0 * 50.0 = 100.0 notional
 
 
 def test_buy_commission_decreases_cash():
@@ -56,12 +60,14 @@ def test_buy_commission_decreases_cash():
     oid = container.orders.create(position_id=pos.id, side="BUY", qty=2.0, idempotency_key="buy-1")
 
     uc = ExecuteOrderUC(container.positions, container.orders, container.events, container.clock)
-    uc.execute(order_id=oid, request=FillOrderRequest(qty=2.0, price=10.0, commission=1.0))
+    uc.execute(
+        order_id=oid, request=FillOrderRequest(qty=2.0, price=50.0, commission=1.0)
+    )  # 2.0 * 50.0 = 100.0 notional
 
     pos_after = container.positions.get(pos.id)
     assert pos_after.qty == 2.0
-    # 1000 - (2 * 10) - 1
-    assert pos_after.cash == 979.0
+    # 1000 - (2 * 50) - 1
+    assert pos_after.cash == 899.0
 
 
 def test_sell_commission_reduces_proceeds():
@@ -71,19 +77,23 @@ def test_sell_commission_reduces_proceeds():
     )
 
     uc = ExecuteOrderUC(container.positions, container.orders, container.events, container.clock)
-    uc.execute(order_id=oid, request=FillOrderRequest(qty=2.0, price=10.0, commission=1.5))
+    uc.execute(
+        order_id=oid, request=FillOrderRequest(qty=2.0, price=50.0, commission=1.5)
+    )  # 2.0 * 50.0 = 100.0 notional
 
     pos_after = container.positions.get(pos.id)
     assert pos_after.qty == 3.0
-    # + (2 * 10) - 1.5
-    assert pos_after.cash == 18.5
+    # + (2 * 50) - 1.5
+    assert pos_after.cash == 98.5
 
 
 def test_commission_defaults_to_zero():
     pos = container.positions.create(ticker="CCC", qty=0.0, cash=100.0)
     oid = container.orders.create(position_id=pos.id, side="BUY", qty=1.0, idempotency_key="buy-2")
     uc = ExecuteOrderUC(container.positions, container.orders, container.events, container.clock)
-    uc.execute(order_id=oid, request=FillOrderRequest(qty=1.0, price=10.0))  # no commission
+    uc.execute(
+        order_id=oid, request=FillOrderRequest(qty=1.0, price=100.0)
+    )  # 1.0 * 100.0 = 100.0 notional, no commission
     pos_after = container.positions.get(pos.id)
     assert pos_after.qty == 1.0
-    assert pos_after.cash == 90.0  # 100 - 10
+    assert pos_after.cash == 0.0  # 100 - 100

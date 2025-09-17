@@ -19,6 +19,7 @@ class GuardrailPolicy:
         fill_qty: float,
         price: float,
         commission: float = 0.0,
+        dividend_receivable: float = 0.0,
     ) -> tuple[bool, str | None]:
         dq = fill_qty if side == "BUY" else -fill_qty
         new_qty = qty_now + dq
@@ -26,9 +27,10 @@ class GuardrailPolicy:
             -(fill_qty * price) - commission if side == "BUY" else +(fill_qty * price) - commission
         )
         new_cash = cash_now + cash_delta
+        effective_cash = new_cash + dividend_receivable
 
         stock_val = max(new_qty, 0.0) * price
-        total_val = stock_val + max(new_cash, 0.0)
+        total_val = stock_val + max(effective_cash, 0.0)
         # no capital → allow (or treat as 0% to avoid div-by-zero)
         if total_val <= 0:
             return True, None

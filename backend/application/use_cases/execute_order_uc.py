@@ -120,6 +120,7 @@ class ExecuteOrderUC:
             fill_qty=q_req,
             price=request.price,
             commission=commission,
+            dividend_receivable=pos.dividend_receivable,
         )
         if not ok:
             self.events.append(

@@ -4,7 +4,9 @@
 def test_list_orders_for_position(client, position_id):
     headers = {"Idempotency-Key": "list-k1"}
     response = client.post(
-        f"/v1/positions/{position_id}/orders", json={"side": "BUY", "qty": 1}, headers=headers
+        f"/v1/positions/{position_id}/orders",
+        json={"side": "BUY", "qty": 1, "price": 100.0},
+        headers=headers,
     )
     assert response.status_code in [
         200,

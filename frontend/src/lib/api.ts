@@ -129,6 +129,63 @@ export const ordersApi = {
     }),
 };
 
+// Simulation API
+export const simulationApi = {
+  runSimulation: (config: any) => {
+    // Ensure dates are in ISO format
+    const startDate = new Date(config.startDate).toISOString();
+    const endDate = new Date(config.endDate).toISOString();
+
+    const requestData = {
+      ticker: config.ticker,
+      start_date: startDate,
+      end_date: endDate,
+      initial_cash: config.initialCash,
+      include_after_hours: config.allowAfterHours,
+      position_config: {
+        trigger_threshold_pct: config.triggerThresholdPct,
+        rebalance_ratio: config.rebalanceRatio,
+        commission_rate: config.commissionRate,
+        min_notional: config.minNotional,
+        allow_after_hours: config.allowAfterHours,
+        guardrails: config.guardrails,
+      },
+    };
+
+    return request<any>('/simulation/run', {
+      method: 'POST',
+      body: JSON.stringify(requestData),
+    });
+  },
+
+  getVolatility: (ticker: string, windowMinutes: number = 60) =>
+    request<{ ticker: string; volatility: number; window_minutes: number }>(
+      `/simulation/volatility/${ticker}?window_minutes=${windowMinutes}`,
+    ),
+
+  getHistoricalData: (
+    ticker: string,
+    startDate: string,
+    endDate: string,
+    marketHoursOnly: boolean = false,
+  ) =>
+    request<{
+      ticker: string;
+      start_date: string;
+      end_date: string;
+      market_hours_only: boolean;
+      data_points: number;
+      price_data: Array<{
+        timestamp: string;
+        price: number;
+        volume?: number;
+        is_market_hours: boolean;
+      }>;
+    }>(
+      `/market/historical/${ticker}?start_date=${startDate}&end_date=${endDate}&market_hours_only=${marketHoursOnly}`,
+    ),
+};
+
 // Health API
 export const healthApi = {
   check: () => request<{ status: string; timestamp: string }>('/health'),

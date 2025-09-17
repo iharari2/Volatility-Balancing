@@ -16,7 +16,7 @@ class MarketDataStorage:
     def __init__(self):
         # Data retention policies
         self.REAL_TIME_CACHE_TTL = 5  # seconds
-        self.HISTORICAL_DATA_HOURS = 24  # hours
+        self.HISTORICAL_DATA_HOURS = 24 * 7  # 7 days for simulations
         self.DAILY_SUMMARIES_DAYS = 365  # days
         self.VOLATILITY_CACHE_MINUTES = 60  # minutes
 

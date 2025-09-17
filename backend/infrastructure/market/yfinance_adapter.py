@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any, List
 import pytz
 
 from domain.ports.market_data import MarketDataRepo, MarketStatus
-from domain.entities.market_data import PriceData, PriceSource, DailySummary, SimulationData
+from domain.entities.market_data import PriceData, PriceSource, SimulationData
 from infrastructure.market.market_data_storage import MarketDataStorage
 
 
@@ -253,9 +253,18 @@ class YFinanceAdapter(MarketDataRepo):
             start_str = start_date.strftime("%Y-%m-%d")
             end_str = end_date.strftime("%Y-%m-%d")
 
+            # Determine appropriate interval based on date range
+            days_diff = (end_date - start_date).days
+            if days_diff <= 7:
+                interval = "1m"  # 1-minute data for short periods
+            elif days_diff <= 30:
+                interval = "5m"  # 5-minute data for medium periods
+            else:
+                interval = "1d"  # Daily data for long periods
+
             # Fetch data
             stock = yf.Ticker(ticker)
-            hist = stock.history(start=start_str, end=end_str, interval="1m")
+            hist = stock.history(start=start_str, end=end_str, interval=interval)
 
             if hist.empty:
                 return []

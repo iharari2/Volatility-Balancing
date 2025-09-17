@@ -8,6 +8,8 @@ from domain.ports.orders_repo import OrdersRepo
 from domain.ports.events_repo import EventsRepo
 from domain.ports.idempotency_repo import IdempotencyRepo
 from domain.ports.market_data import MarketDataRepo
+from domain.ports.dividend_repo import DividendRepo, DividendReceivableRepo
+from domain.ports.dividend_market_data import DividendMarketDataRepo
 
 from infrastructure.time.clock import Clock
 
@@ -16,7 +18,12 @@ from infrastructure.persistence.memory.positions_repo_mem import InMemoryPositio
 from infrastructure.persistence.memory.orders_repo_mem import InMemoryOrdersRepo
 from infrastructure.persistence.memory.events_repo_mem import InMemoryEventsRepo
 from infrastructure.persistence.memory.idempotency_repo_mem import InMemoryIdempotencyRepo
+from infrastructure.persistence.memory.dividend_repo import (
+    InMemoryDividendRepo,
+    InMemoryDividendReceivableRepo,
+)
 from infrastructure.market.yfinance_adapter import YFinanceAdapter
+from infrastructure.market.yfinance_dividend_adapter import YFinanceDividendAdapter
 
 # SQL bits (imported unconditionally; OK since deps are installed)
 from sqlalchemy.orm import sessionmaker
@@ -39,11 +46,17 @@ class _Container:
     events: EventsRepo
     idempotency: IdempotencyRepo
     market_data: MarketDataRepo
+    dividend: DividendRepo
+    dividend_receivable: DividendReceivableRepo
+    dividend_market_data: DividendMarketDataRepo
     clock: Clock
 
     def __init__(self) -> None:
         self.clock = Clock()
         self.market_data = YFinanceAdapter()
+        self.dividend_market_data = YFinanceDividendAdapter()
+        self.dividend = InMemoryDividendRepo()
+        self.dividend_receivable = InMemoryDividendReceivableRepo()
 
         persistence = os.getenv("APP_PERSISTENCE", "memory").lower()
         events_backend = os.getenv("APP_EVENTS", "memory").lower()
@@ -98,6 +111,7 @@ class _Container:
         self.orders.clear()
         self.events.clear()
         self.idempotency.clear()
+        # Note: dividend repos don't have clear() methods yet, but they're in-memory so they reset on restart
 
 
 container = _Container()
