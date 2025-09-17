@@ -5,7 +5,7 @@
 
 from typing import Optional, cast
 from typing import Any, Dict
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from app.di import container
 from dataclasses import asdict
@@ -91,6 +91,45 @@ def create_position(payload: CreatePositionRequest) -> CreatePositionResponse:
     return CreatePositionResponse(id=pos.id, ticker=pos.ticker, qty=pos.qty, cash=pos.cash)
 
 
+@router.get("/positions")
+def list_positions() -> Dict[str, Any]:
+    """List all positions."""
+    positions = container.positions.list_all()
+    return {
+        "positions": [
+            {
+                "id": pos.id,
+                "ticker": pos.ticker,
+                "qty": pos.qty,
+                "cash": pos.cash,
+                "anchor_price": pos.anchor_price,
+                "order_policy": {
+                    "trigger_threshold_pct": pos.order_policy.trigger_threshold_pct,
+                    "rebalance_ratio": pos.order_policy.rebalance_ratio,
+                    "commission_rate": pos.order_policy.commission_rate,
+                    "min_notional": pos.order_policy.min_notional,
+                },
+                "guardrails": {
+                    "min_stock_alloc_pct": pos.guardrails.min_stock_alloc_pct,
+                    "max_stock_alloc_pct": pos.guardrails.max_stock_alloc_pct,
+                    "max_orders_per_day": pos.guardrails.max_orders_per_day,
+                },
+            }
+            for pos in positions
+        ]
+    }
+
+
+@router.post("/clear-positions")
+def clear_all_positions() -> Dict[str, Any]:
+    """Clear all positions from memory."""
+    container.positions.clear()
+    return {
+        "message": "All positions cleared",
+        "count": 0
+    }
+
+
 @router.get("/positions/{position_id}")
 def get_position(position_id: str) -> Dict[str, Any]:
     pos = container.positions.get(position_id)
@@ -117,7 +156,7 @@ def get_position(position_id: str) -> Dict[str, Any]:
 
 
 @router.post("/positions/{position_id}/evaluate")
-def evaluate_position(position_id: str, current_price: float) -> Dict[str, Any]:
+def evaluate_position(position_id: str, current_price: float = Query(...)) -> Dict[str, Any]:
     """Evaluate position for volatility triggers with manual price."""
     if not container.positions.get(position_id):
         raise HTTPException(404, detail="position_not_found")
@@ -343,3 +382,88 @@ def get_volatility_data(ticker: str, window_minutes: int = 60) -> Dict[str, Any]
 
     except Exception as e:
         raise HTTPException(400, detail=f"Error getting volatility data: {str(e)}")
+
+
+# Orders endpoints
+class CreateOrderRequest(BaseModel):
+    side: str  # "BUY" or "SELL"
+    qty: float
+    price: float
+
+
+@router.post("/positions/{position_id}/orders")
+def create_order(position_id: str, data: CreateOrderRequest, idempotency_key: str = None) -> Dict[str, Any]:
+    """Create a new order for a position."""
+    pos = container.positions.get(position_id)
+    if not pos:
+        raise HTTPException(404, detail="position_not_found")
+    
+    # For now, return a mock order response
+    # In a real implementation, this would create an actual order
+    order_id = f"order_{position_id}_{int(__import__('time').time())}"
+    
+    return {
+        "order_id": order_id,
+        "position_id": position_id,
+        "side": data.side,
+        "qty": data.qty,
+        "price": data.price,
+        "status": "PENDING"
+    }
+
+
+@router.post("/positions/{position_id}/orders/auto-size")
+def auto_size_order(position_id: str, current_price: float = Query(...), idempotency_key: str = Query(None)) -> Dict[str, Any]:
+    """Create an auto-sized order based on position evaluation."""
+    pos = container.positions.get(position_id)
+    if not pos:
+        raise HTTPException(404, detail="position_not_found")
+    
+    # Evaluate the position first
+    uc = EvaluatePositionUC(
+        positions=container.positions,
+        events=container.events,
+        market_data=container.market_data,
+        clock=container.clock,
+    )
+    
+    evaluation = uc.evaluate(position_id, current_price)
+    
+    if not evaluation.get('trigger_detected') or not evaluation.get('order_proposal'):
+        return {
+            "position_id": position_id,
+            "current_price": current_price,
+            "order_submitted": False,
+            "reason": "No trigger detected or no valid order proposal",
+            "evaluation": evaluation
+        }
+    
+    # Create the order
+    order_proposal = evaluation['order_proposal']
+    order_id = f"auto_order_{position_id}_{int(__import__('time').time())}"
+    
+    return {
+        "position_id": position_id,
+        "current_price": current_price,
+        "order_submitted": True,
+        "order_id": order_id,
+        "order_details": {
+            "side": order_proposal['side'],
+            "qty": order_proposal['trimmed_qty'],
+            "price": current_price,
+            "notional": order_proposal['notional'],
+            "commission": order_proposal['commission']
+        },
+        "evaluation": evaluation
+    }
+
+
+@router.get("/positions/{position_id}/orders")
+def list_orders(position_id: str, limit: int = 100) -> Dict[str, Any]:
+    """List orders for a position."""
+    # For now, return empty list
+    # In a real implementation, this would query the orders repository
+    return {
+        "position_id": position_id,
+        "orders": []
+    }

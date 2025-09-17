@@ -26,3 +26,5 @@ class InMemoryPositionsRepo(PositionsRepo):
     def clear(self) -> None:
         self._items.clear()
 
+    def list_all(self) -> list[Position]:
+        return list(self._items.values())
