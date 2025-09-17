@@ -1,0 +1,159 @@
+import { useState } from 'react';
+import { usePositions } from '../hooks/usePositions';
+import TradingInterface from '../components/TradingInterface';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
+
+export default function Trading() {
+  const [selectedPositionId, setSelectedPositionId] = useState<string>('');
+  const { data: positions = [] } = usePositions();
+
+  const selectedPosition = positions.find((p) => p.id === selectedPositionId);
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Trading Interface</h1>
+        <p className="text-gray-600">Real-time volatility evaluation and order execution</p>
+      </div>
+
+      {/* Position Selector */}
+      <div className="card">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Position</h3>
+        <div className="flex items-center space-x-4">
+          <div className="flex-1">
+            <label className="label">Choose a position to trade</label>
+            <select
+              value={selectedPositionId}
+              onChange={(e) => setSelectedPositionId(e.target.value)}
+              className="input"
+            >
+              <option value="">Select a position...</option>
+              {positions
+                .filter((p) => p.anchor_price) // Only show positions with anchor prices
+                .map((position) => (
+                  <option key={position.id} value={position.id}>
+                    {position.ticker} -{' '}
+                    {position.anchor_price ? `$${position.anchor_price.toFixed(2)}` : 'No anchor'}
+                  </option>
+                ))}
+            </select>
+          </div>
+        </div>
+
+        {positions.filter((p) => p.anchor_price).length === 0 && (
+          <div className="mt-4 p-4 bg-warning-50 border border-warning-200 rounded-lg">
+            <p className="text-warning-800 text-sm">
+              No positions with anchor prices found. Create a position and set an anchor price to
+              start trading.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Trading Interface */}
+      {selectedPosition ? (
+        <TradingInterface position={selectedPosition} />
+      ) : selectedPositionId ? (
+        <div className="card text-center py-12">
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Position Not Found</h3>
+          <p className="text-gray-500">
+            The selected position could not be found or doesn't have an anchor price set.
+          </p>
+        </div>
+      ) : (
+        <div className="card text-center py-12">
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Select a Position</h3>
+          <p className="text-gray-500">
+            Choose a position from the dropdown above to start trading.
+          </p>
+        </div>
+      )}
+
+      {/* Quick Actions */}
+      {selectedPosition && (
+        <div className="card">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-4 border border-gray-200 rounded-lg">
+              <h4 className="font-medium text-gray-900 mb-2">Test Common Prices</h4>
+              <p className="text-sm text-gray-600 mb-3">
+                Quickly test trigger detection at common price levels
+              </p>
+              <div className="space-y-2">
+                {selectedPosition.anchor_price && (
+                  <>
+                    <button
+                      className="w-full text-left px-3 py-2 text-sm bg-gray-50 hover:bg-gray-100 rounded"
+                      onClick={() => {
+                        // This would trigger price evaluation at the specified price
+                        console.log('Test buy trigger at', selectedPosition.anchor_price! * 0.97);
+                      }}
+                    >
+                      Buy Trigger: ${(selectedPosition.anchor_price * 0.97).toFixed(2)}
+                    </button>
+                    <button
+                      className="w-full text-left px-3 py-2 text-sm bg-gray-50 hover:bg-gray-100 rounded"
+                      onClick={() => {
+                        console.log('Test sell trigger at', selectedPosition.anchor_price! * 1.03);
+                      }}
+                    >
+                      Sell Trigger: ${(selectedPosition.anchor_price * 1.03).toFixed(2)}
+                    </button>
+                    <button
+                      className="w-full text-left px-3 py-2 text-sm bg-gray-50 hover:bg-gray-100 rounded"
+                      onClick={() => {
+                        console.log('Test at anchor price', selectedPosition.anchor_price);
+                      }}
+                    >
+                      At Anchor: ${selectedPosition.anchor_price.toFixed(2)}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="p-4 border border-gray-200 rounded-lg">
+              <h4 className="font-medium text-gray-900 mb-2">Position Info</h4>
+              <div className="space-y-1 text-sm text-gray-600">
+                <p>
+                  <span className="font-medium">Ticker:</span> {selectedPosition.ticker}
+                </p>
+                <p>
+                  <span className="font-medium">Shares:</span>{' '}
+                  {selectedPosition.qty.toLocaleString()}
+                </p>
+                <p>
+                  <span className="font-medium">Cash:</span> $
+                  {selectedPosition.cash.toLocaleString()}
+                </p>
+                <p>
+                  <span className="font-medium">Anchor:</span> $
+                  {selectedPosition.anchor_price?.toFixed(2)}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 border border-gray-200 rounded-lg">
+              <h4 className="font-medium text-gray-900 mb-2">Trading Tips</h4>
+              <ul className="text-sm text-gray-600 space-y-1">
+                <li>• Triggers activate at ±3% from anchor</li>
+                <li>• Orders are auto-sized based on position</li>
+                <li>• Anchor updates after each trade</li>
+                <li>• All actions are logged in events</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
