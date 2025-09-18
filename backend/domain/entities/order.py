@@ -18,3 +18,6 @@ class Order:
     request_signature: Optional[Dict[str, Any]] = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    def __hash__(self):
+        return hash((self.id, self.position_id, self.side, self.qty, self.status))

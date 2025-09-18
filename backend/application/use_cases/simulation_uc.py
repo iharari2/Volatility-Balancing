@@ -94,6 +94,22 @@ class SimulationUC:
         if end_date.tzinfo is None:
             end_date = end_date.replace(tzinfo=timezone.utc)
 
+        # Validate date range
+        now = datetime.now(timezone.utc)
+        if start_date > now:
+            raise ValueError(f"Start date {start_date} cannot be in the future")
+        if end_date > now:
+            raise ValueError(f"End date {end_date} cannot be in the future")
+        if start_date >= end_date:
+            raise ValueError(f"Start date {start_date} must be before end date {end_date}")
+
+        # Check if dates are too far in the past (yfinance limitation)
+        days_ago = (now - end_date).days
+        if days_ago > 30:
+            raise ValueError(
+                f"End date {end_date} is too far in the past. yfinance only supports data from the last 30 days"
+            )
+
         # Fetch historical data first - use a shorter range for 1-minute data
         # yfinance only allows 8 days of 1-minute data per request
         days_diff = (end_date - start_date).days
@@ -112,7 +128,8 @@ class SimulationUC:
         if not historical_data:
             raise ValueError(f"No price data available for {ticker} in date range")
 
-        # Get simulation data
+        # Get simulation data using the original date range
+        print(f"Getting simulation data for {ticker} from {start_date} to {end_date}")
         sim_data = self.market_data.get_simulation_data(
             ticker, start_date, end_date, include_after_hours
         )

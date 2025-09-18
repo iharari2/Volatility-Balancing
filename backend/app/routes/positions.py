@@ -35,6 +35,7 @@ class CreatePositionRequest(BaseModel):
     ticker: str
     qty: float = 0.0
     cash: float = 0.0
+    anchor_price: Optional[float] = None
     order_policy: Optional[OrderPolicyIn] = None
 
 
@@ -43,6 +44,7 @@ class CreatePositionResponse(BaseModel):
     ticker: str
     qty: float
     cash: float
+    anchor_price: Optional[float] = None
     # expose policy if you want it in the API response; otherwise remove:
     order_policy: Optional[OrderPolicyIn] = None
 
@@ -74,21 +76,51 @@ def _to_domain_policy(op: Optional[OrderPolicyIn]) -> OrderPolicy:
 
 @router.post("/positions", response_model=CreatePositionResponse, status_code=201)
 def create_position(payload: CreatePositionRequest) -> CreatePositionResponse:
-    pos_repo = container.positions
-    pos = pos_repo.create(ticker=payload.ticker, qty=payload.qty, cash=payload.cash)
+    try:
+        print(f"Creating position with payload: {payload}")
+        pos_repo = container.positions
 
-    if payload.order_policy:
-        op = payload.order_policy
-        pos.order_policy = OrderPolicy(
-            min_qty=op.min_qty,
-            min_notional=op.min_notional,
-            lot_size=op.lot_size,
-            qty_step=op.qty_step,
-            action_below_min=op.action_below_min,
+        # Check if position with same ticker already exists
+        existing_positions = pos_repo.list_all()
+        print(f"Found {len(existing_positions)} existing positions")
+        existing_pos = next((p for p in existing_positions if p.ticker == payload.ticker), None)
+
+        if existing_pos:
+            # Update existing position instead of creating new one
+            print(f"Updating existing position: {existing_pos.id}")
+            existing_pos.qty = payload.qty
+            existing_pos.cash = payload.cash
+            if payload.anchor_price is not None:
+                existing_pos.anchor_price = payload.anchor_price
+            pos = existing_pos
+        else:
+            # Create new position
+            print("Creating new position")
+            pos = pos_repo.create(ticker=payload.ticker, qty=payload.qty, cash=payload.cash)
+            if payload.anchor_price is not None:
+                pos.anchor_price = payload.anchor_price
+
+        if payload.order_policy:
+            op = payload.order_policy
+            pos.order_policy = OrderPolicy(
+                min_qty=op.min_qty,
+                min_notional=op.min_notional,
+                lot_size=op.lot_size,
+                qty_step=op.qty_step,
+                action_below_min=op.action_below_min,
+            )
+            pos_repo.save(pos)
+
+        print(f"Position created/updated: {pos.id}")
+        return CreatePositionResponse(
+            id=pos.id, ticker=pos.ticker, qty=pos.qty, cash=pos.cash, anchor_price=pos.anchor_price
         )
-        pos_repo.save(pos)
+    except Exception as e:
+        print(f"Error creating position: {e}")
+        import traceback
 
-    return CreatePositionResponse(id=pos.id, ticker=pos.ticker, qty=pos.qty, cash=pos.cash)
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/positions")

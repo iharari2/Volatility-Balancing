@@ -44,8 +44,8 @@ class MarketDataStorage:
 
         self.price_history[ticker].append(price_data)
 
-        # Clean up old historical data
-        self._cleanup_historical_data(ticker)
+        # Clean up old historical data (temporarily disabled for testing)
+        # self._cleanup_historical_data(ticker)
 
         # Update volatility cache if needed
         self._update_volatility_cache(ticker)

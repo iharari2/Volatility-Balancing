@@ -16,3 +16,6 @@ class Trade:
     price: float
     commission: float
     executed_at: datetime
+
+    def __hash__(self):
+        return hash((self.id, self.order_id, self.position_id, self.side, self.qty, self.price))

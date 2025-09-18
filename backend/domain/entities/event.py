@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, Any
 
+
 @dataclass
 class Event:
     id: str
@@ -16,3 +17,5 @@ class Event:
     message: str
     ts: datetime
 
+    def __hash__(self):
+        return hash((self.id, self.position_id, self.type, self.ts))
