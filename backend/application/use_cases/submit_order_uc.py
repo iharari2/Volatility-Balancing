@@ -45,7 +45,9 @@ class SubmitOrderUC:
         # 1) Validate position
         pos = self.positions.get(position_id)
         if not pos:
-            raise KeyError("position_not_found")
+            from domain.errors import PositionNotFound
+
+            raise PositionNotFound("position_not_found")
 
         # 2) Signature + per-position scoped key
         sig = self._signature(position_id, request)

@@ -101,20 +101,18 @@ def create_position(payload: CreatePositionRequest) -> CreatePositionResponse:
                 pos.anchor_price = payload.anchor_price
 
         if payload.order_policy:
-            op = payload.order_policy
-            pos.order_policy = OrderPolicy(
-                min_qty=op.min_qty,
-                min_notional=op.min_notional,
-                lot_size=op.lot_size,
-                qty_step=op.qty_step,
-                action_below_min=op.action_below_min,
-            )
+            # Validate and convert order policy
+            validated_policy = _to_domain_policy(payload.order_policy)
+            pos.order_policy = validated_policy
             pos_repo.save(pos)
 
         print(f"Position created/updated: {pos.id}")
         return CreatePositionResponse(
             id=pos.id, ticker=pos.ticker, qty=pos.qty, cash=pos.cash, anchor_price=pos.anchor_price
         )
+    except HTTPException:
+        # Re-raise HTTP exceptions (like validation errors) as-is
+        raise
     except Exception as e:
         print(f"Error creating position: {e}")
         import traceback

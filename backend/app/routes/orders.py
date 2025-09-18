@@ -33,12 +33,25 @@ def submit_order(
         idempotency=container.idempotency,
         clock=container.clock,
     )
-    # NOW: returns CreateOrderResponse directly
-    return uc.execute(
-        position_id=position_id,
-        request=payload,
-        idempotency_key=(idempotency_key or ""),
-    )
+    try:
+        return uc.execute(
+            position_id=position_id,
+            request=payload,
+            idempotency_key=(idempotency_key or ""),
+        )
+    except KeyError as e:
+        if str(e) == "position_not_found":
+            raise HTTPException(status_code=404, detail="position_not_found")
+        raise
+    except Exception as e:
+        # Check if it's a domain exception
+        if e.__class__.__name__ == "PositionNotFound":
+            raise HTTPException(status_code=404, detail="position_not_found")
+        print(f"Unexpected error in submit_order: {e}")
+        import traceback
+
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/orders/{order_id}/fill", response_model=FillOrderResponse)
