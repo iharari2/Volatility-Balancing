@@ -256,9 +256,9 @@ class YFinanceAdapter(MarketDataRepo):
             # Determine appropriate interval based on date range
             days_diff = (end_date - start_date).days
             if days_diff <= 7:
-                interval = "1m"  # 1-minute data for short periods
-            elif days_diff <= 30:
-                interval = "5m"  # 5-minute data for medium periods
+                interval = "1m"  # 1-minute data for short periods (max 7 days)
+            elif days_diff <= 60:
+                interval = "1d"  # Daily data for medium periods (up to 60 days)
             else:
                 interval = "1d"  # Daily data for long periods
 

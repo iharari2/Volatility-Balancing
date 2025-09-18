@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { usePositions } from '../hooks/usePositions';
+import { usePositions, useCreatePosition } from '../hooks/usePositions';
 import TradingInterface from '../components/TradingInterface';
+import CreatePositionForm from '../components/CreatePositionForm';
+import { CreatePositionRequest } from '../types';
 import {
   Select,
   SelectContent,
@@ -11,9 +13,20 @@ import {
 
 export default function Trading() {
   const [selectedPositionId, setSelectedPositionId] = useState<string>('');
+  const [showCreateForm, setShowCreateForm] = useState(false);
   const { data: positions = [] } = usePositions();
+  const createPosition = useCreatePosition();
 
   const selectedPosition = positions.find((p) => p.id === selectedPositionId);
+
+  const handleCreatePosition = async (data: CreatePositionRequest) => {
+    try {
+      await createPosition.mutateAsync(data);
+      setShowCreateForm(false);
+    } catch (error) {
+      console.error('Failed to create position:', error);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -25,7 +38,12 @@ export default function Trading() {
 
       {/* Position Selector */}
       <div className="card">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Position</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Select Position</h3>
+          <button onClick={() => setShowCreateForm(true)} className="btn btn-primary btn-sm">
+            + Create New Position
+          </button>
+        </div>
         <div className="flex items-center space-x-4">
           <div className="flex-1">
             <label className="label">Choose a position to trade</label>
@@ -152,8 +170,25 @@ export default function Trading() {
           </div>
         </div>
       )}
+
+      {/* Create Position Modal */}
+      {showCreateForm && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-center justify-center p-4">
+            <div
+              className="fixed inset-0 bg-gray-500 bg-opacity-75"
+              onClick={() => setShowCreateForm(false)}
+            />
+            <div className="relative bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <CreatePositionForm
+                onSubmit={handleCreatePosition}
+                onCancel={() => setShowCreateForm(false)}
+                isLoading={createPosition.isPending}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
-

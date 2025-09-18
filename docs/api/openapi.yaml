@@ -1,16 +1,78 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
   title: Volatility Balancing Trading API
-  version: 0.1.0
+  version: 1.0.0
   description: >
-    Early-stage API for semi-passive trading platform.
-    Covers evaluation, orders, events, and metrics.
+    Complete API for semi-passive trading platform with volatility balancing.
+    Covers positions, orders, dividends, and market data evaluation.
 servers:
+  - url: http://localhost:8000
+    description: Development server
   - url: https://api.volbalancing.dev
+    description: Production server
 paths:
-  /positions/{id}:
+  /v1/healthz:
     get:
-      summary: Get position card data
+      summary: Health check
+      tags:
+        - Health
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+  
+  /v1/positions:
+    get:
+      summary: List all positions
+      tags:
+        - Positions
+      responses:
+        "200":
+          description: List of positions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  positions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Position"
+    
+    post:
+      summary: Create new position
+      tags:
+        - Positions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePositionRequest"
+      responses:
+        "201":
+          description: Position created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatePositionResponse"
+        "400":
+          description: Bad request
+        "409":
+          description: Position already exists
+
+  /v1/positions/{id}:
+    get:
+      summary: Get position details
+      tags:
+        - Positions
       parameters:
         - name: id
           in: path
@@ -24,90 +86,506 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Position"
-  /positions/{id}/evaluate:
+        "404":
+          description: Position not found
+
+  /v1/positions/{id}/anchor:
     post:
-      summary: Trigger evaluation for a position (internal/event-driven)
+      summary: Set anchor price
+      tags:
+        - Positions
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: string
+        - name: price
+          in: query
+          required: true
+          schema:
+            type: number
       responses:
-        "202":
-          description: Evaluation queued
-  /orders/callback:
+        "200":
+          description: Anchor price set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetAnchorResponse"
+        "404":
+          description: Position not found
+
+  /v1/positions/{id}/evaluate:
     post:
-      summary: Broker webhook for fills/cancels
+      summary: Evaluate position with current price
+      tags:
+        - Positions
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: current_price
+          in: query
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Evaluation completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvaluationResponse"
+        "404":
+          description: Position not found
+
+  /v1/positions/{id}/orders:
+    post:
+      summary: Submit order
+      tags:
+        - Orders
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema:
+            type: string
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/OrderCallback"
+              $ref: "#/components/schemas/CreateOrderRequest"
       responses:
         "200":
-          description: Acknowledged
-  /events:
-    get:
-      summary: Get event timeline for a position
+          description: Order submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateOrderResponse"
+        "400":
+          description: Bad request
+        "404":
+          description: Position not found
+
+  /v1/orders/{id}/fill:
+    post:
+      summary: Fill order (broker callback)
+      tags:
+        - Orders
       parameters:
-        - name: position_id
-          in: query
+        - name: id
+          in: path
           required: true
           schema:
             type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FillOrderRequest"
       responses:
         "200":
-          description: List of events
+          description: Order filled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FillOrderResponse"
+        "404":
+          description: Order not found
+
+  /v1/dividends:
+    get:
+      summary: List dividends
+      tags:
+        - Dividends
+      responses:
+        "200":
+          description: List of dividends
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Event"
-  /metrics:
-    get:
-      summary: Get trading metrics
+                  $ref: "#/components/schemas/Dividend"
+
+  /v1/dividends/announce:
+    post:
+      summary: Announce dividend
+      tags:
+        - Dividends
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DividendAnnouncementRequest"
       responses:
-        "200":
-          description: Metrics snapshot
+        "201":
+          description: Dividend announced
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Metrics"
+                $ref: "#/components/schemas/Dividend"
+
+  /v1/dividends/pay:
+    post:
+      summary: Process dividend payment
+      tags:
+        - Dividends
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DividendPaymentRequest"
+      responses:
+        "200":
+          description: Dividend payment processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DividendPaymentResponse"
 components:
   schemas:
     Position:
       type: object
       properties:
-        id: { type: string }
-        symbol: { type: string }
-        price: { type: number }
-        anchor: { type: number }
-        next_action: { type: string }
-        projected_asset_pct: { type: number }
-    OrderCallback:
+        id:
+          type: string
+          example: "pos_abc123"
+        ticker:
+          type: string
+          example: "AAPL"
+        qty:
+          type: number
+          example: 100.0
+        cash:
+          type: number
+          example: 10000.0
+        anchor_price:
+          type: number
+          nullable: true
+          example: 150.0
+        dividend_receivable:
+          type: number
+          example: 0.0
+        withholding_tax_rate:
+          type: number
+          example: 0.25
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreatePositionRequest:
+      type: object
+      required:
+        - ticker
+      properties:
+        ticker:
+          type: string
+          example: "AAPL"
+        qty:
+          type: number
+          default: 0.0
+          example: 0.0
+        cash:
+          type: number
+          default: 10000.0
+          example: 10000.0
+        order_policy:
+          $ref: "#/components/schemas/OrderPolicyIn"
+
+    CreatePositionResponse:
       type: object
       properties:
-        order_id: { type: string }
-        status: { type: string, enum: [filled, canceled, rejected] }
-        qty: { type: number }
-        price: { type: number }
-        commission_bps: { type: number }
+        id:
+          type: string
+          example: "pos_abc123"
+        ticker:
+          type: string
+          example: "AAPL"
+        qty:
+          type: number
+          example: 0.0
+        cash:
+          type: number
+          example: 10000.0
+
+    OrderPolicyIn:
+      type: object
+      properties:
+        min_qty:
+          type: number
+          default: 0.0
+        min_notional:
+          type: number
+          default: 0.0
+        lot_size:
+          type: number
+          default: 0.0
+        qty_step:
+          type: number
+          default: 0.0
+        action_below_min:
+          type: string
+          enum: [hold, reject, clip]
+          default: hold
+        trigger_threshold_pct:
+          type: number
+          default: 0.03
+        rebalance_ratio:
+          type: number
+          default: 1.6667
+        commission_rate:
+          type: number
+          default: 0.0001
+        allow_after_hours:
+          type: boolean
+          default: false
+
+    SetAnchorResponse:
+      type: object
+      properties:
+        position_id:
+          type: string
+          example: "pos_abc123"
+        anchor_price:
+          type: number
+          example: 150.0
+        message:
+          type: string
+          example: "Anchor price set to $150.00"
+
+    EvaluationResponse:
+      type: object
+      properties:
+        position_id:
+          type: string
+          example: "pos_abc123"
+        action:
+          type: string
+          enum: [buy, sell, hold]
+          example: "buy"
+        qty:
+          type: number
+          example: 10.0
+        reason:
+          type: string
+          example: "Price dropped 3.2% below anchor"
+        current_price:
+          type: number
+          example: 145.0
+        anchor_price:
+          type: number
+          example: 150.0
+
+    CreateOrderRequest:
+      type: object
+      required:
+        - side
+        - qty
+      properties:
+        side:
+          type: string
+          enum: [BUY, SELL]
+          example: "BUY"
+        qty:
+          type: number
+          example: 10.0
+
+    CreateOrderResponse:
+      type: object
+      properties:
+        order_id:
+          type: string
+          example: "ord_xyz789"
+        position_id:
+          type: string
+          example: "pos_abc123"
+        side:
+          type: string
+          example: "BUY"
+        qty:
+          type: number
+          example: 10.0
+        status:
+          type: string
+          example: "submitted"
+        idempotency_key:
+          type: string
+          example: "pos_abc123_20240101_120000_BUY"
+
+    FillOrderRequest:
+      type: object
+      required:
+        - qty
+        - price
+        - commission
+      properties:
+        qty:
+          type: number
+          example: 10.0
+        price:
+          type: number
+          example: 145.0
+        commission:
+          type: number
+          example: 1.45
+
+    FillOrderResponse:
+      type: object
+      properties:
+        order_id:
+          type: string
+          example: "ord_xyz789"
+        status:
+          type: string
+          example: "filled"
+        qty:
+          type: number
+          example: 10.0
+        price:
+          type: number
+          example: 145.0
+        commission:
+          type: number
+          example: 1.45
+        executed_at:
+          type: string
+          format: date-time
+
+    Dividend:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "div_123"
+        ticker:
+          type: string
+          example: "AAPL"
+        ex_date:
+          type: string
+          format: date
+          example: "2024-01-15"
+        pay_date:
+          type: string
+          format: date
+          example: "2024-01-30"
+        dps:
+          type: number
+          example: 0.25
+        currency:
+          type: string
+          example: "USD"
+        withholding_tax_rate:
+          type: number
+          example: 0.25
+        created_at:
+          type: string
+          format: date-time
+
+    DividendAnnouncementRequest:
+      type: object
+      required:
+        - ticker
+        - ex_date
+        - pay_date
+        - dps
+      properties:
+        ticker:
+          type: string
+          example: "AAPL"
+        ex_date:
+          type: string
+          format: date
+          example: "2024-01-15"
+        pay_date:
+          type: string
+          format: date
+          example: "2024-01-30"
+        dps:
+          type: number
+          example: 0.25
+        currency:
+          type: string
+          default: "USD"
+          example: "USD"
+        withholding_tax_rate:
+          type: number
+          default: 0.25
+          example: 0.25
+
+    DividendPaymentRequest:
+      type: object
+      required:
+        - receivable_id
+      properties:
+        receivable_id:
+          type: string
+          example: "rec_456"
+
+    DividendPaymentResponse:
+      type: object
+      properties:
+        receivable_id:
+          type: string
+          example: "rec_456"
+        amount:
+          type: number
+          example: 25.0
+        status:
+          type: string
+          example: "paid"
+        paid_at:
+          type: string
+          format: date-time
+
     Event:
       type: object
       properties:
-        id: { type: string }
-        position_id: { type: string }
-        type: { type: string }
-        message: { type: string }
-        created_at: { type: string, format: date-time }
-    Metrics:
+        id:
+          type: string
+          example: "evt_789"
+        position_id:
+          type: string
+          example: "pos_abc123"
+        type:
+          type: string
+          example: "evaluation"
+        inputs:
+          type: object
+          example: {"current_price": 145.0, "anchor_price": 150.0}
+        outputs:
+          type: object
+          example: {"action": "buy", "qty": 10.0}
+        message:
+          type: string
+          example: "Price dropped 3.2% below anchor, triggering buy order"
+        ts:
+          type: string
+          format: date-time
+
+    Error:
       type: object
       properties:
-        slippage_bps: { type: number }
-        guardrail_time_pct: { type: number }
-        min_notional_skips: { type: integer }
-        turnover: { type: number }
-        fee_drag: { type: number }
+        error:
+          type: string
+          example: "Position not found"
+        message:
+          type: string
+          example: "The requested position does not exist"
+        status_code:
+          type: integer
+          example: 404

@@ -1,7 +1,15 @@
 import { useState } from 'react';
 import { Position, EvaluationResult } from '../types';
-import { useEvaluatePosition, useCreateOrder, useAutoSizeOrder } from '../hooks/usePositions';
+import {
+  useEvaluatePosition,
+  useCreateOrder,
+  useAutoSizeOrder,
+  useEvaluatePositionWithMarketData,
+  useAutoSizeOrderWithMarketData,
+} from '../hooks/usePositions';
 import { useCreateOrder as useCreateOrderMutation } from '../hooks/useOrders';
+import { useMarketPrice } from '../hooks/useMarketData';
+import MarketDataStatus from './MarketDataStatus';
 import {
   Play,
   Target,
@@ -10,6 +18,9 @@ import {
   AlertTriangle,
   CheckCircle,
   XCircle,
+  RefreshCw,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 
 interface TradingInterfaceProps {
@@ -19,7 +30,16 @@ interface TradingInterfaceProps {
 export default function TradingInterface({ position }: TradingInterfaceProps) {
   const [currentPrice, setCurrentPrice] = useState<number>(position.anchor_price || 150);
   const [isAutoMode, setIsAutoMode] = useState(false);
+  const [useMarketData, setUseMarketData] = useState(true);
 
+  // Market data integration
+  const { data: marketPrice, isLoading: marketPriceLoading } = useMarketPrice(position.ticker);
+
+  // Evaluation with market data
+  const { data: marketEvaluation, isLoading: isMarketEvaluating } =
+    useEvaluatePositionWithMarketData(position.id);
+
+  // Manual evaluation
   const { data: evaluation, isLoading: isEvaluating } = useEvaluatePosition(
     position.id,
     currentPrice,
@@ -27,6 +47,11 @@ export default function TradingInterface({ position }: TradingInterfaceProps) {
 
   const createOrderMutation = useCreateOrderMutation(position.id);
   const autoSizeMutation = useAutoSizeOrder(position.id);
+  const autoSizeMarketMutation = useAutoSizeOrderWithMarketData(position.id);
+
+  // Use market data evaluation if enabled and available
+  const activeEvaluation = useMarketData && marketEvaluation ? marketEvaluation : evaluation;
+  const isActiveEvaluating = useMarketData ? isMarketEvaluating : isEvaluating;
 
   const handleEvaluate = () => {
     // The evaluation will automatically trigger when currentPrice changes
@@ -51,24 +76,28 @@ export default function TradingInterface({ position }: TradingInterfaceProps) {
 
   const handleAutoOrder = async () => {
     try {
-      await autoSizeMutation.mutateAsync({
-        currentPrice,
-        idempotencyKey: `auto-${Date.now()}`,
-      });
+      if (useMarketData) {
+        await autoSizeMarketMutation.mutateAsync(`auto-market-${Date.now()}`);
+      } else {
+        await autoSizeMutation.mutateAsync({
+          currentPrice,
+          idempotencyKey: `auto-${Date.now()}`,
+        });
+      }
     } catch (error) {
       console.error('Failed to create auto order:', error);
     }
   };
 
   const getTriggerStatus = () => {
-    if (!evaluation) return { status: 'loading', message: 'Evaluating...' };
+    if (!activeEvaluation) return { status: 'loading', message: 'Evaluating...' };
 
-    if (evaluation.trigger_detected) {
+    if (activeEvaluation.trigger_detected) {
       return {
         status: 'trigger',
-        message: `${evaluation.trigger_type} trigger detected`,
-        icon: evaluation.trigger_type === 'BUY' ? TrendingUp : TrendingDown,
-        color: evaluation.trigger_type === 'BUY' ? 'text-success-600' : 'text-danger-600',
+        message: `${activeEvaluation.trigger_type} trigger detected`,
+        icon: activeEvaluation.trigger_type === 'BUY' ? TrendingUp : TrendingDown,
+        color: activeEvaluation.trigger_type === 'BUY' ? 'text-success-600' : 'text-danger-600',
       };
     }
 
@@ -84,34 +113,89 @@ export default function TradingInterface({ position }: TradingInterfaceProps) {
 
   return (
     <div className="space-y-6">
-      {/* Price Input */}
+      {/* Market Data Status */}
+      <MarketDataStatus ticker={position.ticker} showPrice={true} />
+
+      {/* Trading Mode Toggle */}
       <div className="card">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Price Evaluation</h3>
-        <div className="flex items-center space-x-4">
-          <div className="flex-1">
-            <label className="label">Current Price</label>
-            <input
-              type="number"
-              value={currentPrice}
-              onChange={(e) => setCurrentPrice(Number(e.target.value))}
-              className="input"
-              step="0.01"
-              min="0"
-            />
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Trading Mode</h3>
+            <p className="text-sm text-gray-600">
+              {useMarketData
+                ? 'Using real-time market data for evaluation'
+                : 'Using manual price input for evaluation'}
+            </p>
           </div>
-          <button
-            onClick={handleEvaluate}
-            disabled={isEvaluating}
-            className="btn btn-primary self-end"
-          >
-            <Play className="w-4 h-4 mr-2" />
-            {isEvaluating ? 'Evaluating...' : 'Evaluate'}
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setUseMarketData(!useMarketData)}
+              className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                useMarketData ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-700'
+              }`}
+            >
+              {useMarketData ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
+              <span>{useMarketData ? 'Market Data' : 'Manual'}</span>
+            </button>
+          </div>
         </div>
       </div>
 
+      {/* Price Input (only show in manual mode) */}
+      {!useMarketData && (
+        <div className="card">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Manual Price Evaluation</h3>
+          <div className="flex items-center space-x-4">
+            <div className="flex-1">
+              <label className="label">Current Price</label>
+              <input
+                type="number"
+                value={currentPrice}
+                onChange={(e) => setCurrentPrice(Number(e.target.value))}
+                className="input"
+                step="0.01"
+                min="0"
+              />
+            </div>
+            <button
+              onClick={handleEvaluate}
+              disabled={isEvaluating}
+              className="btn btn-primary self-end"
+            >
+              <Play className="w-4 h-4 mr-2" />
+              {isEvaluating ? 'Evaluating...' : 'Evaluate'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Market Data Info (only show in market data mode) */}
+      {useMarketData && marketPrice && (
+        <div className="card">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Market Data</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <label className="text-xs text-gray-500">Current Price</label>
+              <p className="text-lg font-semibold">${marketPrice.price.toFixed(2)}</p>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Source</label>
+              <p className="text-sm font-medium">{marketPrice.source}</p>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Fresh</label>
+              <p className="text-sm font-medium">{marketPrice.is_fresh ? 'Yes' : 'No'}</p>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Market Hours</label>
+              <p className="text-sm font-medium">{marketPrice.is_market_hours ? 'Yes' : 'No'}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Evaluation Results */}
-      {evaluation && (
+      {activeEvaluation && (
         <div className="card">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Evaluation Results</h3>
 
@@ -129,24 +213,24 @@ export default function TradingInterface({ position }: TradingInterfaceProps) {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Current Price:</span>
-                  <span className="font-medium">${evaluation.current_price.toFixed(2)}</span>
+                  <span className="font-medium">${activeEvaluation.current_price.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Anchor Price:</span>
-                  <span className="font-medium">${evaluation.anchor_price.toFixed(2)}</span>
+                  <span className="font-medium">${activeEvaluation.anchor_price.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Price Change:</span>
                   <span
                     className={`font-medium ${
-                      evaluation.current_price > evaluation.anchor_price
+                      activeEvaluation.current_price > activeEvaluation.anchor_price
                         ? 'text-danger-600'
                         : 'text-success-600'
                     }`}
                   >
                     {(
-                      ((evaluation.current_price - evaluation.anchor_price) /
-                        evaluation.anchor_price) *
+                      ((activeEvaluation.current_price - activeEvaluation.anchor_price) /
+                        activeEvaluation.anchor_price) *
                       100
                     ).toFixed(2)}
                     %
@@ -156,7 +240,7 @@ export default function TradingInterface({ position }: TradingInterfaceProps) {
             </div>
 
             {/* Order Proposal */}
-            {evaluation.order_proposal && (
+            {activeEvaluation.order_proposal && (
               <div className="space-y-4">
                 <h4 className="font-medium text-gray-900">Order Proposal</h4>
 
@@ -165,33 +249,35 @@ export default function TradingInterface({ position }: TradingInterfaceProps) {
                     <span className="text-gray-500">Side:</span>
                     <span
                       className={`font-medium ${
-                        evaluation.order_proposal.side === 'BUY'
+                        activeEvaluation.order_proposal.side === 'BUY'
                           ? 'text-success-600'
                           : 'text-danger-600'
                       }`}
                     >
-                      {evaluation.order_proposal.side}
+                      {activeEvaluation.order_proposal.side}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Quantity:</span>
-                    <span className="font-medium">{evaluation.order_proposal.trimmed_qty}</span>
+                    <span className="font-medium">
+                      {activeEvaluation.order_proposal.trimmed_qty}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Notional:</span>
                     <span className="font-medium">
-                      ${evaluation.order_proposal.notional.toLocaleString()}
+                      ${activeEvaluation.order_proposal.notional.toLocaleString()}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Commission:</span>
                     <span className="font-medium">
-                      ${evaluation.order_proposal.commission.toFixed(2)}
+                      ${activeEvaluation.order_proposal.commission.toFixed(2)}
                     </span>
                   </div>
                 </div>
 
-                {evaluation.order_proposal.validation.valid ? (
+                {activeEvaluation.order_proposal.validation.valid ? (
                   <div className="flex items-center text-success-600 text-sm">
                     <CheckCircle className="w-4 h-4 mr-2" />
                     Order validation passed
@@ -203,9 +289,11 @@ export default function TradingInterface({ position }: TradingInterfaceProps) {
                       Order validation failed
                     </div>
                     <ul className="text-xs text-danger-600 space-y-1">
-                      {evaluation.order_proposal.validation.rejections.map((rejection, index) => (
-                        <li key={index}>• {rejection}</li>
-                      ))}
+                      {activeEvaluation.order_proposal.validation.rejections.map(
+                        (rejection, index) => (
+                          <li key={index}>• {rejection}</li>
+                        ),
+                      )}
                     </ul>
                   </div>
                 )}
@@ -214,43 +302,48 @@ export default function TradingInterface({ position }: TradingInterfaceProps) {
           </div>
 
           {/* Action Buttons */}
-          {evaluation.trigger_detected && evaluation.order_proposal?.validation.valid && (
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <div className="flex items-center justify-between">
-                <div className="flex space-x-3">
-                  <button
-                    onClick={() => handleManualOrder(evaluation.order_proposal!.side)}
-                    disabled={createOrderMutation.isPending}
-                    className={`btn ${
-                      evaluation.order_proposal!.side === 'BUY' ? 'btn-success' : 'btn-danger'
-                    }`}
-                  >
-                    {evaluation.order_proposal!.side === 'BUY' ? (
-                      <TrendingUp className="w-4 h-4 mr-2" />
-                    ) : (
-                      <TrendingDown className="w-4 h-4 mr-2" />
-                    )}
-                    Manual {evaluation.order_proposal!.side}
-                  </button>
+          {activeEvaluation.trigger_detected &&
+            activeEvaluation.order_proposal?.validation.valid && (
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex space-x-3">
+                    <button
+                      onClick={() => handleManualOrder(activeEvaluation.order_proposal!.side)}
+                      disabled={createOrderMutation.isPending}
+                      className={`btn ${
+                        activeEvaluation.order_proposal!.side === 'BUY'
+                          ? 'btn-success'
+                          : 'btn-danger'
+                      }`}
+                    >
+                      {activeEvaluation.order_proposal!.side === 'BUY' ? (
+                        <TrendingUp className="w-4 h-4 mr-2" />
+                      ) : (
+                        <TrendingDown className="w-4 h-4 mr-2" />
+                      )}
+                      Manual {activeEvaluation.order_proposal!.side}
+                    </button>
 
-                  <button
-                    onClick={handleAutoOrder}
-                    disabled={autoSizeMutation.isPending}
-                    className="btn btn-primary"
-                  >
-                    <Target className="w-4 h-4 mr-2" />
-                    Auto-Size Order
-                  </button>
+                    <button
+                      onClick={handleAutoOrder}
+                      disabled={
+                        useMarketData
+                          ? autoSizeMarketMutation.isPending
+                          : autoSizeMutation.isPending
+                      }
+                      className="btn btn-primary"
+                    >
+                      <Target className="w-4 h-4 mr-2" />
+                      Auto-Size Order
+                    </button>
+                  </div>
+
+                  <div className="text-xs text-gray-500">{activeEvaluation.reasoning}</div>
                 </div>
-
-                <div className="text-xs text-gray-500">{evaluation.reasoning}</div>
               </div>
-            </div>
-          )}
+            )}
         </div>
       )}
     </div>
   );
 }
-
-

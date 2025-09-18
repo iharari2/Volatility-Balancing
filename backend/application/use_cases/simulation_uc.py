@@ -47,6 +47,9 @@ class SimulationResult:
     trade_log: List[Dict[str, Any]]
     daily_returns: List[Dict[str, Any]]
 
+    # Market data for visualization
+    price_data: List[Dict[str, Any]]
+
 
 class SimulationUC:
     """Use case for running trading simulations and backtesting."""
@@ -78,7 +81,7 @@ class SimulationUC:
         if position_config is None:
             position_config = {
                 "trigger_threshold_pct": 0.03,
-                "rebalance_ratio": 1.6667,
+                "rebalance_ratio": 0.5,
                 "commission_rate": 0.0001,
                 "min_notional": 100.0,
                 "allow_after_hours": include_after_hours,
@@ -110,6 +113,14 @@ class SimulationUC:
                 f"End date {end_date} is too far in the past. yfinance only supports data from the last 30 days"
             )
 
+        # Check if start date is too far in the past
+        start_days_ago = (now - start_date).days
+        if start_days_ago > 30:
+            print(
+                f"Warning: Start date {start_date} is {start_days_ago} days in the past. yfinance may have limited data."
+            )
+            # Don't raise error, just warn
+
         # Fetch historical data first - use a shorter range for 1-minute data
         # yfinance only allows 8 days of 1-minute data per request
         days_diff = (end_date - start_date).days
@@ -128,10 +139,10 @@ class SimulationUC:
         if not historical_data:
             raise ValueError(f"No price data available for {ticker} in date range")
 
-        # Get simulation data using the original date range
-        print(f"Getting simulation data for {ticker} from {start_date} to {end_date}")
+        # Get simulation data using the same date range as fetch
+        print(f"Getting simulation data for {ticker} from {fetch_start} to {fetch_end}")
         sim_data = self.market_data.get_simulation_data(
-            ticker, start_date, end_date, include_after_hours
+            ticker, fetch_start, fetch_end, include_after_hours
         )
 
         if not sim_data.price_data:
@@ -146,11 +157,23 @@ class SimulationUC:
         # Calculate comparison metrics
         comparison_metrics = self._calculate_comparison_metrics(algo_result, buy_hold_result)
 
+        # Convert price data to API format
+        price_data = [
+            {
+                "timestamp": p.timestamp.isoformat(),
+                "price": p.price,
+                "volume": getattr(p, "volume", 0),
+                "is_market_hours": getattr(p, "is_market_hours", True),
+            }
+            for p in sim_data.price_data
+        ]
+
         return SimulationResult(
             ticker=ticker,
             start_date=start_date,
             end_date=end_date,
             total_trading_days=sim_data.total_trading_days,
+            price_data=price_data,
             **algo_result,
             **buy_hold_result,
             **comparison_metrics,
@@ -216,25 +239,49 @@ class SimulationUC:
                             )
 
                     elif qty < 0:  # Sell
-                        sell_qty = min(abs(qty), shares)
-                        if sell_qty > 0:
-                            proceeds = sell_qty * current_price - commission
-                            cash += proceeds
-                            shares -= sell_qty
-                            total_commission += commission
-                            anchor_price = current_price  # Update anchor after trade
+                        if shares > 0:
+                            # Normal sell: we have shares to sell
+                            sell_qty = min(abs(qty), shares)
+                            if sell_qty > 0:
+                                proceeds = sell_qty * current_price - commission
+                                cash += proceeds
+                                shares -= sell_qty
+                                total_commission += commission
+                                anchor_price = current_price  # Update anchor after trade
 
-                            trade_log.append(
-                                {
-                                    "timestamp": current_time.isoformat(),
-                                    "side": "SELL",
-                                    "qty": -sell_qty,
-                                    "price": current_price,
-                                    "commission": commission,
-                                    "cash_after": cash,
-                                    "shares_after": shares,
-                                }
-                            )
+                                trade_log.append(
+                                    {
+                                        "timestamp": current_time.isoformat(),
+                                        "side": "SELL",
+                                        "qty": -sell_qty,
+                                        "price": current_price,
+                                        "commission": commission,
+                                        "cash_after": cash,
+                                        "shares_after": shares,
+                                    }
+                                )
+                        else:
+                            # Special case: we have 0 shares but want to sell
+                            # Convert this to a buy order (buy the absolute quantity)
+                            buy_qty = abs(qty)
+                            cost = buy_qty * current_price + commission
+                            if cost <= cash:
+                                cash -= cost
+                                shares += buy_qty
+                                total_commission += commission
+                                anchor_price = current_price  # Update anchor after trade
+
+                                trade_log.append(
+                                    {
+                                        "timestamp": current_time.isoformat(),
+                                        "side": "BUY",  # Convert sell to buy
+                                        "qty": buy_qty,
+                                        "price": current_price,
+                                        "commission": commission,
+                                        "cash_after": cash,
+                                        "shares_after": shares,
+                                    }
+                                )
 
             # Calculate portfolio value
             portfolio_value = cash + (shares * current_price)
@@ -401,7 +448,9 @@ class SimulationUC:
             cost = raw_qty * current_price + commission
             valid = cost <= cash
         elif raw_qty < 0:  # Sell
-            valid = abs(raw_qty) <= shares
+            # Allow selling if we have shares OR if this is the first trade (shares = 0)
+            # In the latter case, we'll convert it to a buy order
+            valid = abs(raw_qty) <= shares or shares == 0
 
         return {
             "qty": raw_qty,

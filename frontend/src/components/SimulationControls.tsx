@@ -36,6 +36,89 @@ export default function SimulationControls({
 }: SimulationControlsProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
+  // Quick date presets
+  const quickDatePresets = [
+    { label: 'Last 3 days', days: 3 },
+    { label: 'Last 7 days', days: 7 },
+    { label: 'Last 14 days', days: 14 },
+    { label: 'Last 30 days', days: 30 },
+  ];
+
+  const applyQuickDate = (days: number) => {
+    const today = new Date();
+    const startDate = new Date(today.getTime() - days * 24 * 60 * 60 * 1000);
+    const endDate = new Date(today.getTime() - 1 * 24 * 60 * 60 * 1000); // Yesterday
+
+    onConfigChange({
+      ...config,
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0],
+    });
+  };
+
+  // Calculate actual simulation time window
+  const getSimulationTimeWindow = () => {
+    const startDate = new Date(config.startDate);
+    const endDate = new Date(config.endDate);
+    const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    // Better trading days calculation
+    // Weekends are Saturday (6) and Sunday (0)
+    let tradingDays = 0;
+    const currentDate = new Date(startDate);
+
+    while (currentDate <= endDate) {
+      const dayOfWeek = currentDate.getDay();
+      // Count Monday (1) through Friday (5) as trading days
+      if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+        tradingDays++;
+      }
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return {
+      start: startDate.toLocaleDateString(),
+      end: endDate.toLocaleDateString(),
+      days: daysDiff,
+      tradingDays: Math.max(1, tradingDays),
+    };
+  };
+
+  const timeWindow = getSimulationTimeWindow();
+
+  // Date validation
+  const validateDates = () => {
+    const startDate = new Date(config.startDate);
+    const endDate = new Date(config.endDate);
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const errors = [];
+    const warnings = [];
+
+    if (startDate > today) {
+      errors.push('Start date cannot be in the future');
+    }
+    if (endDate > today) {
+      errors.push('End date cannot be in the future');
+    }
+    if (startDate >= endDate) {
+      errors.push('Start date must be before end date');
+    }
+    // Allow exactly 30 days (with some tolerance)
+    const thirtyDaysAgoTolerance = new Date(today.getTime() - 31 * 24 * 60 * 60 * 1000); // 31 days ago
+    if (endDate < thirtyDaysAgoTolerance) {
+      errors.push('End date is too far in the past (yfinance only supports last 30 days)');
+    }
+    if (startDate < thirtyDaysAgoTolerance) {
+      warnings.push('Start date is far in the past - may have limited data');
+    }
+
+    return { errors, warnings };
+  };
+
+  const validation = validateDates();
+
   const handleConfigChange = (field: string, value: any) => {
     if (field.includes('.')) {
       const [parent, child] = field.split('.');
@@ -136,7 +219,9 @@ export default function SimulationControls({
                 type="date"
                 value={config.startDate}
                 onChange={(e) => handleConfigChange('startDate', e.target.value)}
-                className="input pl-10"
+                className={`input pl-10 ${
+                  validation.errors.some((e) => e.includes('Start date')) ? 'border-red-300' : ''
+                }`}
               />
             </div>
           </div>
@@ -149,9 +234,70 @@ export default function SimulationControls({
                 type="date"
                 value={config.endDate}
                 onChange={(e) => handleConfigChange('endDate', e.target.value)}
-                className="input pl-10"
+                className={`input pl-10 ${
+                  validation.errors.some((e) => e.includes('End date')) ? 'border-red-300' : ''
+                }`}
               />
             </div>
+          </div>
+        </div>
+
+        {/* Time Window Display */}
+        <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-medium text-blue-900">Simulation Time Window</h4>
+            <div className="text-xs text-blue-600">
+              {timeWindow.days} day{timeWindow.days !== 1 ? 's' : ''} • ~{timeWindow.tradingDays}{' '}
+              trading day{timeWindow.tradingDays !== 1 ? 's' : ''}
+            </div>
+          </div>
+          <div className="text-sm text-blue-800">
+            <span className="font-medium">{timeWindow.start}</span> to{' '}
+            <span className="font-medium">{timeWindow.end}</span>
+          </div>
+          <div className="mt-2 text-xs text-blue-600">
+            <AlertCircle className="w-3 h-3 inline mr-1" />
+            Data limited to last 30 days for 1-minute intervals
+          </div>
+        </div>
+
+        {/* Validation Messages */}
+        {(validation.errors.length > 0 || validation.warnings.length > 0) && (
+          <div className="mt-4 space-y-2">
+            {validation.errors.map((error, index) => (
+              <div
+                key={index}
+                className="flex items-center p-3 bg-red-50 border border-red-200 rounded-lg"
+              >
+                <AlertCircle className="w-4 h-4 text-red-500 mr-2" />
+                <span className="text-sm text-red-700">{error}</span>
+              </div>
+            ))}
+            {validation.warnings.map((warning, index) => (
+              <div
+                key={index}
+                className="flex items-center p-3 bg-yellow-50 border border-yellow-200 rounded-lg"
+              >
+                <AlertCircle className="w-4 h-4 text-yellow-500 mr-2" />
+                <span className="text-sm text-yellow-700">{warning}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Quick Date Picker */}
+        <div className="mt-4">
+          <label className="label">Quick Date Selection</label>
+          <div className="flex flex-wrap gap-2">
+            {quickDatePresets.map((preset) => (
+              <button
+                key={preset.days}
+                onClick={() => applyQuickDate(preset.days)}
+                className="btn btn-outline btn-sm"
+              >
+                {preset.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -159,22 +305,13 @@ export default function SimulationControls({
         <div className="mt-4">
           <label className="label">Quick Presets</label>
           <div className="flex space-x-2">
-            <button
-              onClick={() => applyPreset('conservative')}
-              className="btn btn-outline btn-sm"
-            >
+            <button onClick={() => applyPreset('conservative')} className="btn btn-outline btn-sm">
               Conservative
             </button>
-            <button
-              onClick={() => applyPreset('moderate')}
-              className="btn btn-outline btn-sm"
-            >
+            <button onClick={() => applyPreset('moderate')} className="btn btn-outline btn-sm">
               Moderate
             </button>
-            <button
-              onClick={() => applyPreset('aggressive')}
-              className="btn btn-outline btn-sm"
-            >
+            <button onClick={() => applyPreset('aggressive')} className="btn btn-outline btn-sm">
               Aggressive
             </button>
           </div>
@@ -184,14 +321,16 @@ export default function SimulationControls({
         {showAdvanced && (
           <div className="mt-6 pt-6 border-t border-gray-200">
             <h4 className="font-medium text-gray-900 mb-4">Advanced Parameters</h4>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="label">Trigger Threshold (%)</label>
                 <input
                   type="number"
                   value={config.triggerThresholdPct * 100}
-                  onChange={(e) => handleConfigChange('triggerThresholdPct', Number(e.target.value) / 100)}
+                  onChange={(e) =>
+                    handleConfigChange('triggerThresholdPct', Number(e.target.value) / 100)
+                  }
                   className="input"
                   min="0.1"
                   max="10"
@@ -223,7 +362,9 @@ export default function SimulationControls({
                 <input
                   type="number"
                   value={config.commissionRate * 100}
-                  onChange={(e) => handleConfigChange('commissionRate', Number(e.target.value) / 100)}
+                  onChange={(e) =>
+                    handleConfigChange('commissionRate', Number(e.target.value) / 100)
+                  }
                   className="input"
                   min="0"
                   max="1"
@@ -244,9 +385,7 @@ export default function SimulationControls({
                   min="0"
                   step="10"
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Minimum order value to execute
-                </p>
+                <p className="text-xs text-gray-500 mt-1">Minimum order value to execute</p>
               </div>
             </div>
 
@@ -259,7 +398,12 @@ export default function SimulationControls({
                   <input
                     type="number"
                     value={config.guardrails.minStockAllocPct * 100}
-                    onChange={(e) => handleConfigChange('guardrails.minStockAllocPct', Number(e.target.value) / 100)}
+                    onChange={(e) =>
+                      handleConfigChange(
+                        'guardrails.minStockAllocPct',
+                        Number(e.target.value) / 100,
+                      )
+                    }
                     className="input"
                     min="0"
                     max="100"
@@ -271,7 +415,12 @@ export default function SimulationControls({
                   <input
                     type="number"
                     value={config.guardrails.maxStockAllocPct * 100}
-                    onChange={(e) => handleConfigChange('guardrails.maxStockAllocPct', Number(e.target.value) / 100)}
+                    onChange={(e) =>
+                      handleConfigChange(
+                        'guardrails.maxStockAllocPct',
+                        Number(e.target.value) / 100,
+                      )
+                    }
                     className="input"
                     min="0"
                     max="100"
@@ -309,20 +458,22 @@ export default function SimulationControls({
                 `Ready to simulate ${config.ticker} from ${config.startDate} to ${config.endDate}`
               )}
             </div>
-            
+
             <div className="flex space-x-3">
               {isRunning ? (
-                <button
-                  onClick={onStopSimulation}
-                  className="btn btn-danger"
-                >
+                <button onClick={onStopSimulation} className="btn btn-danger">
                   <Square className="w-4 h-4 mr-2" />
                   Stop
                 </button>
               ) : (
                 <button
                   onClick={onRunSimulation}
-                  disabled={!config.ticker || !config.startDate || !config.endDate}
+                  disabled={
+                    !config.ticker ||
+                    !config.startDate ||
+                    !config.endDate ||
+                    validation.errors.length > 0
+                  }
                   className="btn btn-primary"
                 >
                   <Play className="w-4 h-4 mr-2" />
@@ -336,4 +487,3 @@ export default function SimulationControls({
     </div>
   );
 }
-

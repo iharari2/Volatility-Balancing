@@ -5,6 +5,10 @@ export interface Position {
   qty: number;
   cash: number;
   anchor_price?: number;
+  dividend_receivable?: number;
+  withholding_tax_rate?: number;
+  order_policy?: OrderPolicy;
+  guardrails?: Guardrails;
 }
 
 export interface Order {
@@ -55,7 +59,10 @@ export interface CreatePositionRequest {
   ticker: string;
   qty: number;
   cash: number;
+  anchor_price?: number;
   order_policy?: OrderPolicy;
+  guardrails?: Guardrails;
+  withholding_tax_rate?: number;
 }
 
 export interface OrderPolicy {
@@ -64,6 +71,16 @@ export interface OrderPolicy {
   lot_size: number;
   qty_step: number;
   action_below_min: 'hold' | 'reject' | 'clip';
+  trigger_threshold_pct: number;
+  rebalance_ratio: number;
+  commission_rate: number;
+  allow_after_hours: boolean;
+}
+
+export interface Guardrails {
+  min_stock_alloc_pct: number;
+  max_stock_alloc_pct: number;
+  max_orders_per_day: number;
 }
 
 export interface CreateOrderRequest {
@@ -108,4 +125,84 @@ export interface VolatilityData {
   trigger_zone: 'buy' | 'sell' | 'neutral';
 }
 
+// Market Data Types
+export interface MarketData {
+  ticker: string;
+  price: number;
+  source: string;
+  is_market_hours: boolean;
+  is_fresh: boolean;
+  is_inline: boolean;
+  validation: {
+    valid: boolean;
+    warnings: string[];
+    rejections: string[];
+  };
+}
 
+export interface MarketStatus {
+  is_market_open: boolean;
+  is_after_hours: boolean;
+  next_open: string;
+  next_close: string;
+}
+
+export interface HistoricalPriceData {
+  timestamp: string;
+  price: number;
+  volume?: number;
+  is_market_hours: boolean;
+}
+
+// Dividend Types
+export interface Dividend {
+  id: string;
+  ticker: string;
+  ex_date: string;
+  pay_date: string;
+  dps: number;
+  currency: string;
+  withholding_tax_rate: number;
+  status: string;
+}
+
+export interface DividendReceivable {
+  id: string;
+  ticker: string;
+  ex_date: string;
+  pay_date: string;
+  gross_amount: number;
+  net_amount: number;
+  status: string;
+}
+
+export interface DividendPositionStatus {
+  position_id: string;
+  pending_receivables: DividendReceivable[];
+  recent_dividends: Dividend[];
+}
+
+export interface DividendMarketInfo {
+  ticker: string;
+  next_ex_date?: string;
+  next_pay_date?: string;
+  next_dps?: number;
+  dividend_frequency: string;
+  last_dividend?: {
+    ex_date: string;
+    pay_date: string;
+    dps: number;
+  };
+}
+
+export interface UpcomingDividend {
+  ex_date: string;
+  pay_date: string;
+  dps: number;
+  currency: string;
+}
+
+// Enhanced Evaluation Result with Market Data
+export interface EnhancedEvaluationResult extends EvaluationResult {
+  market_data: MarketData;
+}

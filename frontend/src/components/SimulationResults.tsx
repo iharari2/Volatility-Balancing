@@ -156,12 +156,21 @@ export default function SimulationResults({
     },
   ];
 
-  const chartData = result.daily_returns.map((day, index) => ({
-    date: new Date(day.date).toLocaleDateString(),
-    algorithm: day.portfolio_value,
-    buyHold: result.daily_returns[index]?.portfolio_value || 0, // Simplified - would need separate buy&hold calculation
-    return: day.return * 100,
-  }));
+  // Use price_data for chart if available, otherwise fall back to daily_returns
+  const chartData =
+    result.price_data && result.price_data.length > 0
+      ? result.price_data.map((pricePoint, index) => ({
+          date: new Date(pricePoint.timestamp).toLocaleDateString(),
+          algorithm: pricePoint.price, // Use raw price for now
+          buyHold: pricePoint.price, // Same as algorithm for now
+          return: 0, // Will be calculated if needed
+        }))
+      : result.daily_returns.map((day, index) => ({
+          date: new Date(day.date).toLocaleDateString(),
+          algorithm: day.portfolio_value,
+          buyHold: result.daily_returns[index]?.portfolio_value || 0,
+          return: day.return * 100,
+        }));
 
   const tradeSideData = [
     {
@@ -183,10 +192,23 @@ export default function SimulationResults({
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-xl font-bold text-gray-900">Simulation Results</h2>
-            <p className="text-gray-600">
-              {result.ticker} • {result.start_date} to {result.end_date} •{' '}
-              {result.total_trading_days} trading days
-            </p>
+            <div className="mt-2 space-y-1">
+              <p className="text-gray-600">
+                <span className="font-medium">{result.ticker}</span> • {result.total_trading_days}{' '}
+                trading days
+              </p>
+              <div className="flex items-center space-x-4 text-sm text-gray-500">
+                <div className="flex items-center">
+                  <Clock className="w-4 h-4 mr-1" />
+                  <span>{new Date(result.start_date).toLocaleDateString()}</span>
+                </div>
+                <span>→</span>
+                <div className="flex items-center">
+                  <Clock className="w-4 h-4 mr-1" />
+                  <span>{new Date(result.end_date).toLocaleDateString()}</span>
+                </div>
+              </div>
+            </div>
           </div>
           <div className="text-right">
             <div className="text-2xl font-bold text-gray-900">

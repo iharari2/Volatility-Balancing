@@ -8,8 +8,8 @@ import {
   FillOrderRequest,
 } from '../types';
 
-const API_BASE = '/api'; // This will use the Vite proxy
-// Alternative: const API_BASE = 'http://localhost:8000/v1'; // Direct connection
+// const API_BASE = '/api'; // This will use the Vite proxy
+const API_BASE = 'http://localhost:8001/v1'; // Direct connection
 
 class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -132,9 +132,9 @@ export const ordersApi = {
 // Simulation API
 export const simulationApi = {
   runSimulation: (config: any) => {
-    // Ensure dates are in ISO format
-    const startDate = new Date(config.startDate).toISOString();
-    const endDate = new Date(config.endDate).toISOString();
+    // Ensure dates are in ISO format with timezone
+    const startDate = new Date(config.startDate + 'T00:00:00.000Z').toISOString();
+    const endDate = new Date(config.endDate + 'T23:59:59.999Z').toISOString();
 
     const requestData = {
       ticker: config.ticker,
@@ -148,7 +148,10 @@ export const simulationApi = {
         commission_rate: config.commissionRate,
         min_notional: config.minNotional,
         allow_after_hours: config.allowAfterHours,
-        guardrails: config.guardrails,
+        guardrails: {
+          min_stock_alloc_pct: config.guardrails.minStockAllocPct,
+          max_stock_alloc_pct: config.guardrails.maxStockAllocPct,
+        },
       },
     };
 
@@ -186,9 +189,207 @@ export const simulationApi = {
     ),
 };
 
+// Market Data API
+export const marketApi = {
+  getPrice: (ticker: string) =>
+    request<{
+      ticker: string;
+      price: number;
+      source: string;
+      is_market_hours: boolean;
+      is_fresh: boolean;
+      is_inline: boolean;
+      validation: {
+        valid: boolean;
+        warnings: string[];
+        rejections: string[];
+      };
+    }>(`/market/price/${ticker}`),
+
+  getStatus: () =>
+    request<{
+      is_market_open: boolean;
+      is_after_hours: boolean;
+      next_open: string;
+      next_close: string;
+    }>('/market/status'),
+
+  getHistoricalData: (
+    ticker: string,
+    startDate: string,
+    endDate: string,
+    marketHoursOnly = false,
+  ) =>
+    request<{
+      ticker: string;
+      start_date: string;
+      end_date: string;
+      market_hours_only: boolean;
+      data_points: number;
+      price_data: Array<{
+        timestamp: string;
+        price: number;
+        volume?: number;
+        is_market_hours: boolean;
+      }>;
+    }>(
+      `/market/historical/${ticker}?start_date=${startDate}&end_date=${endDate}&market_hours_only=${marketHoursOnly}`,
+    ),
+};
+
+// Dividend API
+export const dividendApi = {
+  announce: (data: {
+    ticker: string;
+    ex_date: string;
+    pay_date: string;
+    dps: number;
+    currency: string;
+    withholding_tax_rate: number;
+  }) =>
+    request<{
+      dividend_id: string;
+      ticker: string;
+      ex_date: string;
+      pay_date: string;
+      dps: number;
+      currency: string;
+      withholding_tax_rate: number;
+      message: string;
+    }>('/dividends/announce', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getPositionStatus: (positionId: string) =>
+    request<{
+      position_id: string;
+      pending_receivables: Array<{
+        id: string;
+        ticker: string;
+        ex_date: string;
+        pay_date: string;
+        gross_amount: number;
+        net_amount: number;
+        status: string;
+      }>;
+      recent_dividends: Array<{
+        id: string;
+        ticker: string;
+        ex_date: string;
+        pay_date: string;
+        dps: number;
+        status: string;
+      }>;
+    }>(`/dividends/positions/${positionId}/status`),
+
+  getMarketInfo: (ticker: string) =>
+    request<{
+      ticker: string;
+      next_ex_date?: string;
+      next_pay_date?: string;
+      next_dps?: number;
+      dividend_frequency: string;
+      last_dividend?: {
+        ex_date: string;
+        pay_date: string;
+        dps: number;
+      };
+    }>(`/dividends/market/${ticker}/info`),
+
+  getUpcoming: (ticker: string) =>
+    request<{
+      ticker: string;
+      upcoming_dividends: Array<{
+        ex_date: string;
+        pay_date: string;
+        dps: number;
+        currency: string;
+      }>;
+    }>(`/dividends/market/${ticker}/upcoming`),
+
+  processExDividend: (positionId: string) =>
+    request<{
+      position_id: string;
+      processed: boolean;
+      dividend_id?: string;
+      anchor_adjustment?: {
+        old_anchor: number;
+        dps: number;
+        new_anchor: number;
+      };
+      receivable_created?: {
+        gross_amount: number;
+        net_amount: number;
+        receivable_id: string;
+      };
+      message: string;
+    }>(`/dividends/positions/${positionId}/process-ex-dividend`, {
+      method: 'POST',
+    }),
+
+  processPayment: (positionId: string, receivableId: string) =>
+    request<{
+      position_id: string;
+      receivable_id: string;
+      amount_received: number;
+      cash_updated: number;
+      message: string;
+    }>(`/dividends/positions/${positionId}/process-payment`, {
+      method: 'POST',
+      body: JSON.stringify({ receivable_id: receivableId }),
+    }),
+};
+
+// Enhanced Positions API with market data evaluation
+export const enhancedPositionsApi = {
+  ...positionsApi,
+
+  evaluateWithMarketData: (id: string) =>
+    request<
+      EvaluationResult & {
+        market_data: {
+          price: number;
+          source: string;
+          is_market_hours: boolean;
+          is_fresh: boolean;
+          is_inline: boolean;
+          validation: {
+            valid: boolean;
+            warnings: string[];
+            rejections: string[];
+          };
+        };
+      }
+    >(`/positions/${id}/evaluate/market`, {
+      method: 'POST',
+    }),
+
+  autoSizeWithMarketData: (id: string, idempotencyKey?: string) =>
+    request<{
+      position_id: string;
+      current_price: number;
+      order_submitted: boolean;
+      order_id?: string;
+      order_details?: any;
+      sizing_details?: any;
+      evaluation: EvaluationResult;
+      market_data: {
+        price: number;
+        source: string;
+        is_market_hours: boolean;
+      };
+      reason?: string;
+      rejections?: string[];
+    }>(`/positions/${id}/orders/auto-size/market`, {
+      method: 'POST',
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {},
+    }),
+};
+
 // Health API
 export const healthApi = {
-  check: () => request<{ status: string; timestamp: string }>('/health'),
+  check: () => request<{ status: string; timestamp: string }>('/healthz'),
 };
 
 export { ApiError };

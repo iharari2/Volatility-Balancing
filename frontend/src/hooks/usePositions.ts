@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { positionsApi } from '../lib/api';
-import { Position, CreatePositionRequest } from '../types';
+import { positionsApi, enhancedPositionsApi } from '../lib/api';
+import { Position, CreatePositionRequest, EnhancedEvaluationResult } from '../types';
 
 export const usePositions = () => {
   return useQuery({
@@ -75,6 +75,31 @@ export const useAutoSizeOrder = (positionId: string) => {
       queryClient.invalidateQueries({ queryKey: ['orders', positionId] });
       queryClient.invalidateQueries({ queryKey: ['position', positionId] });
       queryClient.invalidateQueries({ queryKey: ['evaluation', positionId] });
+    },
+  });
+};
+
+// Enhanced hooks with market data integration
+export const useEvaluatePositionWithMarketData = (positionId: string) => {
+  return useQuery({
+    queryKey: ['evaluation', 'market', positionId],
+    queryFn: () => enhancedPositionsApi.evaluateWithMarketData(positionId),
+    enabled: !!positionId,
+    refetchInterval: 5000, // Refetch every 5 seconds for real-time updates
+  });
+};
+
+export const useAutoSizeOrderWithMarketData = (positionId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (idempotencyKey?: string) =>
+      enhancedPositionsApi.autoSizeWithMarketData(positionId, idempotencyKey),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders', positionId] });
+      queryClient.invalidateQueries({ queryKey: ['position', positionId] });
+      queryClient.invalidateQueries({ queryKey: ['evaluation', positionId] });
+      queryClient.invalidateQueries({ queryKey: ['evaluation', 'market', positionId] });
     },
   });
 };

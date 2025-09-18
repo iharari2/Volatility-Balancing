@@ -5,8 +5,19 @@ import { SimulationResult, SimulationConfig } from '../components/SimulationResu
 export const useRunSimulation = () => {
   return useMutation({
     mutationFn: async (config: SimulationConfig) => {
-      const response = await simulationApi.runSimulation(config);
-      return response;
+      try {
+        const response = await simulationApi.runSimulation(config);
+        return response;
+      } catch (error) {
+        // Log the actual error for debugging
+        console.error('Simulation API failed:', error);
+        console.error('Error details:', {
+          message: error.message,
+          status: error.status,
+          config: config,
+        });
+        throw error; // Re-throw to see the actual error
+      }
     },
   });
 };

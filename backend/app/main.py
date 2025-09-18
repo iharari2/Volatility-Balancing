@@ -3,6 +3,7 @@
 # =========================
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from app.routes.health import router as health_router
 from app.routes.positions import router as positions_router
 from app.routes.orders import router as orders_router
@@ -15,8 +16,8 @@ app = FastAPI(title="Volatility Balancing API", version="v1")
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-    allow_credentials=True,
+    allow_origins=["*"],  # Allow all origins for development
+    allow_credentials=False,  # Set to False when using allow_origins=["*"]
     allow_methods=["*"],
     allow_headers=["*"],
 )

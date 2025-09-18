@@ -1,15 +1,18 @@
 import { useParams } from 'react-router-dom';
 import { useState } from 'react';
-import { ArrowLeft, Target, Settings } from 'lucide-react';
+import { ArrowLeft, Target, Settings, DollarSign } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { usePosition, useSetAnchorPrice, usePositionEvents } from '../hooks/usePositions';
 import TradingInterface from '../components/TradingInterface';
 import EventTimeline from '../components/EventTimeline';
+import DividendManagement from '../components/DividendManagement';
+import PositionConfigPanel from '../components/PositionConfigPanel';
 
 export default function PositionDetail() {
   const { id } = useParams<{ id: string }>();
   const [showAnchorForm, setShowAnchorForm] = useState(false);
   const [anchorPrice, setAnchorPrice] = useState<number>(0);
+  const [activeTab, setActiveTab] = useState<'trading' | 'dividends' | 'config'>('trading');
 
   const { data: position, isLoading: positionLoading } = usePosition(id!);
   const { data: events, isLoading: eventsLoading } = usePositionEvents(id!);
@@ -65,10 +68,19 @@ export default function PositionDetail() {
     );
   }
 
-  const totalValue = position.qty * (position.anchor_price || 0) + position.cash;
+  const totalValue =
+    position.qty * (position.anchor_price || 0) +
+    position.cash +
+    (position.dividend_receivable || 0);
   const assetPercentage = position.anchor_price
     ? ((position.qty * position.anchor_price) / totalValue) * 100
     : 0;
+
+  const tabs = [
+    { id: 'trading', label: 'Trading', icon: Target },
+    { id: 'dividends', label: 'Dividends', icon: DollarSign },
+    { id: 'config', label: 'Config', icon: Settings },
+  ];
 
   return (
     <div className="space-y-6">
@@ -95,11 +107,30 @@ export default function PositionDetail() {
               Set Anchor Price
             </button>
           )}
-          <button className="btn btn-secondary">
-            <Settings className="w-4 h-4 mr-2" />
-            Settings
-          </button>
         </div>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex space-x-8">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex items-center space-x-2 py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === tab.id
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
       {/* Position Overview */}
@@ -120,6 +151,11 @@ export default function PositionDetail() {
                 <p className="text-2xl font-semibold text-gray-900">
                   ${position.cash.toLocaleString()}
                 </p>
+                {position.dividend_receivable && position.dividend_receivable > 0 && (
+                  <p className="text-xs text-primary-600">
+                    +${position.dividend_receivable.toFixed(2)} receivable
+                  </p>
+                )}
               </div>
               <div>
                 <p className="text-sm text-gray-500">Anchor Price</p>
@@ -161,21 +197,63 @@ export default function PositionDetail() {
             )}
           </div>
 
-          {/* Trading Interface */}
-          {position.anchor_price ? (
-            <TradingInterface position={position} />
-          ) : (
-            <div className="card text-center py-12">
-              <Target className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Anchor Price Required</h3>
-              <p className="text-gray-500 mb-4">
-                Set an anchor price to enable volatility trading for this position.
-              </p>
-              <button onClick={() => setShowAnchorForm(true)} className="btn btn-primary">
-                <Target className="w-4 h-4 mr-2" />
-                Set Anchor Price
-              </button>
-            </div>
+          {/* Tab Content */}
+          {activeTab === 'trading' && (
+            <>
+              {position.anchor_price ? (
+                <TradingInterface position={position} />
+              ) : (
+                <div className="card text-center py-12">
+                  <Target className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Anchor Price Required</h3>
+                  <p className="text-gray-500 mb-4">
+                    Set an anchor price to enable volatility trading for this position.
+                  </p>
+                  <button onClick={() => setShowAnchorForm(true)} className="btn btn-primary">
+                    <Target className="w-4 h-4 mr-2" />
+                    Set Anchor Price
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {activeTab === 'dividends' && (
+            <DividendManagement positionId={position.id} ticker={position.ticker} />
+          )}
+
+          {activeTab === 'config' && (
+            <PositionConfigPanel
+              orderPolicy={
+                position.order_policy || {
+                  min_qty: 0,
+                  min_notional: 100,
+                  lot_size: 0,
+                  qty_step: 0,
+                  action_below_min: 'hold',
+                  trigger_threshold_pct: 0.03,
+                  rebalance_ratio: 1.6667,
+                  commission_rate: 0.0001,
+                  allow_after_hours: false,
+                }
+              }
+              guardrails={
+                position.guardrails || {
+                  min_stock_alloc_pct: 0.25,
+                  max_stock_alloc_pct: 0.75,
+                  max_orders_per_day: 5,
+                }
+              }
+              withholdingTaxRate={position.withholding_tax_rate || 0.25}
+              onSave={(config) => {
+                // TODO: Implement save configuration
+                console.log('Save config:', config);
+              }}
+              onReset={() => {
+                // TODO: Implement reset configuration
+                console.log('Reset config');
+              }}
+            />
           )}
         </div>
 
@@ -250,5 +328,3 @@ export default function PositionDetail() {
     </div>
   );
 }
-
-

@@ -5,106 +5,109 @@
 ---
 
 ## 1) TL;DR
-- **Frontend:** Next.js (React) + TypeScript, Tailwind, Recharts. Auth via OAuth2/OIDC (AWS Cognito).
-- **Backend:** Python **FastAPI** on AWS Lambda (API Gateway). Modules: Price Feed, Decision Engine, Order Manager, Dividend Handler, Event Store, Reporting.
-- **Data:** Postgres (RDS, small/Serverless v2) for portfolios/orders/events; **Redis** (Upstash/ElastiCache) for hot quotes & idempotency; **S3** for audit exports & cold storage.
-- **Async:** **EventBridge** (cron + bus) → **SQS** queues → **Lambda** workers. Optional **Step Functions** for order lifecycle.
-- **Integrations:** Market data & brokerage adapters (paper first; pluggable vendor SDKs).
-- **Security:** Cognito, IAM least‑privilege, KMS‑encrypted storage, Secrets Manager, VPC, TLS‑only.
+
+- **Frontend:** React + TypeScript, Vite, Tailwind CSS, Recharts, React Query, React Router
+- **Backend:** Python **FastAPI** with Clean Architecture (Domain-Driven Design)
+- **Data:** SQLite (development) / PostgreSQL (production), Redis for caching and idempotency
+- **Architecture:** Hexagonal Architecture with dependency injection, event-driven design
+- **Integrations:** YFinance for market data, pluggable brokerage adapters
+- **Security:** Idempotency keys, request validation, audit trails
 
 ---
 
 ## 2) Component Model
+
 ```mermaid
-flowchart LR
-  subgraph Frontend
-    WEB["Next.js App\nConfig / Positions / Timeline"]
+flowchart TB
+  subgraph Frontend["Frontend - React SPA"]
+    WEB["React App\nDashboard / Positions / Trading / Analytics"]
+    COMP["Components\nPositionCard, TradingInterface, Charts"]
+    HOOKS["Custom Hooks\nusePositions, useTrading"]
   end
 
-  subgraph Identity
-    COG[Cognito OIDC]
+  subgraph Backend["Backend - FastAPI + Clean Architecture"]
+    API["FastAPI Router\n/positions, /orders, /dividends, /health"]
+
+    subgraph Application["Application Layer"]
+      UC["Use Cases\nEvaluatePosition, SubmitOrder, ProcessDividend"]
+      DTO["DTOs\nRequest/Response Models"]
+    end
+
+    subgraph Domain["Domain Layer"]
+      ENT["Entities\nPosition, Order, Event, Dividend"]
+      VO["Value Objects\nGuardrails, OrderPolicy, Types"]
+      PORTS["Ports\nRepository Interfaces"]
+    end
+
+    subgraph Infrastructure["Infrastructure Layer"]
+      REPO["Repositories\nSQL, Memory, Redis"]
+      MKT["Market Data\nYFinance Adapter"]
+      TIME["Time\nClock Service"]
+    end
   end
 
-  WEB -->|OIDC| COG
-  WEB -->|HTTPS JSON| APIG[API Gateway]
-
-  subgraph Backend["Backend - Serverless FastAPI"]
-    API[FastAPI Router]
-    DEC[Decision Engine]
-    ORD[Order Manager]
-    DIV[Dividend Handler]
-    RPT[Reporting]
+  subgraph Data["Data Layer"]
+    SQLITE[(SQLite/PostgreSQL)]
+    REDIS[(Redis Cache)]
   end
 
-  APIG --> API
-  API -->|emit events| EVT["EventBridge Bus"]
-  EVT -->|PriceEvent| DEC
-  EVT -->|ExDivEvent| DIV
-  DEC -->|OrderIntent| ORD
+  WEB -->|HTTPS JSON| API
+  API --> UC
+  UC --> ENT
+  UC --> PORTS
+  PORTS --> REPO
+  REPO --> SQLITE
+  REPO --> REDIS
+  MKT --> UC
+  TIME --> UC
 
-  subgraph Async_Queues["Async Queues"]
-    Q1["SQS: price-events"]
-    Q2["SQS: orders"]
-    Q3["SQS: dividends"]
+  subgraph External["External Services"]
+    YFIN["YFinance API"]
+    BROKER["Brokerage APIs\n(Pluggable)"]
   end
 
-  EVT --> Q1
-  Q1 --> DEC
-  DEC --> Q2
-  DIV --> Q3
-  Q2 --> ORD
-
-  subgraph Data
-    PG[(RDS Postgres)]
-    S3[(S3 Audit/Exports)]
-    REDIS[(Redis: cache/idempotency)]
-  end
-
-  API <--> PG
-  DEC <--> PG
-  ORD <--> PG
-  ORD <--> REDIS
-  RPT --> S3
-
-  subgraph Integrations
-    MKT[Market Data Adapter]
-    BRK[Brokerage Adapter]
-  end
-
-  MKT --> EVT
-  ORD <--> BRK
+  MKT --> YFIN
+  UC --> BROKER
 ```
 
 ---
 
 ## 3) Core Sequence (Tick → Trade)
+
 ```mermaid
 sequenceDiagram
   autonumber
-  participant MD as Market Data
-  participant DEC as Decision Engine
-  participant ORD as Order Manager
-  participant BRK as Brokerage API
-  participant DB as Postgres
+  participant FE as Frontend
+  participant API as FastAPI Router
+  participant UC as EvaluatePositionUC
+  participant POS as Position Entity
+  participant REPO as Repository
+  participant MKT as Market Data
+  participant DB as Database
 
-  MD->>DEC: PriceEvent (symbol, last, mid, age)
-  DEC->>DB: Load position and config
-  DEC->>DEC: Evaluate triggers, size order, trim guardrails
-  alt Skip (min_notional or invalid)
-    DEC-->>DB: Event reason=skip
-  else Send order
-    DEC-->>DB: Event order_intent
-    DEC->>ORD: OrderIntent idempotency_key
-    ORD->>BRK: Submit order (market or limit)
-    BRK-->>ORD: Fill (qty, price)
-    ORD->>DB: Update cash, fees, anchor
-    ORD->>DB: Persist events
+  FE->>API: POST /positions/{id}/evaluate?price=150.0
+  API->>UC: Execute evaluation
+  UC->>REPO: Load position
+  REPO->>DB: SELECT position data
+  DB-->>REPO: Position data
+  REPO-->>UC: Position entity
+  UC->>MKT: Get current market data
+  MKT-->>UC: Price data
+  UC->>POS: Evaluate triggers & sizing
+  POS-->>UC: Order decision
+  alt Skip (below threshold)
+    UC->>REPO: Save event (skip reason)
+  else Submit order
+    UC->>REPO: Save order intent
+    UC->>API: Return order response
   end
+  API-->>FE: Order response
 ```
 
 ---
 
 ## 4) Order Lifecycle (State Machine)
+
 ```mermaid
 stateDiagram-v2
   [*] --> Evaluated
@@ -119,90 +122,201 @@ stateDiagram-v2
 
 ---
 
-## 5) Data Model (minimal)
-- **portfolios**(id, user_id, settings_json {tau, r, guardrails, min_notional, commission_bps, max_orders_day, withholding, after_hours, fractional})
-- **positions**(id, portfolio_id, symbol, shares, anchor_price, cash, receivable, last_order_day_count)
-- **orders**(id, position_id, side, qty, price_limit, status, reason, idempotency_key, created_at)
-- **executions**(id, order_id, qty, price, commission_bps, notional, slippage_bps, created_at)
-- **events**(id, position_id, type, inputs_json, outputs_json, message, created_at)
-- **dividends**(id, symbol, ex_date, pay_date, dps, withholding_rate, created_event_id)
+## 5) Data Model (Current Implementation)
+
+- **positions**(id, ticker, qty, cash, anchor_price, dividend_receivable, withholding_tax_rate, created_at, updated_at)
+- **orders**(id, position_id, side, qty, status, idempotency_key, request_signature, created_at, updated_at)
+- **events**(id, position_id, type, inputs, outputs, message, ts)
+- **dividends**(id, ticker, ex_date, pay_date, dps, currency, withholding_tax_rate, created_at)
+- **dividend_receivables**(id, position_id, dividend_id, amount, status, created_at)
 
 **Notes**
-- Event store is append‑only; derive metrics & timeline from events.
-- Receivable is included in **C_effective = cash + receivable** for sizing/guardrails.
+
+- Event store is append‑only; derive metrics & timeline from events
+- Dividend receivable is included in effective cash for sizing/guardrails
+- Idempotency keys prevent duplicate orders
 
 ---
 
-## 6) APIs (MVP)
-- `GET /positions/{id}` → Position card data (price, anchor, next action, trimmed size, projected %).
-- `GET /events?position_id=...` → Timeline entries.
-- `POST /positions/{id}/evaluate` → Internal/event‑driven evaluation hook.
-- `POST /orders/callback` → Broker webhooks for fills/cancels.
-- `GET /metrics` → Slippage, guardrail time %, min_notional skips, turnover, fees.
+## 6) APIs (Current Implementation)
+
+- `GET /v1/healthz` → Health check
+- `GET /v1/positions` → List all positions
+- `POST /v1/positions` → Create new position
+- `GET /v1/positions/{id}` → Get position details
+- `POST /v1/positions/{id}/anchor` → Set anchor price
+- `POST /v1/positions/{id}/evaluate` → Evaluate position with current price
+- `POST /v1/positions/{id}/orders` → Submit order
+- `POST /v1/orders/{id}/fill` → Fill order (broker callback)
+- `GET /v1/dividends` → List dividends
+- `POST /v1/dividends/announce` → Announce dividend
+- `POST /v1/dividends/pay` → Process dividend payment
 
 ---
 
-## 7) Async & Sizing Logic (pseudocode)
-```python
-q_raw = (position.anchor / price) * r * ((A + C_eff) / price)
-q = sign * q_raw  # BUY/SELL
-q = guardrail_trim(q, price, g_low, g_high)
-if abs(q)*price < min_notional: return skip
-if BUY and C_eff < q*price: return skip
-if SELL and shares < |q|: return skip
-```
+## 7) Domain Model (UML)
 
----
-
-## 8) Security & Compliance
-- Cognito (OIDC), AuthZ at API with portfolio/position scoping.
-- Secrets in **AWS Secrets Manager**; KMS‑encrypted RDS/S3.
-- IAM least privilege; API Gateway WAF; CloudTrail + GuardDuty.
-- Per‑tenant brokerage API keys; idempotency keys (`position|ts|side`).
-- Audit exports (CSV/Parquet) to S3; no PII beyond config.
-
----
-
-## 9) Deployment & Cost Posture
-- **Serverless‑first**: API Gateway + Lambda + EventBridge + SQS.
-- Small RDS instance (or Serverless v2 min ACUs); Redis serverless (Upstash) to stay low‑cost.
-- IaC with Terraform; single repo: `apps/web`, `apps/api`, `infra/terraform`.
-- Scale‑out path: move Decision/Order workers to Fargate or Lambda provisioned‑concurrency if needed.
-
----
-
-## 10) Observability
-- Structured JSON logs (request_id, position_id, idempotency_key).
-- Metrics: slippage_bps, hit_rate, guardrail_time_pct, min_notional_skips, turnover, fee_drag.
-- Tracing (X‑Ray) across event flow; dead‑letter queues on SQS.
-
----
-
-## 11) Open Questions
-- Preferred brokerage + market‑data vendors (fractional, corp‑actions, sandbox quality).
-- Execution style defaults (market vs. limit) by venue/region.
-- Evaluation cadence (tick vs. minute bars) vs. cost/latency trade‑off.
-
----
-
-## 12) Mermaid: C4‑ish Context View
 ```mermaid
-C4Context
-title Volatility Balancing – System Context
-Person(user, "Investor", "Configures strategy and reviews timeline")
-System(web, "Web App", "Next.js + OIDC")
-System(api, "Trading API", "FastAPI on AWS Lambda")
-SystemDb(db, "Postgres", "Event store & portfolio state")
-System_Ext(market, "Market Data Provider", "Quotes & trades")
-System_Ext(broker, "Brokerage API", "Order execution")
-Rel(user, web, "Uses")
-Rel(web, api, "HTTPS/JSON")
-Rel(api, db, "SQL (RDS)")
-Rel(market, api, "Price events")
-Rel(api, broker, "Orders / Fills")
+classDiagram
+  class Position {
+    +String id
+    +String ticker
+    +Float qty
+    +Float cash
+    +Float anchor_price
+    +Float dividend_receivable
+    +Float withholding_tax_rate
+    +GuardrailPolicy guardrails
+    +OrderPolicy order_policy
+    +DateTime created_at
+    +DateTime updated_at
+    +set_anchor_price(price)
+    +get_effective_cash()
+    +adjust_anchor_for_dividend(dps)
+  }
+
+  class Order {
+    +String id
+    +String position_id
+    +OrderSide side
+    +Float qty
+    +String status
+    +String idempotency_key
+    +DateTime created_at
+    +DateTime updated_at
+  }
+
+  class Event {
+    +String id
+    +String position_id
+    +String type
+    +Dict inputs
+    +Dict outputs
+    +String message
+    +DateTime ts
+  }
+
+  class Dividend {
+    +String id
+    +String ticker
+    +DateTime ex_date
+    +DateTime pay_date
+    +Decimal dps
+    +String currency
+    +Float withholding_tax_rate
+    +calculate_gross_amount(shares)
+    +calculate_net_amount(shares)
+  }
+
+  class GuardrailPolicy {
+    +Float min_qty
+    +Float min_notional
+    +Float lot_size
+    +Float qty_step
+    +ActionBelowMin action_below_min
+  }
+
+  class OrderPolicy {
+    +Float trigger_threshold_pct
+    +Float rebalance_ratio
+    +Float commission_rate
+    +Boolean allow_after_hours
+  }
+
+  Position ||--o{ Order : has
+  Position ||--o{ Event : generates
+  Position ||--o{ DividendReceivable : has
+  Position ||--|| GuardrailPolicy : uses
+  Position ||--|| OrderPolicy : uses
+  Dividend ||--o{ DividendReceivable : creates
 ```
 
 ---
 
-## 13) Non‑Goals (Next Versions)
-- Multi‑asset portfolio allocation; dynamic thresholds; DRIP; TWAP; tax‑lot optimization.
+## 8) Clean Architecture Layers
+
+```mermaid
+graph TB
+  subgraph "Domain Layer (Core Business Logic)"
+    ENT[Entities]
+    VO[Value Objects]
+    PORTS[Ports/Interfaces]
+  end
+
+  subgraph "Application Layer (Use Cases)"
+    UC[Use Cases]
+    DTO[DTOs]
+  end
+
+  subgraph "Infrastructure Layer (External Concerns)"
+    REPO[Repositories]
+    MKT[Market Data]
+    TIME[Time Services]
+  end
+
+  subgraph "Presentation Layer (API)"
+    API[FastAPI Routes]
+    MID[Middleware]
+  end
+
+  API --> UC
+  UC --> ENT
+  UC --> PORTS
+  PORTS --> REPO
+  REPO --> ENT
+  MKT --> UC
+  TIME --> UC
+```
+
+---
+
+## 9) Technology Stack
+
+- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, Recharts, React Query, React Router
+- **Backend:** Python 3.11+, FastAPI, Pydantic, SQLAlchemy
+- **Database:** SQLite (dev), PostgreSQL (prod)
+- **Cache:** Redis
+- **Market Data:** YFinance
+- **Architecture:** Clean Architecture / Hexagonal Architecture
+- **Testing:** Pytest, FastAPI TestClient
+- **Documentation:** OpenAPI 3.0, Mermaid diagrams
+
+---
+
+## 10) Security & Compliance
+
+- Request validation via Pydantic models
+- Idempotency keys for order deduplication
+- Input sanitization and type checking
+- Audit trails via event store
+- No PII storage beyond configuration
+
+---
+
+## 11) Deployment & Development
+
+- **Development:** Local SQLite, in-memory repositories
+- **Production:** PostgreSQL, Redis, containerized deployment
+- **Configuration:** Environment variables for persistence backends
+- **Testing:** Unit tests, integration tests, API tests
+
+---
+
+## 12) Observability
+
+- Structured logging with request IDs
+- Event store for audit trails
+- Health check endpoints
+- Error handling and validation
+
+---
+
+## 13) Future Enhancements
+
+- Multi-asset portfolio allocation
+- Dynamic thresholds
+- DRIP (Dividend Reinvestment Plan)
+- TWAP (Time-Weighted Average Price)
+- Tax-lot optimization
+- Real-time WebSocket updates
+- Advanced analytics and reporting

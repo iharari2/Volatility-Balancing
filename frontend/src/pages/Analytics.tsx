@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { usePositions, usePositionEvents } from '../hooks/usePositions';
 import {
   BarChart,
@@ -13,8 +13,19 @@ import {
   PieChart,
   Pie,
   Cell,
+  AreaChart,
+  Area,
+  ComposedChart,
+  Legend,
 } from 'recharts';
-import { TrendingUp, DollarSign, Activity, Target } from 'lucide-react';
+import {
+  TrendingUp,
+  DollarSign,
+  Activity,
+  Target,
+  BarChart3,
+  PieChart as PieChartIcon,
+} from 'lucide-react';
 
 export default function Analytics() {
   const { data: positions = [] } = usePositions();
@@ -53,6 +64,69 @@ export default function Analytics() {
     cash: pos.cash,
     hasAnchor: !!pos.anchor_price,
   }));
+
+  // Generate timeline data for portfolio analysis
+  const timelineData = useMemo(() => {
+    const days = 30; // Last 30 days
+    const data = [];
+
+    for (let i = days; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+
+      // Simulate portfolio value changes (in real app, this would come from historical data)
+      const baseValue = totalValue;
+      const volatility = 0.02; // 2% daily volatility
+      const randomChange = (Math.random() - 0.5) * volatility;
+      const portfolioValue = baseValue * (1 + (randomChange * (days - i)) / days);
+
+      // Simulate asset value changes
+      const assetValue = positions.reduce((sum, pos) => {
+        if (pos.anchor_price) {
+          const assetChange = (Math.random() - 0.5) * 0.03; // 3% daily asset volatility
+          const currentPrice = pos.anchor_price * (1 + (assetChange * (days - i)) / days);
+          return sum + pos.qty * currentPrice;
+        }
+        return sum;
+      }, 0);
+
+      // Calculate allocation percentages
+      const totalCash = positions.reduce((sum, pos) => sum + pos.cash, 0);
+      const totalStockValue = portfolioValue - totalCash;
+      const cashPercentage = (totalCash / portfolioValue) * 100;
+      const stockPercentage = (totalStockValue / portfolioValue) * 100;
+
+      data.push({
+        date: date.toISOString().split('T')[0],
+        portfolioValue: Math.round(portfolioValue),
+        assetValue: Math.round(assetValue),
+        cashValue: Math.round(totalCash),
+        stockValue: Math.round(totalStockValue),
+        cashPercentage: Math.round(cashPercentage * 10) / 10,
+        stockPercentage: Math.round(stockPercentage * 10) / 10,
+        day: days - i + 1,
+      });
+    }
+
+    return data;
+  }, [totalValue, positions]);
+
+  // Portfolio performance comparison data
+  const performanceData = useMemo(() => {
+    return timelineData.map((point, index) => {
+      const initialValue = timelineData[0].portfolioValue;
+      const portfolioReturn = ((point.portfolioValue - initialValue) / initialValue) * 100;
+      const assetReturn =
+        ((point.assetValue - timelineData[0].assetValue) / timelineData[0].assetValue) * 100;
+
+      return {
+        ...point,
+        portfolioReturn: Math.round(portfolioReturn * 100) / 100,
+        assetReturn: Math.round(assetReturn * 100) / 100,
+        alpha: Math.round((portfolioReturn - assetReturn) * 100) / 100,
+      };
+    });
+  }, [timelineData]);
 
   const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
@@ -185,6 +259,138 @@ export default function Analytics() {
         )}
       </div>
 
+      {/* Timeline Charts */}
+      <div className="space-y-6">
+        <h2 className="text-xl font-bold text-gray-900 flex items-center">
+          <BarChart3 className="w-6 h-6 mr-2" />
+          Portfolio Analysis
+        </h2>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Portfolio Value Over Time */}
+          <div className="card">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Portfolio Value Over Time</h3>
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={timelineData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="day" tickFormatter={(value) => `Day ${value}`} />
+                  <YAxis tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
+                  <Tooltip
+                    formatter={(value) => [`$${value.toLocaleString()}`, 'Portfolio Value']}
+                    labelFormatter={(label) => `Day ${label}`}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="portfolioValue"
+                    stroke="#3b82f6"
+                    fill="#3b82f6"
+                    fillOpacity={0.3}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Portfolio vs Asset Performance */}
+          <div className="card">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Portfolio vs Asset Performance
+            </h3>
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={performanceData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="day" tickFormatter={(value) => `Day ${value}`} />
+                  <YAxis tickFormatter={(value) => `${value}%`} />
+                  <Tooltip
+                    formatter={(value, name) => [
+                      `${value}%`,
+                      name === 'portfolioReturn'
+                        ? 'Portfolio Return'
+                        : name === 'assetReturn'
+                        ? 'Asset Return'
+                        : 'Alpha',
+                    ]}
+                    labelFormatter={(label) => `Day ${label}`}
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="portfolioReturn"
+                    stroke="#3b82f6"
+                    strokeWidth={2}
+                    name="Portfolio Return"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="assetReturn"
+                    stroke="#10b981"
+                    strokeWidth={2}
+                    name="Asset Return"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="alpha"
+                    stroke="#f59e0b"
+                    strokeWidth={2}
+                    name="Alpha (Outperformance)"
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        {/* Cash vs Stock Allocation Over Time */}
+        <div className="card">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            Cash vs Stock Allocation Over Time
+          </h3>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={timelineData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="day" tickFormatter={(value) => `Day ${value}`} />
+                <YAxis yAxisId="left" tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
+                <YAxis yAxisId="right" orientation="right" tickFormatter={(value) => `${value}%`} />
+                <Tooltip
+                  formatter={(value, name) => {
+                    if (name === 'cashValue' || name === 'stockValue') {
+                      return [
+                        `$${value.toLocaleString()}`,
+                        name === 'cashValue' ? 'Cash Value' : 'Stock Value',
+                      ];
+                    }
+                    return [`${value}%`, name === 'cashPercentage' ? 'Cash %' : 'Stock %'];
+                  }}
+                  labelFormatter={(label) => `Day ${label}`}
+                />
+                <Legend />
+                <Bar yAxisId="left" dataKey="cashValue" fill="#10b981" name="Cash Value" />
+                <Bar yAxisId="left" dataKey="stockValue" fill="#3b82f6" name="Stock Value" />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="cashPercentage"
+                  stroke="#ef4444"
+                  strokeWidth={2}
+                  name="Cash %"
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="stockPercentage"
+                  stroke="#8b5cf6"
+                  strokeWidth={2}
+                  name="Stock %"
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
       {/* Position Breakdown */}
       <div className="card">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Position Breakdown</h3>
@@ -276,5 +482,3 @@ export default function Analytics() {
     </div>
   );
 }
-
-

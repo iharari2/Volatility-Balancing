@@ -1,44 +1,89 @@
-# Volatility Balancing — API Scaffold
+# Volatility Balancing — Trading System
 
-A thin FastAPI service exposing a REST API over a simple domain (Positions, Orders, Events) with **idempotent** order submission. It’s structured by layers (app/domain/application/infrastructure) and ships with unit + integration tests.
+A complete semi-passive trading platform for volatility balancing with blue-chip equities. Features a React frontend, FastAPI backend with Clean Architecture, and comprehensive trading capabilities including position management, order execution, and dividend processing.
+
+## 🏗️ Architecture Overview
+
+- **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS
+- **Backend**: Python FastAPI with Clean Architecture (Hexagonal)
+- **Database**: SQLite (dev) / PostgreSQL (prod) + Redis cache
+- **Market Data**: YFinance integration
+- **Architecture**: Domain-Driven Design with dependency injection
 
 ---
 
-## TL;DR (Dev Loop)
+## 🚀 Quick Start
+
+### Backend Setup
 
 ```bash
+cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-python -m uvicorn --app-dir backend app.main:app --reload
-# in another terminal (same venv):
-python -m pytest -q
-python -m ruff check backend
-python -m mypy backend
-If you prefer Make:
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
 
-bash
-Copy
-Edit
-make venv install dev     # run server with reload
-make test lint type fmt   # tests, lint, types, autofix
-Project Structure
-bash
-Copy
-Edit
-backend/
-  app/               # FastAPI wiring (routes, DI container)
-  domain/            # Entities (dataclasses), ports (protocols), errors, value objects
-  application/       # Use cases (Flows A–E), DTOs (Pydantic)
-  infrastructure/    # Adapters (memory, sql, redis, market)
-  tests/             # unit + integration tests
-pyproject.toml       # deps + pytest/mypy/ruff config
-Makefile             # handy targets (run, dev, test, fmt, type)
-Domain → Python dataclasses (no runtime validation): fast, minimal, library-agnostic.
+### Frontend Setup
 
-DTOs / API models → Pydantic v2 models (validation + serialization).
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-Adapters → In-memory by default; SQL/Redis/Market stubs provided.
+### Full Stack Demo
+
+```bash
+# Terminal 1: Backend
+cd backend && python -m uvicorn app.main:app --reload
+
+# Terminal 2: Frontend
+cd frontend && npm run dev
+
+# Open http://localhost:3000
+```
+
+## 📁 Project Structure
+
+```
+├── frontend/                 # React SPA
+│   ├── src/
+│   │   ├── components/      # Reusable UI components
+│   │   ├── pages/          # Page components
+│   │   ├── hooks/          # Custom React hooks
+│   │   └── types/          # TypeScript definitions
+│   └── package.json
+├── backend/                 # FastAPI Backend
+│   ├── app/                # FastAPI routes & DI
+│   ├── domain/             # Core business logic
+│   │   ├── entities/       # Domain entities
+│   │   ├── value_objects/  # Value objects
+│   │   └── ports/          # Repository interfaces
+│   ├── application/        # Use cases & DTOs
+│   ├── infrastructure/     # External adapters
+│   └── tests/              # Test suite
+└── docs/                   # Documentation
+    ├── architecture/       # System architecture
+    └── api/               # API documentation
+```
+
+## 🏛️ Clean Architecture
+
+The system follows Clean Architecture principles with clear separation of concerns:
+
+- **Domain Layer**: Core business entities and rules
+- **Application Layer**: Use cases and application services
+- **Infrastructure Layer**: External concerns (database, APIs)
+- **Presentation Layer**: FastAPI routes and React components
+
+## 📚 Documentation
+
+- **[System Architecture](docs/architecture/system_architecture_v1.md)** - Complete system overview with UML diagrams
+- **[Component Architecture](docs/architecture/component_architecture.md)** - Detailed component relationships
+- **[Deployment Architecture](docs/architecture/deployment_architecture.md)** - Infrastructure and deployment diagrams
+- **[Sequence Diagrams](docs/architecture/SEQUENCE_EXAMPLE.md)** - API flow documentation
+- **[API Documentation](docs/api/openapi.yaml)** - Complete OpenAPI 3.0 specification
 
 API Reference
 Base URL: http://localhost:8000
@@ -95,7 +140,9 @@ Curl Smoke (copy/paste)
 bash
 Copy
 Edit
+
 # Create a position
+
 POS=$(curl -s -X POST localhost:8000/v1/positions \
   -H 'Content-Type: application/json' \
   -d '{"ticker":"ZIM","qty":0,"cash":10000}' \
@@ -103,24 +150,28 @@ POS=$(curl -s -X POST localhost:8000/v1/positions \
 echo "$POS"
 
 # First submit -> 201 Created
+
 curl -i -X POST "http://localhost:8000/v1/positions/$POS/orders" \
-  -H "Content-Type: application/json" \
-  -H "Idempotency-Key: k1" \
-  -d '{"side":"BUY","qty":1.5}'
+ -H "Content-Type: application/json" \
+ -H "Idempotency-Key: k1" \
+ -d '{"side":"BUY","qty":1.5}'
 
 # Replay same key+body -> 200 OK, same order_id
+
 curl -i -X POST "http://localhost:8000/v1/positions/$POS/orders" \
-  -H "Content-Type: application/json" \
-  -H "Idempotency-Key: k1" \
-  -d '{"side":"BUY","qty":1.5}'
+ -H "Content-Type: application/json" \
+ -H "Idempotency-Key: k1" \
+ -d '{"side":"BUY","qty":1.5}'
 
 # Mismatch (same key, different body) -> 409 Conflict
+
 curl -i -X POST "http://localhost:8000/v1/positions/$POS/orders" \
-  -H "Content-Type: application/json" \
-  -H "Idempotency-Key: k1" \
-  -d '{"side":"SELL","qty":2.0}'
+ -H "Content-Type: application/json" \
+ -H "Idempotency-Key: k1" \
+ -d '{"side":"SELL","qty":2.0}'
 
 # See audit events
+
 curl -s "http://localhost:8000/v1/positions/$POS/events" | sed 's/},{/},\n{/g'
 Architecture & Flows
 app/: FastAPI routers (positions.py, orders.py), DI container (di.py), and main.py.
@@ -180,9 +231,9 @@ Testing & Quality
 bash
 Copy
 Edit
-python -m pytest -q          # run tests
+python -m pytest -q # run tests
 python -m ruff check backend # lint
-python -m mypy backend       # types
+python -m mypy backend # types
 pyproject.toml configures pytest to use backend as PYTHONPATH. If you run into path issues, use:
 
 bash
@@ -207,5 +258,7 @@ Your $POS variable is empty. Echo it before use: echo "$POS".
 
 Port already in use
 pkill -f uvicorn or use another port: -–port 8001.
+
+```
 
 ```

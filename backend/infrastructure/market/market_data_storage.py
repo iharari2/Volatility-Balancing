@@ -67,10 +67,16 @@ class MarketDataStorage:
 
         data = self.price_history[ticker]
 
-        # Filter by time range
+        # Filter by time range with proper timezone handling
         if start_time:
+            # Ensure timezone-aware comparison
+            if start_time.tzinfo is None:
+                start_time = start_time.replace(tzinfo=timezone.utc)
             data = [p for p in data if p.timestamp >= start_time]
         if end_time:
+            # Ensure timezone-aware comparison
+            if end_time.tzinfo is None:
+                end_time = end_time.replace(tzinfo=timezone.utc)
             data = [p for p in data if p.timestamp <= end_time]
 
         # Filter by market hours
@@ -169,8 +175,12 @@ class MarketDataStorage:
             if start_date <= vol_timestamp <= end_date:
                 volatility_data.append(vol_data)
 
-        # Calculate total trading days
-        total_trading_days = len([s for s in daily_summaries if s.is_trading_day])
+        # Calculate total trading days based on actual price data
+        # Count unique trading days from price data
+        trading_days = set()
+        for price_point in price_data:
+            trading_days.add(price_point.timestamp.date())
+        total_trading_days = len(trading_days)
 
         return SimulationData(
             ticker=ticker,

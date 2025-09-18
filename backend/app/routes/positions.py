@@ -256,6 +256,9 @@ def get_market_price(ticker: str) -> Dict[str, Any]:
     if not price_data:
         raise HTTPException(404, detail="ticker_not_found")
 
+    # Validate the price data
+    validation = container.market_data.validate_price(price_data, allow_after_hours=True)
+
     return {
         "ticker": price_data.ticker,
         "price": price_data.price,
@@ -271,6 +274,7 @@ def get_market_price(ticker: str) -> Dict[str, Any]:
         "is_market_hours": price_data.is_market_hours,
         "is_fresh": price_data.is_fresh,
         "is_inline": price_data.is_inline,
+        "validation": validation,
     }
 
 
@@ -388,6 +392,8 @@ def run_simulation(request: SimulationRequest) -> Dict[str, Any]:
             # Trade details
             "trade_log": result.trade_log,
             "daily_returns": result.daily_returns,
+            # Market data for visualization
+            "price_data": result.price_data,
         }
 
     except Exception as e:

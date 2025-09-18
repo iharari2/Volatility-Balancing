@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, Package, TrendingUp, AlertCircle } from 'lucide-react';
+import { DollarSign, TrendingUp, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
 import { CreatePositionRequest } from '../types';
+import { useMarketPrice } from '../hooks/useMarketData';
 
 interface CreatePositionFormProps {
   onSubmit: (data: CreatePositionRequest) => Promise<void>;
@@ -8,80 +9,71 @@ interface CreatePositionFormProps {
   isLoading?: boolean;
 }
 
-type InputMethod = 'dollar' | 'quantity';
-
-export default function CreatePositionForm({ onSubmit, onCancel, isLoading = false }: CreatePositionFormProps) {
-  const [inputMethod, setInputMethod] = useState<InputMethod>('dollar');
+export default function CreatePositionForm({
+  onSubmit,
+  onCancel,
+  isLoading = false,
+}: CreatePositionFormProps) {
   const [ticker, setTicker] = useState('AAPL');
-  const [dollarAmount, setDollarAmount] = useState(10000);
-  const [quantity, setQuantity] = useState(0);
-  const [currentPrice, setCurrentPrice] = useState<number | null>(null);
-  const [priceLoading, setPriceLoading] = useState(false);
-  const [priceError, setPriceError] = useState<string | null>(null);
+  const [investmentAmount, setInvestmentAmount] = useState(10000);
+  const [isValidating, setIsValidating] = useState(false);
 
-  // Mock current price - in real implementation, this would fetch from market data API
-  useEffect(() => {
-    const fetchCurrentPrice = async () => {
-      if (!ticker) return;
-      
-      setPriceLoading(true);
-      setPriceError(null);
-      
-      try {
-        // Simulate API call delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Mock price data - in real implementation, this would be actual market data
-        const mockPrices: Record<string, number> = {
-          'AAPL': 150.25,
-          'MSFT': 350.80,
-          'GOOGL': 2800.50,
-          'TSLA': 250.75,
-          'AMZN': 3200.00,
-        };
-        
-        const price = mockPrices[ticker.toUpperCase()] || 100.00;
-        setCurrentPrice(price);
-      } catch (error) {
-        setPriceError('Failed to fetch current price');
-        setCurrentPrice(null);
-      } finally {
-        setPriceLoading(false);
-      }
-    };
+  // Use real market data
+  const {
+    data: marketData,
+    isLoading: priceLoading,
+    error: priceError,
+    refetch,
+  } = useMarketPrice(ticker);
 
-    fetchCurrentPrice();
-  }, [ticker]);
-
-  // Calculate derived values
-  const calculatedQuantity = currentPrice ? dollarAmount / currentPrice : 0;
-  const calculatedDollarValue = currentPrice ? quantity * currentPrice : 0;
-  const totalValue = inputMethod === 'dollar' ? dollarAmount : calculatedDollarValue;
+  const currentPrice = marketData?.price;
+  const calculatedShares = currentPrice ? investmentAmount / currentPrice : 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    // Validate form data
+    if (!ticker.trim()) {
+      alert('Please enter a ticker symbol');
+      return;
+    }
+
+    if (!currentPrice) {
+      alert('Unable to fetch current market price. Please try again.');
+      return;
+    }
+
+    if (investmentAmount <= 0) {
+      alert('Investment amount must be greater than 0');
+      return;
+    }
+
+    if (calculatedShares <= 0) {
+      alert('Unable to calculate shares. Please check the investment amount.');
+      return;
+    }
+
+    setIsValidating(true);
+
     const formData: CreatePositionRequest = {
       ticker: ticker.toUpperCase(),
-      qty: inputMethod === 'quantity' ? quantity : calculatedQuantity,
-      cash: inputMethod === 'dollar' ? dollarAmount : calculatedDollarValue,
+      qty: calculatedShares,
+      cash: investmentAmount,
+      anchor_price: currentPrice, // Set anchor price to current market price
     };
 
-    await onSubmit(formData);
-  };
-
-  const handleDollarAmountChange = (value: number) => {
-    setDollarAmount(value);
-    if (currentPrice) {
-      setQuantity(value / currentPrice);
+    try {
+      await onSubmit(formData);
+    } catch (error) {
+      console.error('Failed to create position:', error);
+      alert('Failed to create position. Please try again.');
+    } finally {
+      setIsValidating(false);
     }
   };
 
-  const handleQuantityChange = (value: number) => {
-    setQuantity(value);
-    if (currentPrice) {
-      setDollarAmount(value * currentPrice);
-    }
+  const handleRefreshPrice = () => {
+    refetch();
   };
 
   return (
@@ -89,7 +81,9 @@ export default function CreatePositionForm({ onSubmit, onCancel, isLoading = fal
       <div>
         <h3 className="text-lg font-semibold text-gray-900 mb-2">Create New Position</h3>
         <p className="text-sm text-gray-600">
-          Set up a new volatility balancing position. Choose how you want to specify the initial investment.
+          Set up a new volatility balancing position. Simply enter the ticker and investment amount
+          - we'll automatically calculate the shares and set the anchor price based on current
+          market data.
         </p>
       </div>
 
@@ -114,7 +108,7 @@ export default function CreatePositionForm({ onSubmit, onCancel, isLoading = fal
               <TrendingUp className="w-4 h-4 text-gray-500" />
               <span className="text-sm font-medium text-gray-700">Current Market Price</span>
             </div>
-            <div className="text-right">
+            <div className="flex items-center space-x-2">
               {priceLoading ? (
                 <div className="animate-pulse h-4 w-16 bg-gray-200 rounded"></div>
               ) : priceError ? (
@@ -123,145 +117,116 @@ export default function CreatePositionForm({ onSubmit, onCancel, isLoading = fal
                   <span className="text-sm">Error</span>
                 </div>
               ) : currentPrice ? (
-                <span className="text-lg font-semibold text-gray-900">
-                  ${currentPrice.toFixed(2)}
-                </span>
+                <div className="flex items-center space-x-2">
+                  <span className="text-lg font-semibold text-gray-900">
+                    ${currentPrice.toFixed(2)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleRefreshPrice}
+                    className="p-1 hover:bg-gray-200 rounded"
+                    title="Refresh price"
+                  >
+                    <RefreshCw className="w-4 h-4 text-gray-500" />
+                  </button>
+                </div>
               ) : (
                 <span className="text-sm text-gray-500">N/A</span>
               )}
             </div>
           </div>
-        </div>
 
-        {/* Input Method Toggle */}
-        <div>
-          <label className="label">Investment Method</label>
-          <div className="flex space-x-1 p-1 bg-gray-100 rounded-lg">
-            <button
-              type="button"
-              onClick={() => setInputMethod('dollar')}
-              className={`flex-1 flex items-center justify-center space-x-2 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                inputMethod === 'dollar'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <DollarSign className="w-4 h-4" />
-              <span>Dollar Amount</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setInputMethod('quantity')}
-              className={`flex-1 flex items-center justify-center space-x-2 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                inputMethod === 'quantity'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Package className="w-4 h-4" />
-              <span>Share Quantity</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Input Fields */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Primary Input */}
-          <div>
-            <label className="label">
-              {inputMethod === 'dollar' ? 'Dollar Amount' : 'Share Quantity'}
-            </label>
-            <div className="relative">
-              <input
-                type="number"
-                value={inputMethod === 'dollar' ? dollarAmount : quantity}
-                onChange={(e) => {
-                  const value = Number(e.target.value);
-                  if (inputMethod === 'dollar') {
-                    handleDollarAmountChange(value);
-                  } else {
-                    handleQuantityChange(value);
-                  }
-                }}
-                className="input pr-8"
-                min="0"
-                step={inputMethod === 'dollar' ? '0.01' : '0.01'}
-                required
-              />
-              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                <span className="text-gray-500 text-sm">
-                  {inputMethod === 'dollar' ? '$' : 'shares'}
+          {marketData && (
+            <div className="mt-2 text-xs text-gray-500">
+              <div className="flex items-center space-x-4">
+                <span>Source: {marketData.source}</span>
+                <span
+                  className={`flex items-center space-x-1 ${
+                    marketData.is_fresh ? 'text-success-600' : 'text-warning-600'
+                  }`}
+                >
+                  {marketData.is_fresh ? (
+                    <CheckCircle className="w-3 h-3" />
+                  ) : (
+                    <AlertCircle className="w-3 h-3" />
+                  )}
+                  {marketData.is_fresh ? 'Fresh' : 'Stale'}
+                </span>
+                <span
+                  className={marketData.is_market_hours ? 'text-success-600' : 'text-warning-600'}
+                >
+                  {marketData.is_market_hours ? 'Market Hours' : 'After Hours'}
                 </span>
               </div>
             </div>
-          </div>
-
-          {/* Conversion Display */}
-          <div>
-            <label className="label">
-              {inputMethod === 'dollar' ? 'Share Quantity' : 'Dollar Value'}
-            </label>
-            <div className="p-3 bg-gray-50 rounded-lg">
-              <div className="text-lg font-semibold text-gray-900">
-                {inputMethod === 'dollar' 
-                  ? `${calculatedQuantity.toFixed(4)} shares`
-                  : `$${calculatedDollarValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                }
-              </div>
-              <div className="text-xs text-gray-500 mt-1">
-                {inputMethod === 'dollar' 
-                  ? 'Calculated from dollar amount'
-                  : 'Calculated from share quantity'
-                }
-              </div>
-            </div>
-          </div>
+          )}
         </div>
 
-        {/* Position Preview */}
-        <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <h4 className="font-medium text-blue-900 mb-2">Position Preview</h4>
-          <div className="space-y-1 text-sm">
-            <div className="flex justify-between">
-              <span className="text-blue-700">Ticker:</span>
-              <span className="font-medium text-blue-900">{ticker.toUpperCase()}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-blue-700">Shares:</span>
-              <span className="font-medium text-blue-900">
-                {inputMethod === 'quantity' ? quantity.toFixed(4) : calculatedQuantity.toFixed(4)}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-blue-700">Cash:</span>
-              <span className="font-medium text-blue-900">
-                ${(inputMethod === 'dollar' ? dollarAmount : calculatedDollarValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            </div>
-            <div className="flex justify-between border-t border-blue-200 pt-1">
-              <span className="text-blue-700 font-medium">Total Value:</span>
-              <span className="font-semibold text-blue-900">
-                ${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
+        {/* Investment Amount Input */}
+        <div>
+          <label className="label">Investment Amount</label>
+          <div className="relative">
+            <input
+              type="number"
+              value={investmentAmount}
+              onChange={(e) => setInvestmentAmount(Number(e.target.value))}
+              className="input pr-8"
+              min="0"
+              step="0.01"
+              required
+            />
+            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+              <span className="text-gray-500 text-sm">$</span>
             </div>
           </div>
+          <p className="text-xs text-gray-500 mt-1">
+            This will be your initial cash allocation for volatility balancing
+          </p>
         </div>
+
+        {/* Calculated Shares Display */}
+        {currentPrice && (
+          <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h4 className="font-medium text-blue-900 mb-2">Position Calculation</h4>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-blue-700">Investment Amount:</span>
+                <span className="font-medium text-blue-900">
+                  $
+                  {investmentAmount.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-blue-700">Current Price:</span>
+                <span className="font-medium text-blue-900">${currentPrice.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between border-t border-blue-200 pt-2">
+                <span className="text-blue-700 font-medium">Shares to Purchase:</span>
+                <span className="font-semibold text-blue-900">
+                  {calculatedShares.toFixed(4)} shares
+                </span>
+              </div>
+              <div className="text-xs text-blue-600 mt-2">
+                The anchor price will be set to ${currentPrice.toFixed(2)} for volatility balancing
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="flex space-x-3 pt-4">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="btn btn-secondary flex-1"
-          >
+          <button type="button" onClick={onCancel} className="btn btn-secondary flex-1">
             Cancel
           </button>
           <button
             type="submit"
-            disabled={isLoading || !currentPrice}
+            disabled={isLoading || isValidating || !currentPrice || priceLoading}
             className="btn btn-primary flex-1"
           >
-            {isLoading ? 'Creating...' : 'Create Position'}
+            {isLoading || isValidating ? 'Creating...' : 'Create Position'}
           </button>
         </div>
       </form>
