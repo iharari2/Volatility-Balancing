@@ -9,7 +9,7 @@ import {
 } from '../types';
 
 // const API_BASE = '/api'; // This will use the Vite proxy
-const API_BASE = 'http://localhost:8001/v1'; // Direct connection
+const API_BASE = 'http://localhost:8000/v1'; // Direct connection
 
 class ApiError extends Error {
   constructor(public status: number, message: string) {

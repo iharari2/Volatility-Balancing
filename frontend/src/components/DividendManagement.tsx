@@ -24,9 +24,21 @@ interface DividendManagementProps {
 export default function DividendManagement({ positionId, ticker }: DividendManagementProps) {
   const [activeTab, setActiveTab] = useState<'status' | 'market' | 'upcoming'>('status');
 
-  const { data: positionStatus, isLoading: statusLoading } = useDividendPositionStatus(positionId);
-  const { data: marketInfo, isLoading: marketLoading } = useDividendMarketInfo(ticker);
-  const { data: upcoming, isLoading: upcomingLoading } = useUpcomingDividends(ticker);
+  const {
+    data: positionStatus,
+    isLoading: statusLoading,
+    error: statusError,
+  } = useDividendPositionStatus(positionId);
+  const {
+    data: marketInfo,
+    isLoading: marketLoading,
+    error: marketError,
+  } = useDividendMarketInfo(ticker);
+  const {
+    data: upcoming,
+    isLoading: upcomingLoading,
+    error: upcomingError,
+  } = useUpcomingDividends(ticker);
 
   const processExDividend = useProcessExDividend(positionId);
   const processPayment = useProcessDividendPayment(positionId);
@@ -52,6 +64,34 @@ export default function DividendManagement({ positionId, ticker }: DividendManag
     { id: 'market', label: 'Market Info', icon: TrendingUp },
     { id: 'upcoming', label: 'Upcoming', icon: Calendar },
   ];
+
+  // Show error state if there are critical errors
+  if (statusError || marketError || upcomingError) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-gray-900">Dividend Management</h3>
+        </div>
+        <div className="card">
+          <div className="text-center py-8">
+            <AlertCircle className="w-12 h-12 mx-auto text-red-500 mb-4" />
+            <h4 className="text-lg font-medium text-gray-900 mb-2">Error Loading Dividend Data</h4>
+            <div className="text-sm text-gray-600 space-y-1">
+              {statusError && <p>Position Status Error: {statusError.message}</p>}
+              {marketError && <p>Market Info Error: {marketError.message}</p>}
+              {upcomingError && <p>Upcoming Dividends Error: {upcomingError.message}</p>}
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 btn btn-primary btn-sm"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -93,7 +133,8 @@ export default function DividendManagement({ positionId, ticker }: DividendManag
             ) : positionStatus ? (
               <div className="space-y-4">
                 {/* Pending Receivables */}
-                {positionStatus.pending_receivables.length > 0 ? (
+                {positionStatus.pending_receivables &&
+                positionStatus.pending_receivables.length > 0 ? (
                   <div>
                     <h5 className="text-sm font-medium text-gray-700 mb-2">Pending Receivables</h5>
                     <div className="space-y-2">
@@ -133,7 +174,7 @@ export default function DividendManagement({ positionId, ticker }: DividendManag
                 )}
 
                 {/* Recent Dividends */}
-                {positionStatus.recent_dividends.length > 0 && (
+                {positionStatus.recent_dividends && positionStatus.recent_dividends.length > 0 && (
                   <div>
                     <h5 className="text-sm font-medium text-gray-700 mb-2">Recent Dividends</h5>
                     <div className="space-y-1">

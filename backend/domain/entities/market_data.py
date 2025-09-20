@@ -33,6 +33,11 @@ class PriceData:
     is_market_hours: bool = True
     is_fresh: bool = True  # Within 3 seconds
     is_inline: bool = True  # Within ±1% of mid-quote
+    # OHLC data for daily bars
+    open: Optional[float] = None
+    high: Optional[float] = None
+    low: Optional[float] = None
+    close: Optional[float] = None
 
 
 @dataclass

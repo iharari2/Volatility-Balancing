@@ -210,15 +210,15 @@ class EvaluatePositionUC:
     ) -> Dict[str, Any]:
         """Calculate order size using the specification formula with guardrail trimming."""
 
+        # Apply order sizing formula: ΔQ_raw = (P_anchor / P - 1) × r × ((A + C) / P)
         # Calculate portfolio values
         asset_value = position.qty * current_price
         total_value = asset_value + position.cash
-
-        # Apply order sizing formula: ΔQ_raw = (P_anchor / P) × r × ((A + C) / P)
+        
         anchor = position.anchor_price
         rebalance_ratio = position.order_policy.rebalance_ratio
 
-        raw_qty = (anchor / current_price) * rebalance_ratio * (total_value / current_price)
+        raw_qty = (anchor / current_price - 1) * rebalance_ratio * (total_value / current_price)
 
         # Apply side (BUY = positive, SELL = negative)
         if side == "SELL":
@@ -255,9 +255,6 @@ class EvaluatePositionUC:
         self, position, raw_qty: float, current_price: float, side: str
     ) -> Tuple[float, str]:
         """Apply guardrail trimming to ensure Asset% ∈ [25%, 75%] post-trade."""
-
-        # Calculate current allocation
-        current_asset_value = position.qty * current_price
 
         # Calculate post-trade allocation without trimming
         post_qty = position.qty + raw_qty

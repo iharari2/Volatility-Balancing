@@ -84,7 +84,7 @@ class SimulationUC:
                 "rebalance_ratio": 0.5,
                 "commission_rate": 0.0001,
                 "min_notional": 100.0,
-                "allow_after_hours": include_after_hours,
+                "allow_after_hours": True,  # Default to after hours ON
                 "guardrails": {
                     "min_stock_alloc_pct": 0.25,
                     "max_stock_alloc_pct": 0.75,
@@ -139,9 +139,16 @@ class SimulationUC:
         if not historical_data:
             raise ValueError(f"No price data available for {ticker} in date range")
 
-        # Get simulation data using the same date range as fetch
+        # Store the fetched data in market data storage for simulation
+        from infrastructure.market.market_data_storage import MarketDataStorage
+
+        market_storage = MarketDataStorage()
+        for price_data in historical_data:
+            market_storage.store_price_data(ticker, price_data)
+
+        # Get simulation data using the stored data
         print(f"Getting simulation data for {ticker} from {fetch_start} to {fetch_end}")
-        sim_data = self.market_data.get_simulation_data(
+        sim_data = market_storage.get_simulation_data(
             ticker, fetch_start, fetch_end, include_after_hours
         )
 
@@ -408,15 +415,20 @@ class SimulationUC:
         asset_value = shares * current_price
         total_value = asset_value + cash
 
-        # Apply order sizing formula: ΔQ_raw = (P_anchor / P) × r × ((A + C) / P)
+        # Apply order sizing formula: ΔQ_raw = (P_anchor / P - 1) × r × ((A + C) / P)
         rebalance_ratio = config["rebalance_ratio"]
-        raw_qty = (anchor_price / current_price) * rebalance_ratio * (total_value / current_price)
 
-        # Apply side based on trigger (simplified)
+        raw_qty = (anchor_price / current_price - 1) * rebalance_ratio * (total_value / current_price)
+
+        # Apply side based on trigger direction
         if current_price < anchor_price * (1 - config["trigger_threshold_pct"]):
-            raw_qty = abs(raw_qty)  # Buy
+            # BUY trigger: keep positive
+            pass
         else:
-            raw_qty = -abs(raw_qty)  # Sell
+            # SELL trigger: make negative
+            raw_qty = -raw_qty
+
+        # raw_qty is already correctly signed from the calculation above
 
         # Apply guardrail trimming (simplified)
         min_alloc = config["guardrails"]["min_stock_alloc_pct"]

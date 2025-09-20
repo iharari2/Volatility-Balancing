@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { OrderPolicy, Guardrails } from '../types';
 import { Settings, Save, RotateCcw } from 'lucide-react';
+import UnifiedConfigPanel, { UnifiedConfig } from './UnifiedConfigPanel';
 
 interface PositionConfigPanelProps {
   orderPolicy: OrderPolicy;
@@ -22,9 +23,9 @@ const defaultOrderPolicy: OrderPolicy = {
   qty_step: 0,
   action_below_min: 'hold',
   trigger_threshold_pct: 0.03, // 3%
-  rebalance_ratio: 1.6667,
+  rebalance_ratio: 0.5, // Updated to match simulation default
   commission_rate: 0.0001, // 0.01%
-  allow_after_hours: false,
+  allow_after_hours: true, // Default to after hours ON
 };
 
 const defaultGuardrails: Guardrails = {
@@ -32,6 +33,46 @@ const defaultGuardrails: Guardrails = {
   max_stock_alloc_pct: 0.75, // 75%
   max_orders_per_day: 5,
 };
+
+// Convert between OrderPolicy/Guardrails and UnifiedConfig
+const convertToUnifiedConfig = (
+  orderPolicy: OrderPolicy,
+  guardrails: Guardrails,
+): UnifiedConfig => ({
+  ticker: 'AAPL', // Default ticker for position config
+  initialCash: 10000, // Default cash for position config
+  triggerThresholdPct: orderPolicy.trigger_threshold_pct,
+  rebalanceRatio: orderPolicy.rebalance_ratio,
+  commissionRate: orderPolicy.commission_rate,
+  minNotional: orderPolicy.min_notional,
+  allowAfterHours: orderPolicy.allow_after_hours,
+  guardrails: {
+    minStockAllocPct: guardrails.min_stock_alloc_pct,
+    maxStockAllocPct: guardrails.max_stock_alloc_pct,
+    maxOrdersPerDay: guardrails.max_orders_per_day,
+  },
+});
+
+const convertFromUnifiedConfig = (
+  config: UnifiedConfig,
+): { orderPolicy: OrderPolicy; guardrails: Guardrails } => ({
+  orderPolicy: {
+    min_qty: 0,
+    min_notional: config.minNotional,
+    lot_size: 0,
+    qty_step: 0,
+    action_below_min: 'hold',
+    trigger_threshold_pct: config.triggerThresholdPct,
+    rebalance_ratio: config.rebalanceRatio,
+    commission_rate: config.commissionRate,
+    allow_after_hours: config.allowAfterHours,
+  },
+  guardrails: {
+    min_stock_alloc_pct: config.guardrails.minStockAllocPct,
+    max_stock_alloc_pct: config.guardrails.maxStockAllocPct,
+    max_orders_per_day: config.guardrails.maxOrdersPerDay,
+  },
+});
 
 export default function PositionConfigPanel({
   orderPolicy,
@@ -47,6 +88,18 @@ export default function PositionConfigPanel({
     withholdingTaxRate,
   });
 
+  // Convert to unified config for the panel
+  const unifiedConfig = convertToUnifiedConfig(config.orderPolicy, config.guardrails);
+
+  const handleUnifiedConfigChange = (unifiedConfig: UnifiedConfig) => {
+    const converted = convertFromUnifiedConfig(unifiedConfig);
+    setConfig({
+      orderPolicy: converted.orderPolicy,
+      guardrails: converted.guardrails,
+      withholdingTaxRate: config.withholdingTaxRate,
+    });
+  };
+
   const handleSave = () => {
     onSave(config);
   };
@@ -60,207 +113,20 @@ export default function PositionConfigPanel({
     onReset();
   };
 
-  const updateOrderPolicy = (field: keyof OrderPolicy, value: any) => {
-    setConfig((prev) => ({
-      ...prev,
-      orderPolicy: { ...prev.orderPolicy, [field]: value },
-    }));
-  };
-
-  const updateGuardrails = (field: keyof Guardrails, value: number) => {
-    setConfig((prev) => ({
-      ...prev,
-      guardrails: { ...prev.guardrails, [field]: value },
-    }));
-  };
-
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <Settings className="w-5 h-5 text-gray-600" />
-          <h3 className="text-lg font-semibold text-gray-900">Position Configuration</h3>
-        </div>
-        <div className="flex space-x-2">
-          <button onClick={handleReset} className="btn btn-secondary" disabled={isLoading}>
-            <RotateCcw className="w-4 h-4 mr-2" />
-            Reset
-          </button>
-          <button onClick={handleSave} className="btn btn-primary" disabled={isLoading}>
-            <Save className="w-4 h-4 mr-2" />
-            {isLoading ? 'Saving...' : 'Save'}
-          </button>
-        </div>
-      </div>
+      {/* Unified Configuration Panel */}
+      <UnifiedConfigPanel
+        config={unifiedConfig}
+        onConfigChange={handleUnifiedConfigChange}
+        onSave={handleSave}
+        onReset={handleReset}
+        isLoading={isLoading}
+        mode="trading"
+        showAdvanced={true}
+      />
 
-      {/* Trading Parameters */}
-      <div className="card">
-        <h4 className="text-md font-semibold text-gray-900 mb-4">Trading Parameters</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="label">Trigger Threshold (%)</label>
-            <input
-              type="number"
-              value={config.orderPolicy.trigger_threshold_pct * 100}
-              onChange={(e) =>
-                updateOrderPolicy('trigger_threshold_pct', Number(e.target.value) / 100)
-              }
-              className="input"
-              min="0.1"
-              max="10"
-              step="0.1"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Price movement threshold to trigger trades (default: 3%)
-            </p>
-          </div>
-
-          <div>
-            <label className="label">Rebalance Ratio</label>
-            <input
-              type="number"
-              value={config.orderPolicy.rebalance_ratio}
-              onChange={(e) => updateOrderPolicy('rebalance_ratio', Number(e.target.value))}
-              className="input"
-              min="0.1"
-              max="5"
-              step="0.1"
-            />
-            <p className="text-xs text-gray-500 mt-1">Order sizing multiplier (default: 1.6667)</p>
-          </div>
-
-          <div>
-            <label className="label">Commission Rate (%)</label>
-            <input
-              type="number"
-              value={config.orderPolicy.commission_rate * 100}
-              onChange={(e) => updateOrderPolicy('commission_rate', Number(e.target.value) / 100)}
-              className="input"
-              min="0"
-              max="1"
-              step="0.001"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Commission as percentage of order value (default: 0.01%)
-            </p>
-          </div>
-
-          <div>
-            <label className="label">Minimum Order ($)</label>
-            <input
-              type="number"
-              value={config.orderPolicy.min_notional}
-              onChange={(e) => updateOrderPolicy('min_notional', Number(e.target.value))}
-              className="input"
-              min="0"
-              step="1"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Minimum order value to execute (default: $100)
-            </p>
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                checked={config.orderPolicy.allow_after_hours}
-                onChange={(e) => updateOrderPolicy('allow_after_hours', e.target.checked)}
-                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span className="text-sm font-medium text-gray-700">Allow After-Hours Trading</span>
-            </label>
-            <p className="text-xs text-gray-500 mt-1">
-              Enable trading outside regular market hours (4:00 PM - 9:30 AM ET)
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Guardrail Settings */}
-      <div className="card">
-        <h4 className="text-md font-semibold text-gray-900 mb-4">Guardrail Settings</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="label">Minimum Stock Allocation (%)</label>
-            <input
-              type="number"
-              value={config.guardrails.min_stock_alloc_pct * 100}
-              onChange={(e) =>
-                updateGuardrails('min_stock_alloc_pct', Number(e.target.value) / 100)
-              }
-              className="input"
-              min="0"
-              max="100"
-              step="1"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Minimum percentage of portfolio in stocks (default: 25%)
-            </p>
-          </div>
-
-          <div>
-            <label className="label">Maximum Stock Allocation (%)</label>
-            <input
-              type="number"
-              value={config.guardrails.max_stock_alloc_pct * 100}
-              onChange={(e) =>
-                updateGuardrails('max_stock_alloc_pct', Number(e.target.value) / 100)
-              }
-              className="input"
-              min="0"
-              max="100"
-              step="1"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Maximum percentage of portfolio in stocks (default: 75%)
-            </p>
-          </div>
-
-          <div>
-            <label className="label">Maximum Orders Per Day</label>
-            <input
-              type="number"
-              value={config.guardrails.max_orders_per_day}
-              onChange={(e) => updateGuardrails('max_orders_per_day', Number(e.target.value))}
-              className="input"
-              min="1"
-              max="20"
-              step="1"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Maximum number of orders per day (default: 5)
-            </p>
-          </div>
-        </div>
-
-        {/* Guardrail Visualization */}
-        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-          <h5 className="text-sm font-medium text-gray-700 mb-2">Asset Allocation Range</h5>
-          <div className="flex items-center space-x-2">
-            <div className="flex-1 bg-gray-200 rounded-full h-2 relative">
-              <div
-                className="bg-primary-500 h-2 rounded-full absolute"
-                style={{
-                  left: `${config.guardrails.min_stock_alloc_pct * 100}%`,
-                  width: `${
-                    (config.guardrails.max_stock_alloc_pct -
-                      config.guardrails.min_stock_alloc_pct) *
-                    100
-                  }%`,
-                }}
-              />
-            </div>
-            <div className="text-xs text-gray-600">
-              {config.guardrails.min_stock_alloc_pct * 100}% -{' '}
-              {config.guardrails.max_stock_alloc_pct * 100}%
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Dividend Settings */}
+      {/* Dividend Settings - Keep this as it's specific to trading */}
       <div className="card">
         <h4 className="text-md font-semibold text-gray-900 mb-4">Dividend Settings</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

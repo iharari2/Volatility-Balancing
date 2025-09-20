@@ -6,12 +6,14 @@ import { usePosition, useSetAnchorPrice, usePositionEvents } from '../hooks/useP
 import TradingInterface from '../components/TradingInterface';
 import EventTimeline from '../components/EventTimeline';
 import DividendManagement from '../components/DividendManagement';
-import PositionConfigPanel from '../components/PositionConfigPanel';
+import TradingConfigPanel from '../components/TradingConfigPanel';
+import { useConfiguration } from '../contexts/ConfigurationContext';
 
 export default function PositionDetail() {
   const { id } = useParams<{ id: string }>();
   const [showAnchorForm, setShowAnchorForm] = useState(false);
   const [anchorPrice, setAnchorPrice] = useState<number>(0);
+  const { configuration } = useConfiguration();
   const [activeTab, setActiveTab] = useState<'trading' | 'dividends' | 'config'>('trading');
 
   const { data: position, isLoading: positionLoading } = usePosition(id!);
@@ -223,24 +225,25 @@ export default function PositionDetail() {
           )}
 
           {activeTab === 'config' && (
-            <PositionConfigPanel
+            <TradingConfigPanel
               orderPolicy={
                 position.order_policy || {
                   min_qty: 0,
-                  min_notional: 100,
+                  min_notional: configuration.minNotional,
                   lot_size: 0,
                   qty_step: 0,
                   action_below_min: 'hold',
-                  trigger_threshold_pct: 0.03,
-                  rebalance_ratio: 1.6667,
-                  commission_rate: 0.0001,
-                  allow_after_hours: false,
+                  trigger_threshold_pct: configuration.triggerThresholdPct,
+                  rebalance_ratio: configuration.rebalanceRatio,
+                  commission_rate: configuration.commissionRate,
+                  allow_after_hours: configuration.allowAfterHours,
+                  order_sizing_strategy: 'proportional',
                 }
               }
               guardrails={
                 position.guardrails || {
-                  min_stock_alloc_pct: 0.25,
-                  max_stock_alloc_pct: 0.75,
+                  min_stock_alloc_pct: configuration.guardrails.minStockAllocPct,
+                  max_stock_alloc_pct: configuration.guardrails.maxStockAllocPct,
                   max_orders_per_day: 5,
                 }
               }

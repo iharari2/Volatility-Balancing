@@ -253,14 +253,15 @@ class YFinanceAdapter(MarketDataRepo):
             start_str = start_date.strftime("%Y-%m-%d")
             end_str = end_date.strftime("%Y-%m-%d")
 
-            # Determine appropriate interval based on date range
+            # Use 1-minute data for simulation to enable realistic intraday trading
+            # yfinance supports 1m data for up to 7 days, so we'll fetch in chunks if needed
             days_diff = (end_date - start_date).days
             if days_diff <= 7:
                 interval = "1m"  # 1-minute data for short periods (max 7 days)
-            elif days_diff <= 60:
-                interval = "1d"  # Daily data for medium periods (up to 60 days)
             else:
-                interval = "1d"  # Daily data for long periods
+                # For longer periods, use daily data but create multiple intraday points
+                # This simulates intraday trading by creating multiple evaluation points per day
+                interval = "1d"  # Daily data for longer periods
 
             # Fetch data
             stock = yf.Ticker(ticker)
@@ -284,24 +285,106 @@ class YFinanceAdapter(MarketDataRepo):
                 # Determine if market hours
                 is_market_hours = self.storage.is_market_hours(timestamp)
 
-                price_data = PriceData(
-                    ticker=ticker,
-                    price=row["Close"],
-                    source=PriceSource.LAST_TRADE,
-                    timestamp=timestamp,
-                    bid=row["Low"],
-                    ask=row["High"],
-                    volume=int(row["Volume"]) if not pd.isna(row["Volume"]) else None,
-                    last_trade_price=row["Close"],
-                    last_trade_time=timestamp,
-                    is_market_hours=bool(is_market_hours),
-                    is_fresh=True,  # Historical data is considered fresh
-                    is_inline=True,  # Historical data is considered inline
-                )
+                if interval == "1m":
+                    # For minute data, create one PriceData object
+                    # For minute data, use close as both bid and ask (no spread)
+                    bid_price = row["Close"]
+                    ask_price = row["Close"]
+                    mid_quote = row["Close"]
 
-                price_data_list.append(price_data)
-                # Store in storage system
-                self.storage.store_price_data(ticker, price_data)
+                    price_data = PriceData(
+                        ticker=ticker,
+                        price=mid_quote,  # Use mid-quote for trading calculations
+                        source=PriceSource.LAST_TRADE,
+                        timestamp=timestamp,
+                        bid=bid_price,
+                        ask=ask_price,
+                        volume=int(row["Volume"]) if not pd.isna(row["Volume"]) else None,
+                        last_trade_price=row["Close"],
+                        last_trade_time=timestamp,
+                        is_market_hours=bool(is_market_hours),
+                        is_fresh=True,  # Historical data is considered fresh
+                        is_inline=True,  # Historical data is considered inline
+                        # OHLC data for daily bars
+                        open=row["Open"],
+                        high=row["High"],
+                        low=row["Low"],
+                        close=row["Close"],
+                    )
+                    price_data_list.append(price_data)
+                    self.storage.store_price_data(ticker, price_data)
+                else:
+                    # For daily data, create multiple intraday points to simulate intraday trading
+                    # Create configurable evaluation points per day (default: every 30 minutes)
+                    # Market hours: 9:30 AM - 4:00 PM ET (6.5 hours = 390 minutes)
+                    # Default: every 30 minutes = 13 points per day
+                    intraday_interval_minutes = 30  # Configurable: 15, 30, 60 minutes
+                    intraday_times = []
+
+                    # Generate times every N minutes from 9:30 AM to 4:00 PM
+                    current_hour, current_minute = 9, 30
+                    while current_hour < 16 or (current_hour == 16 and current_minute == 0):
+                        intraday_times.append((current_hour, current_minute))
+                        current_minute += intraday_interval_minutes
+                        if current_minute >= 60:
+                            current_hour += 1
+                            current_minute -= 60
+
+                    print(
+                        f"DEBUG: Generated {len(intraday_times)} intraday times: {intraday_times[:5]}..."
+                    )
+
+                    for hour, minute in intraday_times:
+                        # Create timestamp for this intraday point
+                        # Convert to Eastern time first, then set the hour/minute, then convert back to UTC
+                        et_timestamp = timestamp.astimezone(self.tz_eastern)
+                        intraday_timestamp = et_timestamp.replace(
+                            hour=hour, minute=minute, second=0, microsecond=0
+                        )
+                        intraday_timestamp = intraday_timestamp.astimezone(self.tz_utc)
+
+                        # Simulate price movement within the day using OHLC data
+                        # Use a simple linear interpolation between open and close
+                        progress = (hour - 9.5) / 6.5  # Progress from 9:30 to 4:00
+                        progress = max(0, min(1, progress))  # Clamp between 0 and 1
+
+                        # Interpolate price between open and close
+                        simulated_price = row["Open"] + (row["Close"] - row["Open"]) * progress
+
+                        # Create realistic bid/ask spread (0.1% of price)
+                        spread = simulated_price * 0.001
+                        bid_price = simulated_price - spread / 2
+                        ask_price = simulated_price + spread / 2
+                        mid_quote = simulated_price
+
+                        # Distribute volume across intraday points
+                        intraday_volume = (
+                            int(row["Volume"] / len(intraday_times))
+                            if not pd.isna(row["Volume"])
+                            else None
+                        )
+
+                        price_data = PriceData(
+                            ticker=ticker,
+                            price=mid_quote,  # Use mid-quote for trading calculations
+                            source=PriceSource.LAST_TRADE,
+                            timestamp=intraday_timestamp,
+                            bid=bid_price,  # Realistic bid price
+                            ask=ask_price,  # Realistic ask price
+                            volume=intraday_volume,
+                            last_trade_price=simulated_price,
+                            last_trade_time=intraday_timestamp,
+                            is_market_hours=True,  # All intraday points are during market hours
+                            is_fresh=True,
+                            is_inline=True,
+                            # OHLC data for daily bars (same for all intraday points)
+                            open=row["Open"],
+                            high=row["High"],
+                            low=row["Low"],
+                            close=row["Close"],
+                        )
+                        price_data_list.append(price_data)
+                        self.storage.store_price_data(ticker, price_data)
 
             return price_data_list
 

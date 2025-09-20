@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { TrendingUp, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
 import { CreatePositionRequest } from '../types';
 import { useMarketPrice } from '../hooks/useMarketData';
+import { useConfiguration } from '../contexts/ConfigurationContext';
 
 interface CreatePositionFormProps {
   onSubmit: (data: CreatePositionRequest) => Promise<void>;
@@ -17,6 +18,7 @@ export default function CreatePositionForm({
   const [ticker, setTicker] = useState('AAPL');
   const [investmentAmount, setInvestmentAmount] = useState(10000);
   const [isValidating, setIsValidating] = useState(false);
+  const { configuration } = useConfiguration();
 
   // Use real market data
   const {
@@ -60,6 +62,23 @@ export default function CreatePositionForm({
       qty: calculatedShares,
       cash: investmentAmount,
       anchor_price: currentPrice, // Set anchor price to current market price
+      order_policy: {
+        min_qty: 0,
+        min_notional: configuration.minNotional,
+        lot_size: 0,
+        qty_step: 0,
+        action_below_min: 'hold',
+        trigger_threshold_pct: configuration.triggerThresholdPct,
+        rebalance_ratio: configuration.rebalanceRatio,
+        commission_rate: configuration.commissionRate,
+        allow_after_hours: configuration.allowAfterHours,
+      },
+      guardrails: {
+        min_stock_alloc_pct: configuration.guardrails.minStockAllocPct,
+        max_stock_alloc_pct: configuration.guardrails.maxStockAllocPct,
+        max_orders_per_day: 5,
+      },
+      withholding_tax_rate: 0.25,
     };
 
     try {

@@ -1,31 +1,52 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRunSimulation } from '../hooks/useSimulation';
 import TradingModeToggle, { TradingMode } from '../components/TradingModeToggle';
 import SimulationControls, { SimulationConfig } from '../components/SimulationControls';
 import SimulationResults, { SimulationResult } from '../components/SimulationResults';
+import SimulationAnalytics from '../components/SimulationAnalytics';
+import { useConfiguration } from '../contexts/ConfigurationContext';
+import { BarChart3, Play, Settings } from 'lucide-react';
 
 export default function Simulation() {
   const [mode, setMode] = useState<TradingMode>('simulation');
+  const [activeTab, setActiveTab] = useState<'simulation' | 'analytics'>('simulation');
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
   const [isSimulationRunning, setIsSimulationRunning] = useState(false);
 
   const runSimulationMutation = useRunSimulation();
+  const { configuration, updateConfiguration } = useConfiguration();
 
   const [simulationConfig, setSimulationConfig] = useState<SimulationConfig>({
     ticker: 'AAPL',
     startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 7 days ago
     endDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Yesterday
     initialCash: 10000,
-    triggerThresholdPct: 0.03,
-    rebalanceRatio: 0.5,
-    commissionRate: 0.0001,
-    minNotional: 100,
-    allowAfterHours: false,
+    triggerThresholdPct: configuration.triggerThresholdPct,
+    rebalanceRatio: configuration.rebalanceRatio,
+    commissionRate: configuration.commissionRate,
+    minNotional: configuration.minNotional,
+    allowAfterHours: configuration.allowAfterHours,
     guardrails: {
-      minStockAllocPct: 0.25,
-      maxStockAllocPct: 0.75,
+      minStockAllocPct: configuration.guardrails.minStockAllocPct,
+      maxStockAllocPct: configuration.guardrails.maxStockAllocPct,
     },
   });
+
+  // Update simulation config when shared configuration changes
+  useEffect(() => {
+    setSimulationConfig((prev) => ({
+      ...prev,
+      triggerThresholdPct: configuration.triggerThresholdPct,
+      rebalanceRatio: configuration.rebalanceRatio,
+      commissionRate: configuration.commissionRate,
+      minNotional: configuration.minNotional,
+      allowAfterHours: configuration.allowAfterHours,
+      guardrails: {
+        minStockAllocPct: configuration.guardrails.minStockAllocPct,
+        maxStockAllocPct: configuration.guardrails.maxStockAllocPct,
+      },
+    }));
+  }, [configuration]);
 
   const handleRunSimulation = async () => {
     setIsSimulationRunning(true);
@@ -84,6 +105,37 @@ export default function Simulation() {
         />
       </div>
 
+      {/* Tab Navigation */}
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('simulation')}
+            className={`flex items-center space-x-2 py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'simulation'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <Play className="w-4 h-4" />
+            <span>Simulation</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('analytics')}
+            disabled={!simulationResult}
+            className={`flex items-center space-x-2 py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'analytics'
+                ? 'border-primary-500 text-primary-600'
+                : simulationResult
+                ? 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                : 'border-transparent text-gray-300 cursor-not-allowed'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span>Analytics</span>
+          </button>
+        </nav>
+      </div>
+
       {/* Data Availability Notice */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start">
@@ -108,33 +160,54 @@ export default function Simulation() {
         </div>
       </div>
 
-      {/* Mode-specific content */}
-      {mode === 'simulation' ? (
+      {/* Tab-specific content */}
+      {activeTab === 'simulation' ? (
         <div className="space-y-6">
-          {/* Simulation Controls */}
-          <SimulationControls
-            config={simulationConfig}
-            onConfigChange={setSimulationConfig}
-            onRunSimulation={handleRunSimulation}
-            onStopSimulation={handleStopSimulation}
-            isRunning={isSimulationRunning}
-          />
+          {/* Mode-specific content */}
+          {mode === 'simulation' ? (
+            <div className="space-y-6">
+              {/* Simulation Controls */}
+              <SimulationControls
+                config={simulationConfig}
+                onConfigChange={setSimulationConfig}
+                onRunSimulation={handleRunSimulation}
+                onStopSimulation={handleStopSimulation}
+                isRunning={isSimulationRunning}
+                onSharedConfigChange={updateConfiguration}
+              />
 
-          {/* Simulation Results */}
-          <SimulationResults result={simulationResult} isLoading={isSimulationRunning} />
+              {/* Simulation Results */}
+              <SimulationResults result={simulationResult} isLoading={isSimulationRunning} />
+            </div>
+          ) : (
+            <div className="card">
+              <div className="text-center py-12">
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Live Trading Mode</h3>
+                <p className="text-gray-500 mb-4">
+                  Live trading functionality is available in the Trading page.
+                </p>
+                <a href="/trading" className="btn btn-primary">
+                  Go to Live Trading
+                </a>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
-        <div className="card">
-          <div className="text-center py-12">
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Live Trading Mode</h3>
-            <p className="text-gray-500 mb-4">
-              Live trading functionality is available in the Trading page.
-            </p>
-            <a href="/trading" className="btn btn-primary">
-              Go to Live Trading
-            </a>
-          </div>
-        </div>
+        <SimulationAnalytics
+          data={
+            simulationResult
+              ? {
+                  simulationResult,
+                  dailyReturns: simulationResult.daily_returns || [],
+                  priceData: simulationResult.price_data || [],
+                  tradeLog: simulationResult.trade_log || [],
+                  triggerAnalysis: simulationResult.trigger_analysis || [],
+                }
+              : null
+          }
+          isLoading={isSimulationRunning}
+        />
       )}
     </div>
   );

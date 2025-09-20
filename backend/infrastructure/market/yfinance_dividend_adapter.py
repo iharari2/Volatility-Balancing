@@ -66,8 +66,15 @@ class YFinanceDividendAdapter(DividendMarketDataRepo):
             if dividends.empty:
                 return []
 
-            # Filter by date range
-            dividends = dividends[(dividends.index >= start_date) & (dividends.index <= end_date)]
+            # Filter by date range - convert to timezone-aware for comparison
+            start_date_tz = start_date.replace(tzinfo=self.tz_utc) if start_date.tzinfo is None else start_date
+            end_date_tz = end_date.replace(tzinfo=self.tz_utc) if end_date.tzinfo is None else end_date
+            
+            # Convert dividend index to UTC for comparison
+            dividends_utc = dividends.copy()
+            dividends_utc.index = dividends_utc.index.tz_localize(self.tz_utc) if dividends_utc.index.tz is None else dividends_utc.index.tz_convert(self.tz_utc)
+            
+            dividends = dividends_utc[(dividends_utc.index >= start_date_tz) & (dividends_utc.index <= end_date_tz)]
 
             dividend_list = []
             for date, amount in dividends.items():

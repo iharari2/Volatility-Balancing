@@ -2,7 +2,10 @@ import { useState } from 'react';
 import { usePositions, useCreatePosition } from '../hooks/usePositions';
 import TradingInterface from '../components/TradingInterface';
 import CreatePositionForm from '../components/CreatePositionForm';
+import TradingConfigPanel from '../components/TradingConfigPanel';
 import { CreatePositionRequest } from '../types';
+import { Settings } from 'lucide-react';
+import { useConfiguration } from '../contexts/ConfigurationContext';
 import {
   Select,
   SelectContent,
@@ -14,8 +17,10 @@ import {
 export default function Trading() {
   const [selectedPositionId, setSelectedPositionId] = useState<string>('');
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
   const { data: positions = [] } = usePositions();
   const createPosition = useCreatePosition();
+  const { configuration, updateConfiguration } = useConfiguration();
 
   const selectedPosition = positions.find((p) => p.id === selectedPositionId);
 
@@ -91,6 +96,132 @@ export default function Trading() {
           <p className="text-gray-500">
             Choose a position from the dropdown above to start trading.
           </p>
+        </div>
+      )}
+
+      {/* Configuration Section */}
+      {selectedPosition && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Trading Configuration</h3>
+            <button onClick={() => setShowConfig(!showConfig)} className="btn btn-secondary btn-sm">
+              <Settings className="w-4 h-4 mr-2" />
+              {showConfig ? 'Hide' : 'Show'} Configuration
+            </button>
+          </div>
+
+          {/* Quick Configuration Summary */}
+          <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Current Settings</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <span className="text-gray-500">Trigger:</span>
+                <span className="ml-1 font-medium">
+                  ±
+                  {(
+                    (selectedPosition.order_policy?.trigger_threshold_pct ||
+                      configuration.triggerThresholdPct) * 100
+                  ).toFixed(1)}
+                  %
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-500">Rebalance:</span>
+                <span className="ml-1 font-medium">
+                  {(
+                    selectedPosition.order_policy?.rebalance_ratio || configuration.rebalanceRatio
+                  ).toFixed(2)}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-500">After Hours:</span>
+                <span className="ml-1 font-medium">
+                  {selectedPosition.order_policy?.allow_after_hours ?? configuration.allowAfterHours
+                    ? 'Yes'
+                    : 'No'}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-500">Guardrails:</span>
+                <span className="ml-1 font-medium">
+                  {(
+                    (selectedPosition.guardrails?.min_stock_alloc_pct ||
+                      configuration.guardrails.minStockAllocPct) * 100
+                  ).toFixed(0)}
+                  % -{' '}
+                  {(
+                    (selectedPosition.guardrails?.max_stock_alloc_pct ||
+                      configuration.guardrails.maxStockAllocPct) * 100
+                  ).toFixed(0)}
+                  %
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {showConfig && (
+            <TradingConfigPanel
+              orderPolicy={
+                selectedPosition.order_policy || {
+                  min_qty: 0,
+                  min_notional: configuration.minNotional,
+                  lot_size: 0,
+                  qty_step: 0,
+                  action_below_min: 'hold',
+                  trigger_threshold_pct: configuration.triggerThresholdPct,
+                  rebalance_ratio: configuration.rebalanceRatio,
+                  commission_rate: configuration.commissionRate,
+                  allow_after_hours: configuration.allowAfterHours,
+                }
+              }
+              guardrails={
+                selectedPosition.guardrails || {
+                  min_stock_alloc_pct: configuration.guardrails.minStockAllocPct,
+                  max_stock_alloc_pct: configuration.guardrails.maxStockAllocPct,
+                  max_orders_per_day: configuration.guardrails.maxOrdersPerDay,
+                }
+              }
+              withholdingTaxRate={
+                selectedPosition.withholding_tax_rate || configuration.withholdingTaxRate
+              }
+              onSave={(config) => {
+                // Update shared configuration
+                updateConfiguration({
+                  triggerThresholdPct: config.orderPolicy.trigger_threshold_pct,
+                  rebalanceRatio: config.orderPolicy.rebalance_ratio,
+                  commissionRate: config.orderPolicy.commission_rate,
+                  minNotional: config.orderPolicy.min_notional,
+                  allowAfterHours: config.orderPolicy.allow_after_hours,
+                  guardrails: {
+                    minStockAllocPct: config.guardrails.min_stock_alloc_pct,
+                    maxStockAllocPct: config.guardrails.max_stock_alloc_pct,
+                    maxOrdersPerDay: config.guardrails.max_orders_per_day,
+                  },
+                  withholdingTaxRate: config.withholdingTaxRate,
+                });
+                console.log('Configuration saved and synchronized across screens!');
+                alert('Configuration saved and synchronized across screens!');
+              }}
+              onReset={() => {
+                // Reset to shared configuration defaults
+                updateConfiguration({
+                  triggerThresholdPct: 0.03,
+                  rebalanceRatio: 0.5,
+                  commissionRate: 0.0001,
+                  minNotional: 100,
+                  allowAfterHours: true,
+                  guardrails: {
+                    minStockAllocPct: 0.25,
+                    maxStockAllocPct: 0.75,
+                    maxOrdersPerDay: 5,
+                  },
+                  withholdingTaxRate: 0.25,
+                });
+                console.log('Configuration reset to defaults');
+                alert('Configuration reset to defaults');
+              }}
+            />
+          )}
         </div>
       )}
 

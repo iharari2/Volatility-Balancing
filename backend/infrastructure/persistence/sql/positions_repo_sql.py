@@ -32,8 +32,8 @@ def _to_entity(m: PositionModel) -> Position:
         ),
         # Coalesce nullable guardrails columns to defaults
         guardrails=GuardrailPolicy(
-            min_stock_alloc_pct=m.gr_min_stock_alloc_pct or 0.0,
-            max_stock_alloc_pct=m.gr_max_stock_alloc_pct or 1.0,
+            min_stock_alloc_pct=m.gr_min_stock_alloc_pct or 0.25,  # 25% default
+            max_stock_alloc_pct=m.gr_max_stock_alloc_pct or 0.75,  # 75% default
             max_orders_per_day=m.gr_max_orders_per_day or 5,
         ),
     )

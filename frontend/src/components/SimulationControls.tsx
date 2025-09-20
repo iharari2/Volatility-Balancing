@@ -24,6 +24,7 @@ interface SimulationControlsProps {
   onStopSimulation: () => void;
   isRunning: boolean;
   className?: string;
+  onSharedConfigChange?: (updates: any) => void;
 }
 
 export default function SimulationControls({
@@ -33,6 +34,7 @@ export default function SimulationControls({
   onStopSimulation,
   isRunning,
   className = '',
+  onSharedConfigChange,
 }: SimulationControlsProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -120,20 +122,52 @@ export default function SimulationControls({
   const validation = validateDates();
 
   const handleConfigChange = (field: string, value: any) => {
+    let newConfig;
     if (field.includes('.')) {
       const [parent, child] = field.split('.');
-      onConfigChange({
+      newConfig = {
         ...config,
         [parent]: {
           ...config[parent as keyof SimulationConfig],
           [child]: value,
         },
-      });
+      };
     } else {
-      onConfigChange({
+      newConfig = {
         ...config,
         [field]: value,
-      });
+      };
+    }
+
+    onConfigChange(newConfig);
+
+    // Also update shared configuration for persistent settings
+    if (onSharedConfigChange) {
+      const sharedFields = [
+        'triggerThresholdPct',
+        'rebalanceRatio',
+        'commissionRate',
+        'minNotional',
+        'allowAfterHours',
+        'guardrails.minStockAllocPct',
+        'guardrails.maxStockAllocPct',
+      ];
+
+      if (sharedFields.includes(field) || field.startsWith('guardrails.')) {
+        if (field.includes('.')) {
+          const [parent, child] = field.split('.');
+          onSharedConfigChange({
+            [parent]: {
+              ...config[parent as keyof SimulationConfig],
+              [child]: value,
+            },
+          });
+        } else {
+          onSharedConfigChange({
+            [field]: value,
+          });
+        }
+      }
     }
   };
 
@@ -397,34 +431,36 @@ export default function SimulationControls({
                   <label className="text-sm text-gray-600">Minimum Stock %</label>
                   <input
                     type="number"
-                    value={config.guardrails.minStockAllocPct * 100}
-                    onChange={(e) =>
-                      handleConfigChange(
-                        'guardrails.minStockAllocPct',
-                        Number(e.target.value) / 100,
-                      )
-                    }
+                    value={Math.round(config.guardrails.minStockAllocPct * 100)}
+                    onChange={(e) => {
+                      const value = Number(e.target.value);
+                      if (!isNaN(value) && value >= 0 && value <= 100) {
+                        handleConfigChange('guardrails.minStockAllocPct', value / 100);
+                      }
+                    }}
                     className="input"
                     min="0"
                     max="100"
                     step="1"
+                    placeholder="25"
                   />
                 </div>
                 <div>
                   <label className="text-sm text-gray-600">Maximum Stock %</label>
                   <input
                     type="number"
-                    value={config.guardrails.maxStockAllocPct * 100}
-                    onChange={(e) =>
-                      handleConfigChange(
-                        'guardrails.maxStockAllocPct',
-                        Number(e.target.value) / 100,
-                      )
-                    }
+                    value={Math.round(config.guardrails.maxStockAllocPct * 100)}
+                    onChange={(e) => {
+                      const value = Number(e.target.value);
+                      if (!isNaN(value) && value >= 0 && value <= 100) {
+                        handleConfigChange('guardrails.maxStockAllocPct', value / 100);
+                      }
+                    }}
                     className="input"
                     min="0"
                     max="100"
                     step="1"
+                    placeholder="75"
                   />
                 </div>
               </div>
@@ -444,43 +480,43 @@ export default function SimulationControls({
             </div>
           </div>
         )}
+      </div>
 
-        {/* Action Buttons */}
-        <div className="mt-6 pt-6 border-t border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-500">
-              {isRunning ? (
-                <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600 mr-2"></div>
-                  Running simulation...
-                </div>
-              ) : (
-                `Ready to simulate ${config.ticker} from ${config.startDate} to ${config.endDate}`
-              )}
-            </div>
+      {/* Action Buttons */}
+      <div className="mt-6 pt-6 border-t border-gray-200">
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-gray-500">
+            {isRunning ? (
+              <div className="flex items-center">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600 mr-2"></div>
+                Running simulation...
+              </div>
+            ) : (
+              `Ready to simulate ${config.ticker} from ${config.startDate} to ${config.endDate}`
+            )}
+          </div>
 
-            <div className="flex space-x-3">
-              {isRunning ? (
-                <button onClick={onStopSimulation} className="btn btn-danger">
-                  <Square className="w-4 h-4 mr-2" />
-                  Stop
-                </button>
-              ) : (
-                <button
-                  onClick={onRunSimulation}
-                  disabled={
-                    !config.ticker ||
-                    !config.startDate ||
-                    !config.endDate ||
-                    validation.errors.length > 0
-                  }
-                  className="btn btn-primary"
-                >
-                  <Play className="w-4 h-4 mr-2" />
-                  Run Simulation
-                </button>
-              )}
-            </div>
+          <div className="flex space-x-3">
+            {isRunning ? (
+              <button onClick={onStopSimulation} className="btn btn-danger">
+                <Square className="w-4 h-4 mr-2" />
+                Stop
+              </button>
+            ) : (
+              <button
+                onClick={onRunSimulation}
+                disabled={
+                  !config.ticker ||
+                  !config.startDate ||
+                  !config.endDate ||
+                  validation.errors.length > 0
+                }
+                className="btn btn-primary"
+              >
+                <Play className="w-4 h-4 mr-2" />
+                Run Simulation
+              </button>
+            )}
           </div>
         </div>
       </div>

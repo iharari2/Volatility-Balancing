@@ -1,17 +1,50 @@
-DEVELOPER_NOTES.md (order policy + fills)
-OrderPolicy fields
+# Developer Notes
 
-min_qty: smallest orderable quantity.
+## Order Policy Fields
 
-min_notional: smallest notional (qty \* price).
+- `min_qty`: smallest orderable quantity
+- `min_notional`: smallest notional (qty × price)
+- `lot_size`: fixed lot granularity (0 → ignore)
+- `qty_step`: smallest increment (0 → ignore)
+- `action_below_min`: "hold" or "reject" ("clip" reserved/NYI)
+- `order_sizing_strategy`: Strategy for calculating order sizes ("proportional", "fixed_percentage", "original")
 
-lot_size: fixed lot granularity (0 → ignore).
+## Order Sizing Strategies
 
-qty_step: smallest increment (0 → ignore).
+The system supports multiple order sizing strategies through the Strategy pattern:
 
-action_below_min: "hold" or "reject" ( "clip" reserved/NYI).
+### Available Strategies
 
-Fill pipeline (ExecuteOrderUC)
+1. **Proportional** (Default): `ΔQ_raw = (P_anchor / P - 1) × r × ((A + C) / P)`
+
+   - Most conservative, scales with price deviation
+   - Zero at anchor price
+
+2. **Fixed Percentage**: Uses fixed percentage of available resources
+
+   - BUY: `(cash × r) / P`
+   - SELL: `-(shares × r)`
+
+3. **Original**: `ΔQ_raw = (P_anchor / P) × r × ((A + C) / P)`
+   - Original aggressive strategy
+
+### Implementation
+
+- Strategy selection via `OrderSizingStrategyFactory`
+- Context object provides all necessary data
+- Strategies are stateless and thread-safe
+- Easy to add new strategies by implementing `OrderSizingStrategy` interface
+
+### Usage
+
+```python
+# In EvaluatePositionUC
+strategy = OrderSizingStrategyFactory.create_strategy(position.order_policy.order_sizing_strategy)
+context = OrderSizingContext(current_price, anchor_price, cash, shares, rebalance_ratio, trigger_threshold_pct, side)
+raw_qty = strategy.calculate_raw_qty(context)
+```
+
+## Fill Pipeline (ExecuteOrderUC)
 
 Load order & position.
 

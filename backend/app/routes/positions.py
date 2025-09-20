@@ -12,7 +12,6 @@ from dataclasses import asdict
 from domain.value_objects.order_policy import OrderPolicy
 from domain.value_objects.types import ActionBelowMin
 from application.use_cases.evaluate_position_uc import EvaluatePositionUC
-from application.use_cases.simulation_uc import SimulationUC
 
 router = APIRouter(prefix="/v1")
 
@@ -25,10 +24,16 @@ class OrderPolicyIn(BaseModel):
     action_below_min: str = "hold"  # "hold" | "reject" | "clip"
     # Volatility trading parameters
     trigger_threshold_pct: float = 0.03
-    rebalance_ratio: float = 1.6667
+    rebalance_ratio: float = 0.5  # Updated to match simulation default
     commission_rate: float = 0.0001
     # Market hours configuration
-    allow_after_hours: bool = False
+    allow_after_hours: bool = True  # Default to after hours ON
+
+
+class GuardrailsIn(BaseModel):
+    min_stock_alloc_pct: float = 0.25
+    max_stock_alloc_pct: float = 0.75
+    max_orders_per_day: int = 5
 
 
 class CreatePositionRequest(BaseModel):
@@ -37,6 +42,8 @@ class CreatePositionRequest(BaseModel):
     cash: float = 0.0
     anchor_price: Optional[float] = None
     order_policy: Optional[OrderPolicyIn] = None
+    guardrails: Optional[GuardrailsIn] = None
+    withholding_tax_rate: Optional[float] = None
 
 
 class CreatePositionResponse(BaseModel):
@@ -106,9 +113,25 @@ def create_position(payload: CreatePositionRequest) -> CreatePositionResponse:
             pos.order_policy = validated_policy
             pos_repo.save(pos)
 
+        if payload.guardrails:
+            # Convert guardrails
+            from domain.value_objects.guardrails import GuardrailPolicy
+
+            pos.guardrails = GuardrailPolicy(
+                min_stock_alloc_pct=payload.guardrails.min_stock_alloc_pct,
+                max_stock_alloc_pct=payload.guardrails.max_stock_alloc_pct,
+                max_orders_per_day=payload.guardrails.max_orders_per_day,
+            )
+            pos_repo.save(pos)
+
         print(f"Position created/updated: {pos.id}")
         return CreatePositionResponse(
-            id=pos.id, ticker=pos.ticker, qty=pos.qty, cash=pos.cash, anchor_price=pos.anchor_price
+            id=pos.id,
+            ticker=pos.ticker,
+            qty=pos.qty,
+            cash=pos.cash,
+            anchor_price=pos.anchor_price,
+            order_policy=payload.order_policy,  # Include the order policy in response
         )
     except HTTPException:
         # Re-raise HTTP exceptions (like validation errors) as-is
@@ -138,6 +161,7 @@ def list_positions() -> Dict[str, Any]:
                     "rebalance_ratio": pos.order_policy.rebalance_ratio,
                     "commission_rate": pos.order_policy.commission_rate,
                     "min_notional": pos.order_policy.min_notional,
+                    "allow_after_hours": pos.order_policy.allow_after_hours,
                 },
                 "guardrails": {
                     "min_stock_alloc_pct": pos.guardrails.min_stock_alloc_pct,
@@ -342,11 +366,14 @@ def run_simulation(request: SimulationRequest) -> Dict[str, Any]:
         end_dt = datetime.fromisoformat(request.end_date.replace("Z", "+00:00"))
 
         # Create simulation use case
-        sim_uc = SimulationUC(
+        from application.use_cases.simulation_unified_uc import SimulationUnifiedUC
+
+        sim_uc = SimulationUnifiedUC(
             market_data=container.market_data,
             positions=container.positions,
             events=container.events,
             clock=container.clock,
+            dividend_market_data=container.dividend_market_data,
         )
 
         # Run simulation
@@ -392,8 +419,17 @@ def run_simulation(request: SimulationRequest) -> Dict[str, Any]:
             # Trade details
             "trade_log": result.trade_log,
             "daily_returns": result.daily_returns,
+            # Dividend data
+            "total_dividends_received": result.total_dividends_received,
+            "dividend_events": result.dividend_events,
             # Market data for visualization
             "price_data": result.price_data,
+            # Trigger analysis
+            "trigger_analysis": result.trigger_analysis,
+            # Debug info
+            "debug_info": getattr(result, "debug_info", []),
+            "debug_storage_info": getattr(result, "debug_storage_info", {}),
+            "debug_retrieval_info": getattr(result, "debug_retrieval_info", {}),
         }
 
     except Exception as e:

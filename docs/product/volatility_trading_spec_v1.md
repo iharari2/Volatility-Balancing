@@ -14,7 +14,7 @@
 - **Trigger threshold (τ):** Default ±3% relative to P_anchor.
 - **Commission:** Default 0.01% of order notional.
 - **Minimum order threshold (min_notional):** Configurable; default $100.
-- **Rebalance ratio (r):** Default 1.6667.
+- **Rebalance ratio (r):** Default 0.5 (50% of available resources).
 - **Guardrails (g_low, g_high):** Asset% ∈ [25%, 75%].
 - **Portfolio state:**
   - A_t = price × shares
@@ -34,15 +34,47 @@
 
 ## 4. Order Sizing
 
-Formula:
+### 4.1 Default Formula (Proportional Strategy)
 
 ```
-ΔQ_raw = (P_anchor / P) × r × ((A + C) / P)
+ΔQ_raw = (P_anchor / P - 1) × r × ((A + C) / P)
 ```
 
-- Sell trigger → order −ΔQ_raw (capped by holdings).
-- Buy trigger → order +ΔQ_raw (capped by cash & guardrails).
-- Fractional shares allowed by default.
+- **Key improvement**: The `-1` term makes the formula proportional to price deviation
+- **Zero at anchor**: When P = P_anchor, ΔQ_raw = 0 (no trade)
+- **Proportional scaling**: Trade size scales with actual price change percentage
+- Sell trigger → order −ΔQ_raw (capped by holdings)
+- Buy trigger → order +ΔQ_raw (capped by cash & guardrails)
+- Fractional shares allowed by default
+
+### 4.2 Extensible Strategy System
+
+The system supports multiple order sizing strategies that can be selected per position:
+
+#### Available Strategies:
+
+1. **Proportional** (Default): `ΔQ_raw = (P_anchor / P - 1) × r × ((A + C) / P)`
+
+   - Scales with price deviation from anchor
+   - Zero order size when price equals anchor
+   - Most conservative and intuitive
+
+2. **Fixed Percentage**: Uses fixed percentage of available resources
+
+   - BUY: `ΔQ_raw = (cash × r) / P`
+   - SELL: `ΔQ_raw = -(shares × r)`
+   - Consistent trade sizes regardless of price deviation
+
+3. **Original**: `ΔQ_raw = (P_anchor / P) × r × ((A + C) / P)`
+   - The original aggressive strategy
+   - Based on total portfolio value
+   - More aggressive than proportional strategy
+
+#### Strategy Selection:
+
+- Configurable per position via `order_sizing_strategy` parameter
+- Default: "proportional"
+- Can be changed without affecting existing positions
 
 ---
 
@@ -131,7 +163,7 @@ Every evaluation stores an **Event** with:
 
 ### 11.1 Core Trading Interface
 
-- **Strategy Config:** thresholds, rebalance ratio, commission, min order, guardrails, fractional toggle, max orders/day, withholding rate, after-hours toggle.
+- **Strategy Config:** thresholds, rebalance ratio, commission, min order, guardrails, order sizing strategy, fractional toggle, max orders/day, withholding rate, after-hours toggle.
 - **Position Card:** current price, anchor, next action, proposed vs. trimmed qty, projected Asset%.
 - **Event Timeline:** inputs → decision → outputs.
 - **Performance View:** asset return, portfolio return, P&L, fees, turnover, guardrail breaches.
@@ -150,8 +182,9 @@ Every evaluation stores an **Event** with:
 
 - **Trading Parameters:**
   - Threshold setting: ±X% input with slider (default 3%)
-  - Rebalance ratio: decimal input with validation (default 1.6667)
-  - After hours trading: toggle switch (default OFF)
+  - Rebalance ratio: decimal input with validation (default 0.5)
+  - Order sizing strategy: dropdown selection (default "proportional")
+  - After hours trading: toggle switch (default ON)
 - **Guardrail Settings:**
   - Asset percentage bounds: dual slider or separate inputs (default 25%-75%)
   - Visual preview of guardrail zones
@@ -330,7 +363,7 @@ Each position sheet contains detailed line items for every evaluation event:
 - Trigger threshold: ±3%
 - Commission: 0.01%
 - Min order: $100
-- Rebalance ratio: 1.6667
+- Rebalance ratio: 0.5
 - Guardrails: [25%, 75%]
 - Max orders/day: 5
 - Withholding tax: 25%

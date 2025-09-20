@@ -63,26 +63,34 @@ class MarketDataStorage:
     ) -> List[PriceData]:
         """Get historical price data for a ticker."""
         if ticker not in self.price_history:
+            print(f"DEBUG: No data found for ticker {ticker}")
             return []
 
         data = self.price_history[ticker]
+        print(f"DEBUG: Found {len(data)} data points for {ticker}")
 
         # Filter by time range with proper timezone handling
         if start_time:
             # Ensure timezone-aware comparison
             if start_time.tzinfo is None:
                 start_time = start_time.replace(tzinfo=timezone.utc)
+            print(f"DEBUG: Filtering by start_time: {start_time}")
             data = [p for p in data if p.timestamp >= start_time]
+            print(f"DEBUG: After start_time filter: {len(data)} data points")
         if end_time:
             # Ensure timezone-aware comparison
             if end_time.tzinfo is None:
                 end_time = end_time.replace(tzinfo=timezone.utc)
+            print(f"DEBUG: Filtering by end_time: {end_time}")
             data = [p for p in data if p.timestamp <= end_time]
+            print(f"DEBUG: After end_time filter: {len(data)} data points")
 
         # Filter by market hours
         if market_hours_only:
             data = [p for p in data if p.is_market_hours]
+            print(f"DEBUG: After market_hours filter: {len(data)} data points")
 
+        print(f"DEBUG: Returning {len(data)} data points")
         return sorted(data, key=lambda x: x.timestamp)
 
     def get_trading_day_data(

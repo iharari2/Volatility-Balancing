@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { usePositions, usePositionEvents } from '../hooks/usePositions';
+import { useHistoricalData } from '../hooks/useMarketData';
 import {
   BarChart,
   Bar,
@@ -17,6 +18,7 @@ import {
   Area,
   ComposedChart,
   Legend,
+  Scatter,
 } from 'recharts';
 import {
   TrendingUp,
@@ -34,15 +36,20 @@ export default function Analytics() {
   const selectedPosition = positions.find((p) => p.id === selectedPositionId);
   const { data: events } = usePositionEvents(selectedPositionId);
 
-  // Calculate analytics data
-  const totalValue = positions.reduce((sum, pos) => {
+  // Filter positions based on selection
+  const filteredPositions = selectedPositionId
+    ? positions.filter((p) => p.id === selectedPositionId)
+    : positions;
+
+  // Calculate analytics data for filtered positions
+  const totalValue = filteredPositions.reduce((sum, pos) => {
     const value = pos.qty * (pos.anchor_price || 0) + pos.cash;
     return sum + value;
   }, 0);
 
-  const totalCash = positions.reduce((sum, pos) => sum + pos.cash, 0);
-  const totalShares = positions.reduce((sum, pos) => sum + pos.qty, 0);
-  const activePositions = positions.filter((pos) => pos.anchor_price);
+  const totalCash = filteredPositions.reduce((sum, pos) => sum + pos.cash, 0);
+  const totalShares = filteredPositions.reduce((sum, pos) => sum + pos.qty, 0);
+  const activePositions = filteredPositions.filter((pos) => pos.anchor_price);
 
   // Event analytics
   const eventCounts =
@@ -57,7 +64,7 @@ export default function Analytics() {
   }));
 
   // Position performance data
-  const positionData = positions.map((pos) => ({
+  const positionData = filteredPositions.map((pos) => ({
     ticker: pos.ticker,
     value: pos.qty * (pos.anchor_price || 0) + pos.cash,
     shares: pos.qty,
@@ -65,51 +72,149 @@ export default function Analytics() {
     hasAnchor: !!pos.anchor_price,
   }));
 
-  // Generate timeline data for portfolio analysis
+  // Get historical data for the selected position (if any)
+  const earliestPositionDate = useMemo(() => {
+    if (filteredPositions.length === 0) return null;
+
+    // Find the earliest position creation date
+    const dates = filteredPositions
+      .map((pos) => (pos.created_at ? new Date(pos.created_at) : null))
+      .filter(Boolean)
+      .sort((a, b) => a!.getTime() - b!.getTime());
+
+    return dates.length > 0 ? dates[0] : null;
+  }, [filteredPositions]);
+
+  const startDate = earliestPositionDate
+    ? earliestPositionDate.toISOString().split('T')[0]
+    : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]; // 30 days ago as fallback
+
+  const endDate = new Date().toISOString().split('T')[0];
+
+  // Get historical data for the first position's ticker (if any)
+  const firstPosition = filteredPositions[0];
+  const { data: historicalData } = useHistoricalData(
+    firstPosition?.ticker || 'AAPL',
+    startDate,
+    endDate,
+    false, // Include after hours
+  );
+
+  // Generate timeline data using real historical data
   const timelineData = useMemo(() => {
-    const days = 30; // Last 30 days
+    if (!historicalData?.price_data || historicalData.price_data.length === 0) {
+      // Fallback to current values if no historical data
+      return [
+        {
+          date: new Date().toISOString().split('T')[0],
+          portfolioValue: Math.round(totalValue),
+          assetValue: Math.round(totalValue - totalCash),
+          cashValue: Math.round(totalCash),
+          stockValue: Math.round(totalValue - totalCash),
+          cashPercentage: Math.round((totalCash / totalValue) * 100 * 10) / 10,
+          stockPercentage: Math.round(((totalValue - totalCash) / totalValue) * 100 * 10) / 10,
+          day: 1,
+        },
+      ];
+    }
+
     const data = [];
+    const priceData = historicalData.price_data;
 
-    for (let i = days; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
+    // Group price data by date
+    const dailyPrices = priceData.reduce((acc, point) => {
+      const date = point.timestamp.split('T')[0];
+      if (!acc[date]) {
+        acc[date] = [];
+      }
+      acc[date].push(point);
+      return acc;
+    }, {} as Record<string, typeof priceData>);
 
-      // Simulate portfolio value changes (in real app, this would come from historical data)
-      const baseValue = totalValue;
-      const volatility = 0.02; // 2% daily volatility
-      const randomChange = (Math.random() - 0.5) * volatility;
-      const portfolioValue = baseValue * (1 + (randomChange * (days - i)) / days);
+    // Calculate portfolio value for each day
+    let dayCount = 0;
+    for (const [date, dayPrices] of Object.entries(dailyPrices)) {
+      dayCount++;
 
-      // Simulate asset value changes
-      const assetValue = positions.reduce((sum, pos) => {
+      // Use the last price of the day
+      const lastPrice = dayPrices[dayPrices.length - 1].price;
+
+      // Calculate asset value based on current positions and historical price
+      const assetValue = filteredPositions.reduce((sum, pos) => {
         if (pos.anchor_price) {
-          const assetChange = (Math.random() - 0.5) * 0.03; // 3% daily asset volatility
-          const currentPrice = pos.anchor_price * (1 + (assetChange * (days - i)) / days);
-          return sum + pos.qty * currentPrice;
+          // Calculate price change from anchor to historical price
+          const priceChange = (lastPrice - pos.anchor_price) / pos.anchor_price;
+          const currentValue = pos.qty * pos.anchor_price * (1 + priceChange);
+          return sum + currentValue;
         }
         return sum;
       }, 0);
 
+      // Portfolio value = asset value + cash
+      const portfolioValue = assetValue + totalCash;
+
       // Calculate allocation percentages
-      const totalCash = positions.reduce((sum, pos) => sum + pos.cash, 0);
-      const totalStockValue = portfolioValue - totalCash;
       const cashPercentage = (totalCash / portfolioValue) * 100;
-      const stockPercentage = (totalStockValue / portfolioValue) * 100;
+      const stockPercentage = (assetValue / portfolioValue) * 100;
 
       data.push({
-        date: date.toISOString().split('T')[0],
+        date,
         portfolioValue: Math.round(portfolioValue),
         assetValue: Math.round(assetValue),
         cashValue: Math.round(totalCash),
-        stockValue: Math.round(totalStockValue),
+        stockValue: Math.round(assetValue),
         cashPercentage: Math.round(cashPercentage * 10) / 10,
         stockPercentage: Math.round(stockPercentage * 10) / 10,
-        day: days - i + 1,
+        day: dayCount,
+        price: lastPrice, // Add price for trade triggers chart
       });
     }
 
     return data;
-  }, [totalValue, positions]);
+  }, [historicalData, totalValue, totalCash, filteredPositions]);
+
+  // Trade triggers data for overlay chart
+  const tradeTriggersData = useMemo(() => {
+    if (!events?.events || !timelineData.length) {
+      console.log('No events or timeline data:', {
+        events: events?.events?.length,
+        timelineData: timelineData.length,
+      });
+      return [];
+    }
+
+    // Filter for trade-related events
+    const tradeEvents = events.events.filter(
+      (event) =>
+        event.type === 'order_filled' ||
+        event.type === 'order_submitted' ||
+        event.type === 'threshold_crossed',
+    );
+
+    console.log('Trade events found:', tradeEvents.length);
+
+    // Map events to timeline data points
+    const result = tradeEvents.map((event) => {
+      const eventDate = new Date(event.timestamp).toISOString().split('T')[0];
+      const timelinePoint = timelineData.find((point) => point.date === eventDate);
+
+      return {
+        x: timelinePoint?.day || 0, // Day number for x-axis
+        y: timelinePoint?.price || 0, // Price for y-axis
+        date: eventDate,
+        timestamp: event.timestamp,
+        type: event.type,
+        price: timelinePoint?.price || 0,
+        portfolioValue: timelinePoint?.portfolioValue || 0,
+        side: event.data?.side || 'unknown',
+        qty: event.data?.qty || 0,
+        reasoning: event.data?.reasoning || '',
+      };
+    });
+
+    console.log('Trade triggers data:', result);
+    return result;
+  }, [events, timelineData]);
 
   // Portfolio performance comparison data
   const performanceData = useMemo(() => {
@@ -136,6 +241,29 @@ export default function Analytics() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
         <p className="text-gray-600">Performance metrics and trading insights</p>
+      </div>
+
+      {/* Simulation Analytics Notice */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="flex items-start">
+          <div className="flex-shrink-0">
+            <BarChart3 className="h-5 w-5 text-blue-400" />
+          </div>
+          <div className="ml-3">
+            <h3 className="text-sm font-medium text-blue-800">Simulation Analytics Available</h3>
+            <div className="mt-2 text-sm text-blue-700">
+              <p>
+                For detailed simulation performance analysis, risk metrics, and strategy comparison,
+                run a simulation and check the Analytics tab in the Simulation page.
+              </p>
+              <div className="mt-2">
+                <a href="/simulation" className="text-blue-600 hover:text-blue-800 font-medium">
+                  Go to Simulation Analytics →
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Position Selector */}
@@ -269,25 +397,76 @@ export default function Analytics() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Portfolio Value Over Time */}
           <div className="card">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Portfolio Value Over Time</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Portfolio Composition & Asset Performance
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Stack shows cash + asset value over time. Line shows asset performance as reference.
+            </p>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={timelineData}>
+                <ComposedChart data={performanceData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="day" tickFormatter={(value) => `Day ${value}`} />
-                  <YAxis tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
+                  <YAxis
+                    yAxisId="left"
+                    tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                  />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    tickFormatter={(value) => `${value}%`}
+                  />
                   <Tooltip
-                    formatter={(value) => [`$${value.toLocaleString()}`, 'Portfolio Value']}
+                    formatter={(value, name) => {
+                      if (
+                        name === 'cashValue' ||
+                        name === 'stockValue' ||
+                        name === 'portfolioValue'
+                      ) {
+                        return [
+                          `$${value.toLocaleString()}`,
+                          name === 'cashValue'
+                            ? 'Cash Value'
+                            : name === 'stockValue'
+                            ? 'Asset Value'
+                            : 'Total Portfolio',
+                        ];
+                      }
+                      return [`${value}%`, 'Asset Performance'];
+                    }}
                     labelFormatter={(label) => `Day ${label}`}
                   />
+                  <Legend />
                   <Area
+                    yAxisId="left"
                     type="monotone"
-                    dataKey="portfolioValue"
+                    dataKey="cashValue"
+                    stackId="1"
+                    stroke="#10b981"
+                    fill="#10b981"
+                    fillOpacity={0.6}
+                    name="Cash Value"
+                  />
+                  <Area
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey="stockValue"
+                    stackId="1"
                     stroke="#3b82f6"
                     fill="#3b82f6"
-                    fillOpacity={0.3}
+                    fillOpacity={0.6}
+                    name="Asset Value"
                   />
-                </AreaChart>
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="assetReturn"
+                    stroke="#f59e0b"
+                    strokeWidth={2}
+                    name="Asset Performance %"
+                  />
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           </div>
@@ -391,6 +570,88 @@ export default function Analytics() {
         </div>
       </div>
 
+      {/* Trade Triggers Over Asset Price */}
+      {timelineData.length > 0 && (
+        <div className="card">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            Trade Triggers Over Asset Price
+          </h3>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={timelineData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="day" tickFormatter={(value) => `Day ${value}`} />
+                <YAxis yAxisId="left" tickFormatter={(value) => `$${value.toFixed(2)}`} />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                />
+                <Tooltip
+                  formatter={(value, name) => {
+                    if (name === 'price') {
+                      return [`$${value.toFixed(2)}`, 'Asset Price'];
+                    }
+                    return [`$${value.toLocaleString()}`, 'Portfolio Value'];
+                  }}
+                  labelFormatter={(label) => `Day ${label}`}
+                />
+                <Legend />
+                <Line
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="price"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  name="Asset Price"
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="portfolioValue"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                  name="Portfolio Value"
+                />
+                {/* Trade trigger markers */}
+                <Scatter
+                  yAxisId="left"
+                  data={tradeTriggersData}
+                  fill={(entry) => (entry.side === 'buy' ? '#ef4444' : '#f59e0b')}
+                  name="Trade Triggers"
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-4 text-sm text-gray-600">
+            {tradeTriggersData.length > 0 ? (
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                  <span>Buy Triggers</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                  <span>Sell Triggers</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                  <span>Asset Price</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                  <span>Portfolio Value</span>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center text-gray-500">
+                No trade triggers found. Trade markers will appear here when trades are executed.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Position Breakdown */}
       <div className="card">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Position Breakdown</h3>
@@ -419,7 +680,7 @@ export default function Analytics() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {positions.map((position) => {
+              {filteredPositions.map((position) => {
                 const value = position.qty * (position.anchor_price || 0) + position.cash;
                 return (
                   <tr key={position.id}>
