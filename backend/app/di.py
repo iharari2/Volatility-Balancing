@@ -132,6 +132,7 @@ class _Container:
         self.trades.clear()
         self.events.clear()
         self.idempotency.clear()
+        self.portfolio_state.clear()
         # Note: dividend repos don't have clear() methods yet, but they're in-memory so they reset on restart
 
 

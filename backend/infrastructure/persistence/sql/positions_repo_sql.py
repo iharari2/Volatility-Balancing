@@ -20,6 +20,7 @@ def _to_entity(m: PositionModel) -> Position:
         ticker=m.ticker,
         qty=m.qty,
         cash=m.cash,
+        anchor_price=m.anchor_price,
         created_at=m.created_at,
         updated_at=m.updated_at,
         # Coalesce nullable policy columns to defaults
@@ -46,6 +47,7 @@ def _new_row_from_entity(p: Position) -> PositionModel:
         ticker=p.ticker,
         qty=p.qty,
         cash=p.cash,
+        anchor_price=p.anchor_price,
         created_at=p.created_at,
         updated_at=p.updated_at,
         op_min_qty=p.order_policy.min_qty,
@@ -99,6 +101,12 @@ class SQLPositionsRepo(PositionsRepo):
                 .limit(limit)
                 .all()
             )
+            return [_to_entity(r) for r in rows]
+
+    def list_all(self) -> List[Position]:
+        """List all positions without pagination."""
+        with self._sf() as s:
+            rows = s.query(PositionModel).order_by(PositionModel.created_at.desc()).all()
             return [_to_entity(r) for r in rows]
 
     # --- Writes ---

@@ -5,12 +5,66 @@ from __future__ import annotations
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
+import threading
 
 from domain.ports.market_data import MarketDataRepo
 from domain.ports.positions_repo import PositionsRepo
 from domain.ports.events_repo import EventsRepo
 from domain.entities.market_data import SimulationData
 from infrastructure.time.clock import Clock
+from infrastructure.cache.simulation_cache import simulation_cache
+
+
+@dataclass
+class SimulationProgress:
+    """Progress tracking for simulation."""
+
+    status: str  # "initializing", "fetching_data", "processing", "completed", "error"
+    progress: float  # 0.0 to 1.0
+    message: str
+    current_step: str
+    total_steps: int
+    completed_steps: int
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    error: Optional[str] = None
+
+
+class SimulationProgressTracker:
+    """Thread-safe progress tracker for simulations."""
+
+    def __init__(self):
+        self._progress: Dict[str, SimulationProgress] = {}
+        self._lock = threading.Lock()
+
+    def update_progress(self, simulation_id: str, progress: SimulationProgress):
+        """Update progress for a simulation."""
+        with self._lock:
+            self._progress[simulation_id] = progress
+
+    def get_progress(self, simulation_id: str) -> Optional[SimulationProgress]:
+        """Get current progress for a simulation."""
+        with self._lock:
+            return self._progress.get(simulation_id)
+
+    def clear_progress(self, simulation_id: str):
+        """Clear progress for a simulation."""
+        with self._lock:
+            self._progress.pop(simulation_id, None)
+
+
+# Global progress tracker
+_progress_tracker = SimulationProgressTracker()
+
+
+def get_simulation_progress(simulation_id: str) -> Optional[SimulationProgress]:
+    """Get progress for a simulation."""
+    return _progress_tracker.get_progress(simulation_id)
+
+
+def clear_simulation_progress(simulation_id: str):
+    """Clear progress for a simulation."""
+    _progress_tracker.clear_progress(simulation_id)
 
 
 @dataclass
@@ -50,6 +104,9 @@ class SimulationResult:
     # Market data for visualization
     price_data: List[Dict[str, Any]]
 
+    # Dividend analysis
+    dividend_analysis: Dict[str, Any]
+
 
 class SimulationUC:
     """Use case for running trading simulations and backtesting."""
@@ -76,14 +133,47 @@ class SimulationUC:
         include_after_hours: bool = False,
         initial_asset_value: Optional[float] = None,
         initial_asset_units: Optional[float] = None,
+        simulation_id: Optional[str] = None,
     ) -> SimulationResult:
         """Run a complete trading simulation."""
+
+        # Check cache first
+        config_key = {
+            "ticker": ticker,
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "initial_cash": initial_cash,
+            "initial_asset_value": initial_asset_value,
+            "initial_asset_units": initial_asset_units,
+            "position_config": position_config,
+            "include_after_hours": include_after_hours,
+        }
+
+        cached_result = simulation_cache.get(config_key)
+        if cached_result:
+            print(f"Cache hit for simulation {ticker} {start_date} to {end_date}")
+            return cached_result
+
+        # Initialize progress tracking
+        if simulation_id:
+            _progress_tracker.update_progress(
+                simulation_id,
+                SimulationProgress(
+                    status="initializing",
+                    progress=0.0,
+                    message="Initializing simulation...",
+                    current_step="setup",
+                    total_steps=5,
+                    completed_steps=0,
+                    start_time=datetime.now(timezone.utc),
+                ),
+            )
 
         # Default position configuration
         if position_config is None:
             position_config = {
                 "trigger_threshold_pct": 0.03,
-                "rebalance_ratio": 0.5,
+                "rebalance_ratio": 1.6667,
                 "commission_rate": 0.0001,
                 "min_notional": 100.0,
                 "allow_after_hours": True,  # Default to after hours ON
@@ -135,10 +225,38 @@ class SimulationUC:
             fetch_start = start_date - timedelta(hours=1)
             fetch_end = end_date + timedelta(hours=1)
 
+        # Update progress - fetching data
+        if simulation_id:
+            _progress_tracker.update_progress(
+                simulation_id,
+                SimulationProgress(
+                    status="fetching_data",
+                    progress=0.2,
+                    message=f"Fetching historical data for {ticker}...",
+                    current_step="data_fetch",
+                    total_steps=5,
+                    completed_steps=1,
+                    start_time=datetime.now(timezone.utc),
+                ),
+            )
+
         print(f"Fetching historical data for {ticker} from {fetch_start} to {fetch_end}")
         historical_data = self.market_data.fetch_historical_data(ticker, fetch_start, fetch_end)
 
         if not historical_data:
+            if simulation_id:
+                _progress_tracker.update_progress(
+                    simulation_id,
+                    SimulationProgress(
+                        status="error",
+                        progress=0.0,
+                        message=f"No price data available for {ticker} in date range",
+                        current_step="data_fetch",
+                        total_steps=5,
+                        completed_steps=1,
+                        error=f"No price data available for {ticker} in date range",
+                    ),
+                )
             raise ValueError(f"No price data available for {ticker} in date range")
 
         # Store the fetched data in market data storage for simulation
@@ -157,15 +275,60 @@ class SimulationUC:
         if not sim_data.price_data:
             raise ValueError(f"No price data available for {ticker} in date range")
 
+        # Update progress - processing simulation
+        if simulation_id:
+            _progress_tracker.update_progress(
+                simulation_id,
+                SimulationProgress(
+                    status="processing",
+                    progress=0.4,
+                    message="Running algorithm simulation...",
+                    current_step="algorithm_sim",
+                    total_steps=5,
+                    completed_steps=2,
+                    start_time=datetime.now(timezone.utc),
+                ),
+            )
+
         # Run algorithm simulation
         algo_result = self._simulate_algorithm(
             sim_data, initial_cash, position_config, initial_asset_value, initial_asset_units
         )
 
+        # Update progress - buy & hold simulation
+        if simulation_id:
+            _progress_tracker.update_progress(
+                simulation_id,
+                SimulationProgress(
+                    status="processing",
+                    progress=0.6,
+                    message="Running buy & hold simulation...",
+                    current_step="buy_hold_sim",
+                    total_steps=5,
+                    completed_steps=3,
+                    start_time=datetime.now(timezone.utc),
+                ),
+            )
+
         # Run buy & hold simulation
         buy_hold_result = self._simulate_buy_hold(
             sim_data, initial_cash, initial_asset_value, initial_asset_units
         )
+
+        # Update progress - finalizing results
+        if simulation_id:
+            _progress_tracker.update_progress(
+                simulation_id,
+                SimulationProgress(
+                    status="processing",
+                    progress=0.8,
+                    message="Calculating final results...",
+                    current_step="finalize",
+                    total_steps=5,
+                    completed_steps=4,
+                    start_time=datetime.now(timezone.utc),
+                ),
+            )
 
         # Calculate comparison metrics
         comparison_metrics = self._calculate_comparison_metrics(algo_result, buy_hold_result)
@@ -181,16 +344,42 @@ class SimulationUC:
             for p in sim_data.price_data
         ]
 
-        return SimulationResult(
+        # Update progress - completed
+        if simulation_id:
+            _progress_tracker.update_progress(
+                simulation_id,
+                SimulationProgress(
+                    status="completed",
+                    progress=1.0,
+                    message="Simulation completed successfully!",
+                    current_step="completed",
+                    total_steps=5,
+                    completed_steps=5,
+                    start_time=datetime.now(timezone.utc),
+                    end_time=datetime.now(timezone.utc),
+                ),
+            )
+
+        # Calculate dividend analysis
+        dividend_analysis = self._calculate_dividend_analysis(ticker, start_date, end_date)
+
+        result = SimulationResult(
             ticker=ticker,
             start_date=start_date,
             end_date=end_date,
             total_trading_days=sim_data.total_trading_days,
             price_data=price_data,
+            dividend_analysis=dividend_analysis,
             **algo_result,
             **buy_hold_result,
             **comparison_metrics,
         )
+
+        # Cache the result
+        simulation_cache.put(config_key, result)
+        print(f"Cached simulation result for {ticker} {start_date} to {end_date}")
+
+        return result
 
     def _simulate_algorithm(
         self,
@@ -594,3 +783,74 @@ class SimulationUC:
             "beta": beta,
             "information_ratio": information_ratio,
         }
+
+    def _calculate_dividend_analysis(
+        self, ticker: str, start_date: datetime, end_date: datetime
+    ) -> Dict[str, Any]:
+        """Calculate dividend analysis for the simulation period."""
+        try:
+            # Get dividend history for the period
+            from infrastructure.market.yfinance_dividend_adapter import YFinanceDividendAdapter
+
+            dividend_adapter = YFinanceDividendAdapter()
+            dividends = dividend_adapter.get_dividend_history(ticker, start_date, end_date)
+
+            if not dividends:
+                return {
+                    "total_dividends": 0,
+                    "dividend_yield": 0.0,
+                    "dividend_count": 0,
+                    "total_dividend_amount": 0.0,
+                    "dividends": [],
+                    "message": "No dividends found for this period",
+                }
+
+            # Calculate metrics
+            total_dividend_amount = sum(float(div.dps) for div in dividends)
+            dividend_count = len(dividends)
+
+            # Get average price for yield calculation
+            from infrastructure.market.yfinance_adapter import YFinanceAdapter
+
+            market_adapter = YFinanceAdapter()
+            price_data = market_adapter.get_historical_data(ticker, start_date, end_date)
+
+            avg_price = 0.0
+            if price_data and price_data.price_data:
+                prices = [float(p.price) for p in price_data.price_data]
+                avg_price = sum(prices) / len(prices) if prices else 0.0
+
+            dividend_yield = (total_dividend_amount / avg_price * 100) if avg_price > 0 else 0.0
+
+            # Format dividend data
+            dividend_list = []
+            for div in dividends:
+                dividend_list.append(
+                    {
+                        "ex_date": div.ex_date.isoformat(),
+                        "pay_date": div.pay_date.isoformat(),
+                        "dps": float(div.dps),
+                        "currency": div.currency,
+                        "withholding_tax_rate": div.withholding_tax_rate,
+                    }
+                )
+
+            return {
+                "total_dividends": total_dividend_amount,
+                "dividend_yield": dividend_yield,
+                "dividend_count": dividend_count,
+                "total_dividend_amount": total_dividend_amount,
+                "dividends": dividend_list,
+                "message": f"Found {dividend_count} dividend(s) totaling ${total_dividend_amount:.4f} per share",
+            }
+
+        except Exception as e:
+            print(f"Error calculating dividend analysis: {e}")
+            return {
+                "total_dividends": 0,
+                "dividend_yield": 0.0,
+                "dividend_count": 0,
+                "total_dividend_amount": 0.0,
+                "dividends": [],
+                "message": f"Error calculating dividends: {str(e)}",
+            }

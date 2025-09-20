@@ -292,7 +292,12 @@ export default function SimulationAnalytics({ data, isLoading }: SimulationAnaly
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Simulation Analytics</h2>
-          <p className="text-gray-600">Performance analysis and insights from your simulation</p>
+          <p className="text-gray-600">
+            Performance analysis for{' '}
+            <span className="font-semibold text-blue-600">
+              {data?.simulationResult?.ticker || 'Unknown Asset'}
+            </span>
+          </p>
         </div>
         <div className="flex items-center space-x-2 text-sm text-gray-500">
           <Calendar className="w-4 h-4" />
@@ -369,7 +374,9 @@ export default function SimulationAnalytics({ data, isLoading }: SimulationAnaly
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Portfolio Value Over Time */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Portfolio Value Over Time</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            Portfolio Value Over Time ({data?.simulationResult?.ticker || 'Asset'})
+          </h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={analytics.dailyMetrics}>
@@ -418,7 +425,7 @@ export default function SimulationAnalytics({ data, isLoading }: SimulationAnaly
         {/* Trade Triggers Over Asset Price */}
         <div className="card">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Trade Triggers Over Asset Price
+            Trade Triggers Over {data?.simulationResult?.ticker || 'Asset'} Price
           </h3>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
@@ -447,7 +454,7 @@ export default function SimulationAnalytics({ data, isLoading }: SimulationAnaly
                   dataKey="price"
                   stroke="#3b82f6"
                   strokeWidth={2}
-                  name="Asset Price"
+                  name={`${data?.simulationResult?.ticker || 'Asset'} Price`}
                 />
                 <Line
                   yAxisId="right"
@@ -504,7 +511,7 @@ export default function SimulationAnalytics({ data, isLoading }: SimulationAnaly
                 </div>
                 <div className="flex items-center space-x-2">
                   <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                  <span>Asset Price</span>
+                  <span>{data?.simulationResult?.ticker || 'Asset'} Price</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <div className="w-3 h-3 bg-green-500 rounded-full"></div>

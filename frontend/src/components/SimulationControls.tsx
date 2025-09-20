@@ -6,6 +6,8 @@ export interface SimulationConfig {
   startDate: string;
   endDate: string;
   initialCash: number;
+  initialAssetValue: number;
+  initialAssetUnits: number;
   triggerThresholdPct: number;
   rebalanceRatio: number;
   commissionRate: number;
@@ -243,6 +245,50 @@ export default function SimulationControls({
                 step="100"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="label">Initial Asset Value ($)</label>
+            <div className="relative">
+              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="number"
+                value={config.initialAssetValue || 0}
+                onChange={(e) => handleConfigChange('initialAssetValue', Number(e.target.value))}
+                className="input pl-10"
+                min="0"
+                step="100"
+                placeholder="Asset value in dollars"
+              />
+            </div>
+            <div className="flex items-center justify-between mt-1">
+              <p className="text-xs text-gray-500">
+                Default: 50% of initial cash ($
+                {Math.round(config.initialCash * 0.5).toLocaleString()})
+              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  handleConfigChange('initialAssetValue', Math.round(config.initialCash * 0.5))
+                }
+                className="text-xs text-blue-600 hover:text-blue-800 underline"
+              >
+                Reset to 50%
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="label">Initial Asset Units</label>
+            <input
+              type="number"
+              value={config.initialAssetUnits || 0}
+              onChange={(e) => handleConfigChange('initialAssetUnits', Number(e.target.value))}
+              className="input"
+              min="0"
+              step="0.01"
+              placeholder="Number of shares/units"
+            />
           </div>
 
           <div>

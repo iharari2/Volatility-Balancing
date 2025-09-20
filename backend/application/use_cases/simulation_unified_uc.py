@@ -78,6 +78,9 @@ class SimulationResult:
     debug_retrieval_info: Optional[Dict[str, Any]] = None
     debug_info: Optional[List[Dict[str, Any]]] = None
 
+    # Dividend analysis
+    dividend_analysis: Optional[Dict[str, Any]] = None
+
 
 class SimulationUnifiedUC:
     """Use case for running trading simulations using the actual trading logic."""
@@ -109,6 +112,7 @@ class SimulationUnifiedUC:
         initial_asset_value: Optional[float] = None,
         initial_asset_units: Optional[float] = None,
         progress_callback: Optional[Callable[[str, float], None]] = None,
+        simulation_id: Optional[str] = None,
         timeout_seconds: Optional[int] = None,
     ) -> SimulationResult:
         """Run a complete trading simulation using actual trading use cases."""
@@ -119,13 +123,40 @@ class SimulationUnifiedUC:
                 progress_callback(message, percentage)
             print(f"[{percentage:5.1f}%] {message}")
 
+            # Update progress tracker if simulation_id is provided
+            if simulation_id:
+                from application.use_cases.simulation_uc import (
+                    _progress_tracker,
+                    SimulationProgress,
+                )
+                from datetime import datetime, timezone
+
+                status = "processing"
+                if percentage >= 100:
+                    status = "completed"
+                elif percentage <= 0:
+                    status = "initializing"
+
+                _progress_tracker.update_progress(
+                    simulation_id,
+                    SimulationProgress(
+                        status=status,
+                        progress=percentage / 100.0,
+                        message=message,
+                        current_step="simulation",
+                        total_steps=5,
+                        completed_steps=int(percentage / 20),
+                        start_time=datetime.now(timezone.utc),
+                    ),
+                )
+
         report_progress("Starting simulation...", 0.0)
 
         # Default position configuration
         if position_config is None:
             position_config = {
                 "trigger_threshold_pct": 0.03,
-                "rebalance_ratio": 0.5,
+                "rebalance_ratio": 1.6667,
                 "commission_rate": 0.0001,
                 "min_notional": 100.0,
                 "allow_after_hours": True,  # Default to after hours ON
@@ -289,6 +320,11 @@ class SimulationUnifiedUC:
 
         report_progress("Simulation completed successfully!", 100.0)
 
+        # Calculate dividend analysis
+        dividend_analysis = self._calculate_dividend_analysis(
+            ticker, start_date, end_date, sim_data, algo_result
+        )
+
         return SimulationResult(
             ticker=ticker,
             start_date=start_date,
@@ -306,6 +342,7 @@ class SimulationUnifiedUC:
             alpha=alpha,
             beta=beta,
             information_ratio=information_ratio,
+            dividend_analysis=dividend_analysis,
         )
 
     def _simulate_algorithm_unified(
@@ -389,7 +426,9 @@ class SimulationUnifiedUC:
                 if first_price <= 0:
                     raise ValueError(f"Invalid first price: {first_price}")
                 initial_qty = initial_asset_value / first_price
-                initial_cash_after_asset = initial_cash - initial_asset_value
+                # Don't subtract asset value from cash - this represents the total portfolio value
+                # The cash represents the liquid portion, asset_value represents the invested portion
+                initial_cash_after_asset = initial_cash
         elif initial_asset_units is not None and initial_asset_units > 0:
             # Use specified number of units
             if sim_data.price_data:
@@ -398,7 +437,8 @@ class SimulationUnifiedUC:
                     raise ValueError(f"Invalid first price: {first_price}")
                 initial_qty = initial_asset_units
                 cost = initial_qty * first_price
-                initial_cash_after_asset = initial_cash - cost
+                # Don't subtract cost from cash - this represents the total portfolio value
+                initial_cash_after_asset = initial_cash
 
         position = Position(
             id=position_id,
@@ -852,3 +892,105 @@ class SimulationUnifiedUC:
             max_dd = max(max_dd, drawdown)
 
         return max_dd * 100  # Return as percentage
+
+    def _calculate_dividend_analysis(
+        self,
+        ticker: str,
+        start_date: datetime,
+        end_date: datetime,
+        sim_data: SimulationData = None,
+        algo_result: Dict[str, Any] = None,
+    ) -> Dict[str, Any]:
+        """Calculate dividend analysis for the simulation period."""
+        try:
+            # Get dividend history for the period
+            from infrastructure.market.yfinance_dividend_adapter import YFinanceDividendAdapter
+
+            dividend_adapter = YFinanceDividendAdapter()
+            dividends = dividend_adapter.get_dividend_history(ticker, start_date, end_date)
+
+            if not dividends:
+                return {
+                    "total_dividends": 0,
+                    "dividend_yield": 0.0,
+                    "dividend_count": 0,
+                    "total_dividend_amount": 0.0,
+                    "dividends": [],
+                    "message": "No dividends found for this period",
+                }
+
+            # Calculate metrics
+            total_dividend_amount = sum(float(div.dps) for div in dividends)
+            dividend_count = len(dividends)
+
+            # Calculate total dividends received for the position
+            total_dividends_received = 0.0
+            if sim_data and algo_result:
+                # Get the final position quantity from the algorithm result
+                final_qty = algo_result.get("final_qty", 0.0)
+                if final_qty > 0:
+                    # Calculate total dividends received based on shares held
+                    total_dividends_received = total_dividend_amount * final_qty
+
+                    # Apply withholding tax (25% default)
+                    withholding_tax_rate = 0.25
+                    net_dividends_received = total_dividends_received * (1 - withholding_tax_rate)
+                    withholding_tax_amount = total_dividends_received * withholding_tax_rate
+                else:
+                    net_dividends_received = 0.0
+                    withholding_tax_amount = 0.0
+            else:
+                net_dividends_received = 0.0
+                withholding_tax_amount = 0.0
+
+            # Get average price for yield calculation
+            from infrastructure.market.yfinance_adapter import YFinanceAdapter
+
+            market_adapter = YFinanceAdapter()
+            price_data = market_adapter.get_historical_data(ticker, start_date, end_date)
+
+            avg_price = 0.0
+            if price_data and price_data.price_data:
+                prices = [float(p.price) for p in price_data.price_data]
+                avg_price = sum(prices) / len(prices) if prices else 0.0
+
+            dividend_yield = (total_dividend_amount / avg_price * 100) if avg_price > 0 else 0.0
+
+            # Format dividend data
+            dividend_list = []
+            for div in dividends:
+                dividend_list.append(
+                    {
+                        "ex_date": div.ex_date.isoformat(),
+                        "pay_date": div.pay_date.isoformat(),
+                        "dps": float(div.dps),
+                        "currency": div.currency,
+                        "withholding_tax_rate": div.withholding_tax_rate,
+                    }
+                )
+
+            return {
+                "total_dividends": total_dividend_amount,
+                "dividend_yield": dividend_yield,
+                "dividend_count": dividend_count,
+                "total_dividend_amount": total_dividend_amount,
+                "total_dividends_received": total_dividends_received,
+                "net_dividends_received": net_dividends_received,
+                "withholding_tax_amount": withholding_tax_amount,
+                "dividends": dividend_list,
+                "message": f"Found {dividend_count} dividend(s) totaling ${total_dividend_amount:.4f} per share, ${net_dividends_received:.2f} net received",
+            }
+
+        except Exception as e:
+            print(f"Error calculating dividend analysis: {e}")
+            return {
+                "total_dividends": 0,
+                "dividend_yield": 0.0,
+                "dividend_count": 0,
+                "total_dividend_amount": 0.0,
+                "total_dividends_received": 0.0,
+                "net_dividends_received": 0.0,
+                "withholding_tax_amount": 0.0,
+                "dividends": [],
+                "message": f"Error calculating dividends: {str(e)}",
+            }

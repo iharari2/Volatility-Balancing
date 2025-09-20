@@ -1,6 +1,18 @@
 # =========================
 # backend/app/main.py
 # =========================
+import os
+
+# Set environment variables for SQL persistence if not already set
+if not os.getenv("APP_PERSISTENCE"):
+    os.environ["APP_PERSISTENCE"] = "sql"
+if not os.getenv("APP_EVENTS"):
+    os.environ["APP_EVENTS"] = "sql"
+if not os.getenv("APP_AUTO_CREATE"):
+    os.environ["APP_AUTO_CREATE"] = "true"
+if not os.getenv("SQL_URL"):
+    os.environ["SQL_URL"] = "sqlite:///./vb.sqlite"
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse

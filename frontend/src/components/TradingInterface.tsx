@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { Position, EvaluationResult } from '../types';
+import { Position } from '../types';
 import {
   useEvaluatePosition,
-  useCreateOrder,
   useAutoSizeOrder,
   useEvaluatePositionWithMarketData,
   useAutoSizeOrderWithMarketData,
@@ -18,7 +17,6 @@ import {
   AlertTriangle,
   CheckCircle,
   XCircle,
-  RefreshCw,
   Wifi,
   WifiOff,
 } from 'lucide-react';
@@ -29,11 +27,13 @@ interface TradingInterfaceProps {
 
 export default function TradingInterface({ position }: TradingInterfaceProps) {
   const [currentPrice, setCurrentPrice] = useState<number>(position.anchor_price || 150);
-  const [isAutoMode, setIsAutoMode] = useState(false);
   const [useMarketData, setUseMarketData] = useState(true);
 
+  // Check if position has anchor price
+  const hasAnchorPrice = position.anchor_price !== null && position.anchor_price !== undefined;
+
   // Market data integration
-  const { data: marketPrice, isLoading: marketPriceLoading } = useMarketPrice(position.ticker);
+  const { data: marketPrice } = useMarketPrice(position.ticker);
 
   // Evaluation with market data
   const { data: marketEvaluation, isLoading: isMarketEvaluating } =
@@ -116,6 +116,23 @@ export default function TradingInterface({ position }: TradingInterfaceProps) {
       {/* Market Data Status */}
       <MarketDataStatus ticker={position.ticker} showPrice={true} />
 
+      {/* Anchor Price Warning */}
+      {!hasAnchorPrice && (
+        <div className="card bg-yellow-50 border-yellow-200">
+          <div className="flex items-center space-x-3">
+            <AlertTriangle className="w-5 h-5 text-yellow-600" />
+            <div>
+              <h3 className="text-sm font-medium text-yellow-800">No Anchor Price Set</h3>
+              <p className="text-sm text-yellow-700">
+                This position doesn't have an anchor price set. Volatility trading requires an
+                anchor price to calculate triggers. The current price is set to ${currentPrice} for
+                demonstration purposes.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Trading Mode Toggle */}
       <div className="card">
         <div className="flex items-center justify-between">
@@ -195,7 +212,14 @@ export default function TradingInterface({ position }: TradingInterfaceProps) {
       )}
 
       {/* Evaluation Results */}
-      {activeEvaluation && (
+      {isActiveEvaluating ? (
+        <div className="card">
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-3 text-gray-600">Evaluating position...</span>
+          </div>
+        </div>
+      ) : activeEvaluation ? (
         <div className="card">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Evaluation Results</h3>
 
@@ -203,7 +227,9 @@ export default function TradingInterface({ position }: TradingInterfaceProps) {
             {/* Trigger Status */}
             <div className="space-y-4">
               <div className="flex items-center space-x-3">
-                <triggerStatus.icon className={`w-6 h-6 ${triggerStatus.color}`} />
+                {triggerStatus.icon && (
+                  <triggerStatus.icon className={`w-6 h-6 ${triggerStatus.color}`} />
+                )}
                 <div>
                   <h4 className="font-medium text-gray-900">Trigger Status</h4>
                   <p className={`text-sm ${triggerStatus.color}`}>{triggerStatus.message}</p>
@@ -213,27 +239,37 @@ export default function TradingInterface({ position }: TradingInterfaceProps) {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Current Price:</span>
-                  <span className="font-medium">${activeEvaluation.current_price.toFixed(2)}</span>
+                  <span className="font-medium">
+                    ${activeEvaluation?.current_price?.toFixed(2) || 'N/A'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Anchor Price:</span>
-                  <span className="font-medium">${activeEvaluation.anchor_price.toFixed(2)}</span>
+                  <span className="font-medium">
+                    ${activeEvaluation?.anchor_price?.toFixed(2) || 'N/A'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Price Change:</span>
                   <span
                     className={`font-medium ${
-                      activeEvaluation.current_price > activeEvaluation.anchor_price
+                      (activeEvaluation?.current_price ?? 0) > (activeEvaluation?.anchor_price ?? 0)
                         ? 'text-danger-600'
                         : 'text-success-600'
                     }`}
                   >
-                    {(
-                      ((activeEvaluation.current_price - activeEvaluation.anchor_price) /
-                        activeEvaluation.anchor_price) *
-                      100
-                    ).toFixed(2)}
-                    %
+                    {activeEvaluation?.current_price && activeEvaluation?.anchor_price ? (
+                      <>
+                        {(
+                          ((activeEvaluation.current_price - activeEvaluation.anchor_price) /
+                            activeEvaluation.anchor_price) *
+                          100
+                        ).toFixed(2)}
+                        %
+                      </>
+                    ) : (
+                      'N/A'
+                    )}
                   </span>
                 </div>
               </div>
@@ -338,10 +374,22 @@ export default function TradingInterface({ position }: TradingInterfaceProps) {
                     </button>
                   </div>
 
-                  <div className="text-xs text-gray-500">{activeEvaluation.reasoning}</div>
+                  <div className="text-xs text-gray-500">
+                    {activeEvaluation?.reasoning || 'No reasoning available'}
+                  </div>
                 </div>
               </div>
             )}
+        </div>
+      ) : (
+        <div className="card">
+          <div className="text-center py-8">
+            <AlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Evaluation Available</h3>
+            <p className="text-gray-500">
+              Unable to evaluate position. Please check your connection and try again.
+            </p>
+          </div>
         </div>
       )}
     </div>

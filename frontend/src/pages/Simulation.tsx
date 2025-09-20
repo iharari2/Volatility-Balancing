@@ -4,14 +4,19 @@ import TradingModeToggle, { TradingMode } from '../components/TradingModeToggle'
 import SimulationControls, { SimulationConfig } from '../components/SimulationControls';
 import SimulationResults, { SimulationResult } from '../components/SimulationResults';
 import SimulationAnalytics from '../components/SimulationAnalytics';
+import SimulationProgressBar from '../components/SimulationProgressBar';
 import { useConfiguration } from '../contexts/ConfigurationContext';
-import { BarChart3, Play, Settings } from 'lucide-react';
+import { portfolioStateApi } from '../lib/api';
+import { BarChart3, Play, Settings, Save, Download } from 'lucide-react';
 
 export default function Simulation() {
   const [mode, setMode] = useState<TradingMode>('simulation');
   const [activeTab, setActiveTab] = useState<'simulation' | 'analytics'>('simulation');
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
   const [isSimulationRunning, setIsSimulationRunning] = useState(false);
+  const [isSavingState, setIsSavingState] = useState(false);
+  const [simulationId, setSimulationId] = useState<string | null>(null);
+  const [showProgressBar, setShowProgressBar] = useState(false);
 
   const runSimulationMutation = useRunSimulation();
   const { configuration, updateConfiguration } = useConfiguration();
@@ -21,6 +26,8 @@ export default function Simulation() {
     startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 7 days ago
     endDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Yesterday
     initialCash: 10000,
+    initialAssetValue: 10000, // 50/50 split: equal cash and asset values
+    initialAssetUnits: 0,
     triggerThresholdPct: configuration.triggerThresholdPct,
     rebalanceRatio: configuration.rebalanceRatio,
     commissionRate: configuration.commissionRate,
@@ -48,9 +55,74 @@ export default function Simulation() {
     }));
   }, [configuration]);
 
+  // Auto-calculate asset value to maintain 50/50 split when cash changes
+  useEffect(() => {
+    setSimulationConfig((prev) => ({
+      ...prev,
+      initialAssetValue: prev.initialCash, // 50/50 split: equal cash and asset values
+    }));
+  }, [simulationConfig.initialCash]);
+
+  // Load saved portfolio state on component mount
+  useEffect(() => {
+    const loadSavedState = async () => {
+      try {
+        const savedState = await portfolioStateApi.getActivePortfolioState();
+        if (savedState) {
+          setSimulationConfig((prev) => ({
+            ...prev,
+            ticker: savedState.ticker,
+            initialCash: savedState.initial_cash,
+            initialAssetValue: savedState.initial_asset_value,
+            initialAssetUnits: savedState.initial_asset_units,
+          }));
+        }
+      } catch (error) {
+        console.log('No saved portfolio state found');
+      }
+    };
+    loadSavedState();
+  }, []);
+
+  // Update asset value when loading saved state (maintain 50/50 split if asset value is 0)
+  useEffect(() => {
+    if (simulationConfig.initialAssetValue === 0 && simulationConfig.initialCash > 0) {
+      setSimulationConfig((prev) => ({
+        ...prev,
+        initialAssetValue: prev.initialCash, // 50/50 split: equal cash and asset values
+      }));
+    }
+  }, [simulationConfig.initialCash, simulationConfig.initialAssetValue]);
+
+  const handleSavePortfolioState = async () => {
+    setIsSavingState(true);
+    try {
+      const stateName = `Portfolio ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`;
+      await portfolioStateApi.savePortfolioState({
+        name: stateName,
+        description: `Portfolio state saved on ${new Date().toLocaleString()}`,
+        initial_cash: simulationConfig.initialCash,
+        initial_asset_value: simulationConfig.initialAssetValue,
+        initial_asset_units: simulationConfig.initialAssetUnits,
+        current_cash: simulationConfig.initialCash, // In simulation, current = initial
+        current_asset_value: simulationConfig.initialAssetValue,
+        current_asset_units: simulationConfig.initialAssetUnits,
+        ticker: simulationConfig.ticker,
+      });
+      alert('Portfolio state saved successfully!');
+    } catch (error) {
+      console.error('Error saving portfolio state:', error);
+      alert('Error saving portfolio state. Please try again.');
+    } finally {
+      setIsSavingState(false);
+    }
+  };
+
   const handleRunSimulation = async () => {
     setIsSimulationRunning(true);
     setSimulationResult(null);
+    setSimulationId(null);
+    setShowProgressBar(true);
 
     try {
       // Validate dates before running simulation
@@ -75,11 +147,17 @@ export default function Simulation() {
 
       const result = await runSimulationMutation.mutateAsync(simulationConfig);
       setSimulationResult(result);
+
+      // Extract simulation ID from result if available
+      if (result.simulation_id) {
+        setSimulationId(result.simulation_id);
+      }
     } catch (error) {
       console.error('Simulation failed:', error);
       alert(`Simulation failed: ${error.message || 'Unknown error'}`);
     } finally {
       setIsSimulationRunning(false);
+      setShowProgressBar(false);
     }
   };
 
@@ -166,6 +244,25 @@ export default function Simulation() {
           {/* Mode-specific content */}
           {mode === 'simulation' ? (
             <div className="space-y-6">
+              {/* Portfolio State Management */}
+              <div className="card">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Portfolio State</h3>
+                  <button
+                    onClick={handleSavePortfolioState}
+                    disabled={isSavingState}
+                    className="btn btn-primary btn-sm"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {isSavingState ? 'Saving...' : 'Save State'}
+                  </button>
+                </div>
+                <p className="text-sm text-gray-600">
+                  Save your current portfolio configuration to restore it when you restart the
+                  system.
+                </p>
+              </div>
+
               {/* Simulation Controls */}
               <SimulationControls
                 config={simulationConfig}
@@ -174,6 +271,21 @@ export default function Simulation() {
                 onStopSimulation={handleStopSimulation}
                 isRunning={isSimulationRunning}
                 onSharedConfigChange={updateConfiguration}
+              />
+
+              {/* Simulation Progress Bar */}
+              <SimulationProgressBar
+                simulationId={simulationId}
+                show={showProgressBar}
+                onComplete={() => {
+                  console.log('Simulation completed!');
+                  setShowProgressBar(false);
+                }}
+                onError={(error) => {
+                  console.error('Simulation error:', error);
+                  alert(`Simulation error: ${error}`);
+                  setShowProgressBar(false);
+                }}
               />
 
               {/* Simulation Results */}

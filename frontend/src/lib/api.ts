@@ -141,6 +141,8 @@ export const simulationApi = {
       start_date: startDate,
       end_date: endDate,
       initial_cash: config.initialCash,
+      initial_asset_value: config.initialAssetValue,
+      initial_asset_units: config.initialAssetUnits,
       include_after_hours: config.allowAfterHours,
       position_config: {
         trigger_threshold_pct: config.triggerThresholdPct,
@@ -390,6 +392,97 @@ export const enhancedPositionsApi = {
 // Health API
 export const healthApi = {
   check: () => request<{ status: string; timestamp: string }>('/healthz'),
+};
+
+// Portfolio State API
+export const portfolioStateApi = {
+  savePortfolioState: (state: {
+    name: string;
+    description?: string;
+    initial_cash: number;
+    initial_asset_value: number;
+    initial_asset_units: number;
+    current_cash: number;
+    current_asset_value: number;
+    current_asset_units: number;
+    ticker: string;
+  }) =>
+    request<{
+      id: string;
+      name: string;
+      description?: string;
+      initial_cash: number;
+      initial_asset_value: number;
+      initial_asset_units: number;
+      current_cash: number;
+      current_asset_value: number;
+      current_asset_units: number;
+      ticker: string;
+      is_active: boolean;
+      created_at: string;
+      updated_at: string;
+    }>('/portfolio-state/save', {
+      method: 'POST',
+      body: JSON.stringify(state),
+    }),
+
+  getActivePortfolioState: () =>
+    request<{
+      id: string;
+      name: string;
+      description?: string;
+      initial_cash: number;
+      initial_asset_value: number;
+      initial_asset_units: number;
+      current_cash: number;
+      current_asset_value: number;
+      current_asset_units: number;
+      ticker: string;
+      is_active: boolean;
+      created_at: string;
+      updated_at: string;
+    } | null>('/portfolio-state/active'),
+
+  listPortfolioStates: (limit: number = 10, offset: number = 0) =>
+    request<
+      Array<{
+        id: string;
+        name: string;
+        description?: string;
+        initial_cash: number;
+        initial_asset_value: number;
+        initial_asset_units: number;
+        current_cash: number;
+        current_asset_value: number;
+        current_asset_units: number;
+        ticker: string;
+        is_active: boolean;
+        created_at: string;
+        updated_at: string;
+      }>
+    >(`/portfolio-state/list?limit=${limit}&offset=${offset}`),
+};
+
+// Simulation Progress API
+export const simulationProgressApi = {
+  getProgress: (simulationId: string) =>
+    request<{
+      simulation_id: string;
+      status: string;
+      progress: number;
+      message: string;
+      current_step: string;
+      total_steps: number;
+      completed_steps: number;
+      start_time?: string;
+      end_time?: string;
+      error?: string;
+    }>(`/simulation/progress/${simulationId}`),
+
+  clearProgress: (simulationId: string) =>
+    request<{ message: string }>(`/simulation/progress/${simulationId}`, {
+      method: 'DELETE',
+    }),
 };
 
 export { ApiError };

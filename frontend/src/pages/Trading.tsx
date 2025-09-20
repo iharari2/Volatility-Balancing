@@ -58,23 +58,31 @@ export default function Trading() {
               className="input"
             >
               <option value="">Select a position...</option>
-              {positions
-                .filter((p) => p.anchor_price) // Only show positions with anchor prices
-                .map((position) => (
-                  <option key={position.id} value={position.id}>
-                    {position.ticker} -{' '}
-                    {position.anchor_price ? `$${position.anchor_price.toFixed(2)}` : 'No anchor'}
-                  </option>
-                ))}
+              {positions.map((position) => (
+                <option key={position.id} value={position.id}>
+                  {position.ticker} -{' '}
+                  {position.anchor_price
+                    ? `$${position.anchor_price.toFixed(2)}`
+                    : 'No anchor price'}
+                </option>
+              ))}
             </select>
           </div>
         </div>
 
-        {positions.filter((p) => p.anchor_price).length === 0 && (
+        {positions.length === 0 && (
           <div className="mt-4 p-4 bg-warning-50 border border-warning-200 rounded-lg">
             <p className="text-warning-800 text-sm">
-              No positions with anchor prices found. Create a position and set an anchor price to
-              start trading.
+              No positions found. Create a position to start trading.
+            </p>
+          </div>
+        )}
+
+        {positions.length > 0 && positions.filter((p) => p.anchor_price).length === 0 && (
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-blue-800 text-sm">
+              Positions found but none have anchor prices set. Select a position and set an anchor
+              price to enable volatility trading.
             </p>
           </div>
         )}

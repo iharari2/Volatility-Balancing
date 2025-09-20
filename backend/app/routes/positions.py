@@ -13,6 +13,8 @@ from dataclasses import asdict
 from domain.value_objects.order_policy import OrderPolicy
 from domain.value_objects.types import ActionBelowMin
 from application.use_cases.evaluate_position_uc import EvaluatePositionUC
+from application.use_cases.simulation_uc import get_simulation_progress, clear_simulation_progress
+from infrastructure.cache.simulation_cache import simulation_cache
 
 router = APIRouter(prefix="/v1")
 
@@ -25,7 +27,7 @@ class OrderPolicyIn(BaseModel):
     action_below_min: str = "hold"  # "hold" | "reject" | "clip"
     # Volatility trading parameters
     trigger_threshold_pct: float = 0.03
-    rebalance_ratio: float = 0.5  # Updated to match simulation default
+    rebalance_ratio: float = 1.6667  # Updated to match simulation default (5/3 ratio)
     commission_rate: float = 0.0001
     # Market hours configuration
     allow_after_hours: bool = True  # Default to after hours ON
@@ -90,6 +92,8 @@ def create_position(payload: CreatePositionRequest) -> CreatePositionResponse:
 
         # Check if position with same ticker already exists
         existing_positions = pos_repo.list_all()
+        if existing_positions is None:
+            existing_positions = []
         print(f"Found {len(existing_positions)} existing positions")
         existing_pos = next((p for p in existing_positions if p.ticker == payload.ticker), None)
 
@@ -105,8 +109,26 @@ def create_position(payload: CreatePositionRequest) -> CreatePositionResponse:
             # Create new position
             print("Creating new position")
             pos = pos_repo.create(ticker=payload.ticker, qty=payload.qty, cash=payload.cash)
+
+            # Auto-fetch current market price as anchor price if not provided
             if payload.anchor_price is not None:
                 pos.anchor_price = payload.anchor_price
+            else:
+                try:
+                    # Fetch current market price
+                    market_data = container.market_data
+                    price_data = market_data.get_price(payload.ticker)
+                    current_price = price_data.price if price_data else None
+                    if current_price:
+                        pos.anchor_price = current_price
+                        print(f"Set anchor price to current market price: {current_price}")
+                    else:
+                        print(f"Warning: Could not fetch current price for {payload.ticker}")
+                except Exception as e:
+                    print(f"Warning: Failed to fetch current price for {payload.ticker}: {e}")
+
+            # Save the position after setting anchor price
+            pos_repo.save(pos)
 
         if payload.order_policy:
             # Validate and convert order policy
@@ -256,6 +278,75 @@ def set_anchor_price(position_id: str, price: float) -> Dict[str, Any]:
     }
 
 
+@router.put("/positions/{position_id}/anchor-price")
+def set_anchor_price_endpoint(position_id: str, payload: Dict[str, float]) -> Dict[str, Any]:
+    """Set the anchor price for a specific position."""
+    try:
+        pos = container.positions.get(position_id)
+        if not pos:
+            raise HTTPException(404, detail="Position not found")
+
+        anchor_price = payload.get("anchor_price")
+        if anchor_price is None:
+            raise HTTPException(400, detail="anchor_price is required")
+
+        pos.set_anchor_price(anchor_price)
+        container.positions.save(pos)
+
+        return {
+            "message": f"Anchor price set to ${anchor_price}",
+            "position_id": position_id,
+            "ticker": pos.ticker,
+            "anchor_price": anchor_price,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, detail=f"Error setting anchor price: {str(e)}")
+
+
+@router.post("/positions/update-anchor-prices")
+def update_all_anchor_prices() -> Dict[str, Any]:
+    """Update anchor prices for all positions using current market data."""
+    try:
+        updated_positions = []
+        positions = container.positions.list_all()
+
+        if not positions:
+            return {"message": "No positions found", "updated_count": 0}
+
+        for pos in positions:
+            # Update anchor price for all positions (force update)
+            if True:  # Always update anchor prices
+                try:
+                    # Fetch current market price
+                    price_data = container.market_data.get_price(pos.ticker)
+                    current_price = price_data.price if price_data else None
+                    if current_price:
+                        pos.set_anchor_price(current_price)
+                        container.positions.save(pos)
+                        updated_positions.append(
+                            {
+                                "position_id": pos.id,
+                                "ticker": pos.ticker,
+                                "anchor_price": current_price,
+                            }
+                        )
+                        print(f"Updated anchor price for {pos.ticker}: {current_price}")
+                    else:
+                        print(f"Warning: Could not fetch current price for {pos.ticker}")
+                except Exception as e:
+                    print(f"Warning: Failed to fetch current price for {pos.ticker}: {e}")
+
+        return {
+            "message": f"Updated anchor prices for {len(updated_positions)} positions",
+            "updated_count": len(updated_positions),
+            "updated_positions": updated_positions,
+        }
+    except Exception as e:
+        raise HTTPException(500, detail=f"Error updating anchor prices: {str(e)}")
+
+
 @router.get("/positions/{position_id}/events")
 def list_events(position_id: str, limit: int = 100) -> Dict[str, Any]:
     events = container.events.list_for_position(position_id, limit=limit)
@@ -367,6 +458,10 @@ def run_simulation(request: SimulationRequest) -> Dict[str, Any]:
     """Run a trading simulation for backtesting and performance comparison."""
     try:
         from datetime import datetime
+        import uuid
+
+        # Generate simulation ID for progress tracking
+        simulation_id = str(uuid.uuid4())
 
         start_dt = datetime.fromisoformat(request.start_date.replace("Z", "+00:00"))
         end_dt = datetime.fromisoformat(request.end_date.replace("Z", "+00:00"))
@@ -394,11 +489,13 @@ def run_simulation(request: SimulationRequest) -> Dict[str, Any]:
             detailed_trigger_analysis=request.detailed_trigger_analysis,
             initial_asset_value=request.initial_asset_value,
             initial_asset_units=request.initial_asset_units,
+            simulation_id=simulation_id,
             timeout_seconds=request.timeout_seconds,
         )
 
         # Convert result to API format
         return {
+            "simulation_id": simulation_id,
             "ticker": result.ticker,
             "start_date": result.start_date.isoformat(),
             "end_date": result.end_date.isoformat(),
@@ -441,6 +538,8 @@ def run_simulation(request: SimulationRequest) -> Dict[str, Any]:
             "debug_info": getattr(result, "debug_info", []),
             "debug_storage_info": getattr(result, "debug_storage_info", {}),
             "debug_retrieval_info": getattr(result, "debug_retrieval_info", {}),
+            # Dividend analysis
+            "dividend_analysis": getattr(result, "dividend_analysis", {}),
         }
 
     except Exception as e:
@@ -575,6 +674,8 @@ def run_simulation_with_preset(
             "debug_info": getattr(result, "debug_info", []),
             "debug_storage_info": getattr(result, "debug_storage_info", {}),
             "debug_retrieval_info": getattr(result, "debug_retrieval_info", {}),
+            # Dividend analysis
+            "dividend_analysis": getattr(result, "dividend_analysis", {}),
         }
 
     except ValueError:
@@ -777,3 +878,70 @@ def list_portfolio_states(limit: int = 10, offset: int = 0) -> List[PortfolioSta
         ]
     except Exception as e:
         raise HTTPException(500, detail=f"Error listing portfolio states: {str(e)}")
+
+
+@router.get("/simulation/progress/{simulation_id}")
+async def get_simulation_progress_endpoint(simulation_id: str):
+    """Get progress for a simulation."""
+    try:
+        progress = get_simulation_progress(simulation_id)
+        if progress is None:
+            raise HTTPException(404, detail="Simulation not found or no progress available")
+
+        return {
+            "simulation_id": simulation_id,
+            "status": progress.status,
+            "progress": progress.progress,
+            "message": progress.message,
+            "current_step": progress.current_step,
+            "total_steps": progress.total_steps,
+            "completed_steps": progress.completed_steps,
+            "start_time": progress.start_time.isoformat() if progress.start_time else None,
+            "end_time": progress.end_time.isoformat() if progress.end_time else None,
+            "error": progress.error,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, detail=f"Error getting simulation progress: {str(e)}")
+
+
+@router.delete("/simulation/progress/{simulation_id}")
+async def clear_simulation_progress_endpoint(simulation_id: str):
+    """Clear progress for a simulation."""
+    try:
+        clear_simulation_progress(simulation_id)
+        return {"message": "Progress cleared successfully"}
+    except Exception as e:
+        raise HTTPException(500, detail=f"Error clearing simulation progress: {str(e)}")
+
+
+@router.get("/simulation/cache/stats")
+async def get_simulation_cache_stats():
+    """Get simulation cache statistics."""
+    try:
+        stats = simulation_cache.get_stats()
+        return stats
+    except Exception as e:
+        raise HTTPException(500, detail=f"Error getting cache stats: {str(e)}")
+
+
+@router.delete("/simulation/cache/clear")
+async def clear_simulation_cache():
+    """Clear all cached simulation results."""
+    try:
+        simulation_cache.clear()
+        return {"message": "Simulation cache cleared successfully"}
+    except Exception as e:
+        raise HTTPException(500, detail=f"Error clearing simulation cache: {str(e)}")
+
+
+@router.post("/simulation/cache/cleanup")
+async def cleanup_simulation_cache():
+    """Remove expired entries from simulation cache."""
+    try:
+        simulation_cache.clear_expired()
+        stats = simulation_cache.get_stats()
+        return {"message": "Cache cleanup completed", "stats": stats}
+    except Exception as e:
+        raise HTTPException(500, detail=f"Error cleaning up simulation cache: {str(e)}")

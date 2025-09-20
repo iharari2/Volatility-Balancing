@@ -32,6 +32,7 @@ class PositionModel(Base):
     ticker: Mapped[str] = mapped_column(String, nullable=False)
     qty: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     cash: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    anchor_price: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # order policy columns (all nullable)
     op_min_qty: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -141,8 +142,49 @@ class PortfolioStateModel(Base):
 
 
 def get_engine(url: str) -> Engine:
-    return create_engine(url, future=True)
+    # SQLite-specific configuration for better concurrency handling
+    if url.startswith("sqlite"):
+        return create_engine(
+            url,
+            future=True,
+            pool_pre_ping=True,
+            pool_size=1,  # Single connection for SQLite
+            max_overflow=0,  # No overflow connections
+            connect_args={
+                "check_same_thread": False,
+                "timeout": 30,
+                "isolation_level": None,  # Autocommit mode
+            },
+        )
+    else:
+        return create_engine(url, future=True)
 
 
 def create_all(engine: Engine) -> None:
-    Base.metadata.create_all(engine)
+    """Create all tables and indexes, ignoring existing ones."""
+    try:
+        Base.metadata.create_all(engine)
+    except Exception as e:
+        # If there are index conflicts, try to create tables without indexes first
+        if "already exists" in str(e).lower():
+            print(
+                f"Warning: Some database objects already exist. Attempting to create missing tables only..."
+            )
+            # Create tables without indexes first
+            for table in Base.metadata.tables.values():
+                try:
+                    table.create(engine, checkfirst=True)
+                except Exception as table_error:
+                    if "already exists" not in str(table_error).lower():
+                        print(f"Warning: Could not create table {table.name}: {table_error}")
+
+            # Then try to create indexes individually
+            for table in Base.metadata.tables.values():
+                for index in table.indexes:
+                    try:
+                        index.create(engine, checkfirst=True)
+                    except Exception as index_error:
+                        if "already exists" not in str(index_error).lower():
+                            print(f"Warning: Could not create index {index.name}: {index_error}")
+        else:
+            raise e

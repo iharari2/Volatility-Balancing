@@ -8,6 +8,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   LineChart,
+  ReferenceLine,
   Line,
   PieChart,
   Pie,
@@ -76,6 +77,25 @@ export interface SimulationResult {
     return: number;
     portfolio_value: number;
   }>;
+
+  // Dividend analysis
+  dividend_analysis: {
+    total_dividends: number;
+    dividend_yield: number;
+    dividend_count: number;
+    total_dividend_amount: number;
+    total_dividends_received: number;
+    net_dividends_received: number;
+    withholding_tax_amount: number;
+    dividends: Array<{
+      ex_date: string;
+      pay_date: string;
+      dps: number;
+      currency: string;
+      withholding_tax_rate: number;
+    }>;
+    message: string;
+  };
 }
 
 interface SimulationResultsProps {
@@ -163,12 +183,21 @@ export default function SimulationResults({
     const initialValue = result.daily_returns[0]?.portfolio_value || 10000;
     const buyHoldValue = initialValue * (1 + (day.return * index) / result.daily_returns.length);
 
+    // Check if there's a dividend event on this day
+    const dayDate = new Date(day.date);
+    const dividendOnThisDay = result.dividend_analysis?.dividends?.find((div) => {
+      const exDate = new Date(div.ex_date);
+      return exDate.toDateString() === dayDate.toDateString();
+    });
+
     return {
       date: new Date(day.date).toLocaleDateString(),
       algorithm: day.portfolio_value,
       buyHold: buyHoldValue,
       return: day.return * 100,
       day: index + 1,
+      hasDividend: !!dividendOnThisDay,
+      dividendAmount: dividendOnThisDay ? dividendOnThisDay.dps : 0,
     };
   });
 
@@ -573,6 +602,12 @@ export default function SimulationResults({
                       Price
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Asset $ Value
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Change Qty
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Commission
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -603,6 +638,12 @@ export default function SimulationResults({
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {formatCurrency(trade.price)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatCurrency(Math.abs(trade.qty) * trade.price)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatNumber(trade.qty, 2)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {formatCurrency(trade.commission)}
@@ -696,10 +737,212 @@ export default function SimulationResults({
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="date" />
                     <YAxis />
-                    <Tooltip formatter={(value) => [formatPercent(Number(value)), 'Return']} />
+                    <Tooltip
+                      formatter={(value, name, props) => {
+                        if (name === 'return') {
+                          return [formatPercent(Number(value)), 'Return'];
+                        }
+                        return [value, name];
+                      }}
+                      labelFormatter={(label, payload) => {
+                        const data = payload?.[0]?.payload;
+                        if (data?.hasDividend) {
+                          return `${label} (Dividend: $${data.dividendAmount.toFixed(4)})`;
+                        }
+                        return label;
+                      }}
+                    />
                     <Bar dataKey="return" fill="#3b82f6" />
+                    {/* Add dividend markers */}
+                    {chartData
+                      .slice(-30)
+                      .map((entry, index) =>
+                        entry.hasDividend ? (
+                          <ReferenceLine
+                            key={index}
+                            x={entry.date}
+                            stroke="#10b981"
+                            strokeWidth={2}
+                            strokeDasharray="5 5"
+                          />
+                        ) : null,
+                      )}
                   </BarChart>
                 </ResponsiveContainer>
+              </div>
+              {result.dividend_analysis?.dividend_count > 0 && (
+                <div className="mt-2 text-sm text-gray-600">
+                  <span className="inline-flex items-center">
+                    <div
+                      className="w-3 h-3 bg-green-500 mr-2"
+                      style={{ borderRadius: '50%' }}
+                    ></div>
+                    Green dashed lines indicate dividend ex-dates
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dividend Analysis */}
+      {result.dividend_analysis && (
+        <div className="card">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Dividend Analysis</h3>
+          <div className="space-y-4">
+            {/* Dividend Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="text-sm font-medium text-blue-600">Per Share</div>
+                <div className="text-2xl font-bold text-blue-900">
+                  ${result.dividend_analysis.total_dividend_amount.toFixed(4)}
+                </div>
+                <div className="text-xs text-blue-700">total per share</div>
+              </div>
+              <div className="bg-green-50 p-4 rounded-lg">
+                <div className="text-sm font-medium text-green-600">Net Received</div>
+                <div className="text-2xl font-bold text-green-900">
+                  ${result.dividend_analysis.net_dividends_received.toFixed(2)}
+                </div>
+                <div className="text-xs text-green-700">after tax (25%)</div>
+              </div>
+              <div className="bg-purple-50 p-4 rounded-lg">
+                <div className="text-sm font-medium text-purple-600">Dividend Yield</div>
+                <div className="text-2xl font-bold text-purple-900">
+                  {result.dividend_analysis.dividend_yield.toFixed(2)}%
+                </div>
+                <div className="text-xs text-purple-700">annualized</div>
+              </div>
+              <div className="bg-orange-50 p-4 rounded-lg">
+                <div className="text-sm font-medium text-orange-600">Count</div>
+                <div className="text-2xl font-bold text-orange-900">
+                  {result.dividend_analysis.dividend_count}
+                </div>
+                <div className="text-xs text-orange-700">payments</div>
+              </div>
+            </div>
+
+            {/* Additional Dividend Details */}
+            {result.dividend_analysis.dividend_count > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="text-sm font-medium text-gray-600">Gross Total</div>
+                  <div className="text-lg font-bold text-gray-900">
+                    ${result.dividend_analysis.total_dividends_received.toFixed(2)}
+                  </div>
+                  <div className="text-xs text-gray-700">before tax</div>
+                </div>
+                <div className="bg-red-50 p-4 rounded-lg">
+                  <div className="text-sm font-medium text-red-600">Tax Withheld</div>
+                  <div className="text-lg font-bold text-red-900">
+                    ${result.dividend_analysis.withholding_tax_amount.toFixed(2)}
+                  </div>
+                  <div className="text-xs text-red-700">25% withholding</div>
+                </div>
+                <div className="bg-indigo-50 p-4 rounded-lg">
+                  <div className="text-sm font-medium text-indigo-600">Cash Impact</div>
+                  <div className="text-lg font-bold text-indigo-900">
+                    +${result.dividend_analysis.net_dividends_received.toFixed(2)}
+                  </div>
+                  <div className="text-xs text-indigo-700">added to cash</div>
+                </div>
+              </div>
+            )}
+
+            {/* Dividend Details */}
+            {result.dividend_analysis.dividends.length > 0 ? (
+              <div>
+                <h4 className="text-md font-semibold text-gray-800 mb-3">Dividend History</h4>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Ex-Date
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Pay Date
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Amount
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Currency
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Tax Rate
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {result.dividend_analysis.dividends.map((dividend, index) => (
+                        <tr key={index}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {new Date(dividend.ex_date).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {new Date(dividend.pay_date).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            ${dividend.dps.toFixed(4)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {dividend.currency}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {(dividend.withholding_tax_rate * 100).toFixed(1)}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <div className="text-gray-500">
+                  <svg
+                    className="mx-auto h-12 w-12 text-gray-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
+                    />
+                  </svg>
+                  <h3 className="mt-2 text-sm font-medium text-gray-900">No Dividends</h3>
+                  <p className="mt-1 text-sm text-gray-500">{result.dividend_analysis.message}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Dividend Impact Message */}
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                      fillRule="evenodd"
+                      d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-yellow-800">Dividend Impact</h3>
+                  <div className="mt-2 text-sm text-yellow-700">
+                    <p>
+                      Dividends are not included in the simulation performance calculations. The
+                      algorithm focuses on price volatility trading and does not account for
+                      dividend payments or ex-dividend date adjustments to anchor prices.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
