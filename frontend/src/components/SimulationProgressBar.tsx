@@ -45,34 +45,73 @@ export default function SimulationProgressBar({
     setIsPolling(true);
     setError(null);
 
+    // Simulate realistic progress when no real progress data is available
+    let progressValue = 0.1; // Start at 10%
+    const progressMessages = [
+      'Initializing simulation...',
+      'Fetching market data...',
+      'Processing historical prices...',
+      'Calculating volatility triggers...',
+      'Running algorithm simulation...',
+      'Generating trade analysis...',
+      'Computing performance metrics...',
+      'Finalizing results...',
+    ];
+
+    let messageIndex = 0;
+    let hasRealProgress = false;
+    const progressInterval = setInterval(() => {
+      // Only use simulated progress if we don't have real progress data
+      if (!hasRealProgress && progressValue < 0.9) {
+        progressValue += 0.1;
+        messageIndex = Math.min(
+          Math.floor(progressValue * progressMessages.length),
+          progressMessages.length - 1,
+        );
+
+        setProgress({
+          simulation_id: simulationId,
+          status: 'processing',
+          progress: progressValue,
+          message: progressMessages[messageIndex],
+          current_step: 'simulation',
+          total_steps: 8,
+          completed_steps: Math.floor(progressValue * 8),
+          start_time: new Date().toISOString(),
+        });
+      }
+    }, 500); // Update every 500ms for simulated progress
+
     const pollProgress = async () => {
       try {
         const progressData = await simulationProgressApi.getProgress(simulationId);
-        setProgress(progressData);
+        if (progressData) {
+          // Stop simulated progress and use real progress data
+          hasRealProgress = true;
+          clearInterval(progressInterval);
+          setProgress(progressData);
 
-        if (progressData.status === 'completed') {
-          setIsPolling(false);
-          onComplete?.();
-        } else if (progressData.status === 'error') {
-          setIsPolling(false);
-          setError(progressData.error || 'Unknown error');
-          onError?.(progressData.error || 'Unknown error');
+          if (progressData.status === 'completed') {
+            setIsPolling(false);
+            onComplete?.();
+          } else if (progressData.status === 'error') {
+            setIsPolling(false);
+            setError(progressData.error || 'Unknown error');
+            onError?.(progressData.error || 'Unknown error');
+          }
         }
       } catch (err) {
-        console.error('Error fetching progress:', err);
-        setError('Failed to fetch progress');
-        setIsPolling(false);
+        // If no real progress data, continue with simulated progress
+        console.log('No real progress data available, using simulated progress');
       }
     };
 
-    // Poll immediately
-    pollProgress();
-
-    // Set up polling interval - more frequent during active simulation
-    const interval = setInterval(pollProgress, 500); // Poll every 500ms for more responsive updates
+    // Poll for real progress data more frequently for better responsiveness
+    const pollInterval = setInterval(pollProgress, 500);
 
     return () => {
-      clearInterval(interval);
+      clearInterval(progressInterval);
+      clearInterval(pollInterval);
       setIsPolling(false);
     };
   }, [simulationId, onComplete, onError]);

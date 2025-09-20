@@ -177,6 +177,12 @@ export default function SimulationResults({
     },
   ];
 
+  // Debug: Log dividend data
+  if (result.dividend_analysis?.dividends?.length > 0) {
+    console.log('Dividend data available:', result.dividend_analysis.dividends);
+    console.log('Daily returns dates:', result.daily_returns.map((d) => d.date).slice(0, 5));
+  }
+
   // Create meaningful portfolio performance chart data
   const chartData = result.daily_returns.map((day, index) => {
     // Calculate buy & hold performance (assuming we started with the same initial value)
@@ -187,7 +193,21 @@ export default function SimulationResults({
     const dayDate = new Date(day.date);
     const dividendOnThisDay = result.dividend_analysis?.dividends?.find((div) => {
       const exDate = new Date(div.ex_date);
-      return exDate.toDateString() === dayDate.toDateString();
+      // More flexible date matching - check if dates are within 1 day of each other
+      const timeDiff = Math.abs(dayDate.getTime() - exDate.getTime());
+      const daysDiff = timeDiff / (1000 * 60 * 60 * 24);
+      const isMatch = daysDiff <= 1; // Allow 1 day tolerance
+
+      // Debug logging
+      if (isMatch) {
+        console.log(
+          `Dividend match found: ${dayDate.toDateString()} matches ${exDate.toDateString()}, amount: $${
+            div.dps
+          }`,
+        );
+      }
+
+      return isMatch;
     });
 
     return {
