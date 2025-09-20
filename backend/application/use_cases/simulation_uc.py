@@ -74,6 +74,8 @@ class SimulationUC:
         initial_cash: float = 10000.0,
         position_config: Optional[Dict[str, Any]] = None,
         include_after_hours: bool = False,
+        initial_asset_value: Optional[float] = None,
+        initial_asset_units: Optional[float] = None,
     ) -> SimulationResult:
         """Run a complete trading simulation."""
 
@@ -156,10 +158,14 @@ class SimulationUC:
             raise ValueError(f"No price data available for {ticker} in date range")
 
         # Run algorithm simulation
-        algo_result = self._simulate_algorithm(sim_data, initial_cash, position_config)
+        algo_result = self._simulate_algorithm(
+            sim_data, initial_cash, position_config, initial_asset_value, initial_asset_units
+        )
 
         # Run buy & hold simulation
-        buy_hold_result = self._simulate_buy_hold(sim_data, initial_cash)
+        buy_hold_result = self._simulate_buy_hold(
+            sim_data, initial_cash, initial_asset_value, initial_asset_units
+        )
 
         # Calculate comparison metrics
         comparison_metrics = self._calculate_comparison_metrics(algo_result, buy_hold_result)
@@ -187,7 +193,12 @@ class SimulationUC:
         )
 
     def _simulate_algorithm(
-        self, sim_data: SimulationData, initial_cash: float, position_config: Dict[str, Any]
+        self,
+        sim_data: SimulationData,
+        initial_cash: float,
+        position_config: Dict[str, Any],
+        initial_asset_value: Optional[float] = None,
+        initial_asset_units: Optional[float] = None,
     ) -> Dict[str, Any]:
         """Simulate the volatility trading algorithm."""
 
@@ -196,6 +207,23 @@ class SimulationUC:
         shares = 0.0
         anchor_price = None
         total_commission = 0.0
+
+        # Handle initial asset allocation
+        if initial_asset_value is not None and initial_asset_value > 0:
+            # Use asset value to calculate shares at first price
+            if sim_data.price_data:
+                first_price = sim_data.price_data[0].price
+                shares = initial_asset_value / first_price
+                cash -= initial_asset_value
+                anchor_price = first_price
+        elif initial_asset_units is not None and initial_asset_units > 0:
+            # Use specified number of units
+            if sim_data.price_data:
+                first_price = sim_data.price_data[0].price
+                shares = initial_asset_units
+                cost = shares * first_price
+                cash -= cost
+                anchor_price = first_price
 
         trade_log = []
         daily_returns = []
@@ -323,7 +351,13 @@ class SimulationUC:
             "daily_returns": daily_returns,
         }
 
-    def _simulate_buy_hold(self, sim_data: SimulationData, initial_cash: float) -> Dict[str, Any]:
+    def _simulate_buy_hold(
+        self,
+        sim_data: SimulationData,
+        initial_cash: float,
+        initial_asset_value: Optional[float] = None,
+        initial_asset_units: Optional[float] = None,
+    ) -> Dict[str, Any]:
         """Simulate buy and hold strategy."""
 
         if not sim_data.price_data:
@@ -338,8 +372,26 @@ class SimulationUC:
         start_price = sim_data.price_data[0].price
         end_price = sim_data.price_data[-1].price
 
-        # Buy at start
-        shares = initial_cash / start_price
+        # Calculate initial shares based on asset allocation
+        if initial_asset_value is not None and initial_asset_value > 0:
+            # Use asset value to calculate shares
+            shares = initial_asset_value / start_price
+            remaining_cash = initial_cash - initial_asset_value
+            # Buy additional shares with remaining cash
+            additional_shares = remaining_cash / start_price
+            shares += additional_shares
+        elif initial_asset_units is not None and initial_asset_units > 0:
+            # Use specified number of units
+            shares = initial_asset_units
+            cost = shares * start_price
+            remaining_cash = initial_cash - cost
+            # Buy additional shares with remaining cash
+            additional_shares = remaining_cash / start_price
+            shares += additional_shares
+        else:
+            # Standard buy and hold - buy all at start
+            shares = initial_cash / start_price
+
         final_value = shares * end_price
         total_return = (final_value - initial_cash) / initial_cash
 
@@ -418,7 +470,9 @@ class SimulationUC:
         # Apply order sizing formula: ΔQ_raw = (P_anchor / P - 1) × r × ((A + C) / P)
         rebalance_ratio = config["rebalance_ratio"]
 
-        raw_qty = (anchor_price / current_price - 1) * rebalance_ratio * (total_value / current_price)
+        raw_qty = (
+            (anchor_price / current_price - 1) * rebalance_ratio * (total_value / current_price)
+        )
 
         # Apply side based on trigger direction
         if current_price < anchor_price * (1 - config["trigger_threshold_pct"]):

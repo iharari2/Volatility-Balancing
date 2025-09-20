@@ -15,6 +15,7 @@ from sqlalchemy import (
     Index,
     Text,
     CheckConstraint,
+    Boolean,
 )
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -110,6 +111,33 @@ class EventModel(Base):
     )
 
     __table_args__ = (Index("ix_events_position_ts", "position_id", "ts"),)
+
+
+class PortfolioStateModel(Base):
+    __tablename__ = "portfolio_states"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str] = mapped_column(String, nullable=True)
+    initial_cash: Mapped[float] = mapped_column(Float, nullable=False)
+    initial_asset_value: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    initial_asset_units: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    current_cash: Mapped[float] = mapped_column(Float, nullable=False)
+    current_asset_value: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    current_asset_units: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    ticker: Mapped[str] = mapped_column(String, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+
+    __table_args__ = (
+        Index("ix_portfolio_states_active", "is_active"),
+        Index("ix_portfolio_states_updated_at", "updated_at"),
+    )
 
 
 def get_engine(url: str) -> Engine:

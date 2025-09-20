@@ -22,7 +22,10 @@ from application.use_cases.execute_order_uc import ExecuteOrderUC
 from application.dto.orders import CreateOrderRequest, FillOrderRequest
 from infrastructure.persistence.memory.orders_repo_mem import InMemoryOrdersRepo
 from infrastructure.persistence.memory.idempotency_repo_mem import InMemoryIdempotencyRepo
+from infrastructure.persistence.memory.trades_repo_mem import InMemoryTradesRepo
 from infrastructure.time.clock import Clock
+from infrastructure.market.market_data_storage import MarketDataStorage
+from typing import Callable
 
 
 @dataclass
@@ -103,8 +106,20 @@ class SimulationUnifiedUC:
         include_after_hours: bool = False,
         intraday_interval_minutes: int = 30,
         detailed_trigger_analysis: bool = True,
+        initial_asset_value: Optional[float] = None,
+        initial_asset_units: Optional[float] = None,
+        progress_callback: Optional[Callable[[str, float], None]] = None,
+        timeout_seconds: Optional[int] = None,
     ) -> SimulationResult:
         """Run a complete trading simulation using actual trading use cases."""
+
+        # Progress tracking helper
+        def report_progress(message: str, percentage: float):
+            if progress_callback:
+                progress_callback(message, percentage)
+            print(f"[{percentage:5.1f}%] {message}")
+
+        report_progress("Starting simulation...", 0.0)
 
         # Default position configuration
         if position_config is None:
@@ -127,6 +142,7 @@ class SimulationUnifiedUC:
             end_date = end_date.replace(tzinfo=timezone.utc)
 
         # Validate date range
+        report_progress("Validating date range...", 5.0)
         now = datetime.now(timezone.utc)
         if start_date > now:
             raise ValueError(f"Start date {start_date} cannot be in the future")
@@ -146,16 +162,22 @@ class SimulationUnifiedUC:
         fetch_start = start_date - timedelta(days=1)  # Get one extra day for context
         fetch_end = end_date + timedelta(days=1)
 
+        report_progress(f"Fetching historical data for {ticker}...", 10.0)
         print(f"Fetching historical data for {ticker} from {fetch_start} to {fetch_end}")
         try:
-            historical_data = self.market_data.fetch_historical_data(ticker, fetch_start, fetch_end, intraday_interval_minutes)
+            historical_data = self.market_data.fetch_historical_data(
+                ticker, fetch_start, fetch_end, intraday_interval_minutes
+            )
         except Exception as e:
             raise Exception(f"Failed to fetch historical data for {ticker}: {str(e)}")
-        
+
         if not historical_data:
-            raise Exception(f"No historical data available for {ticker} from {fetch_start} to {fetch_end}")
+            raise Exception(
+                f"No historical data available for {ticker} from {fetch_start} to {fetch_end}"
+            )
 
         # Fetch dividend history if dividend market data is available
+        report_progress("Fetching dividend history...", 15.0)
         dividend_history = []
         if self.dividend_market_data:
             try:
@@ -169,8 +191,6 @@ class SimulationUnifiedUC:
                 dividend_history = []
 
         # Store the fetched data in market data storage for simulation
-        from infrastructure.market.market_data_storage import MarketDataStorage
-
         market_storage = MarketDataStorage()
         for price_data in historical_data:
             market_storage.store_price_data(ticker, price_data)
@@ -240,7 +260,15 @@ class SimulationUnifiedUC:
 
         # Run algorithm simulation using actual trading logic
         algo_result = self._simulate_algorithm_unified(
-            sim_data, initial_cash, position_config, dividend_history, market_storage
+            sim_data,
+            initial_cash,
+            position_config,
+            dividend_history,
+            market_storage,
+            detailed_trigger_analysis,
+            initial_asset_value,
+            initial_asset_units,
+            report_progress,
         )
 
         # Run buy & hold simulation
@@ -258,6 +286,8 @@ class SimulationUnifiedUC:
 
         # Extract trigger_analysis from algo_result to avoid duplicate parameter
         trigger_analysis = algo_result.pop("trigger_analysis", [])
+
+        report_progress("Simulation completed successfully!", 100.0)
 
         return SimulationResult(
             ticker=ticker,
@@ -285,14 +315,27 @@ class SimulationUnifiedUC:
         position_config: Dict[str, Any],
         dividend_history: List[Dividend] = None,
         market_storage: MarketDataStorage = None,
+        detailed_trigger_analysis: bool = True,
+        initial_asset_value: Optional[float] = None,
+        initial_asset_units: Optional[float] = None,
+        report_progress: Optional[Callable[[str, float], None]] = None,
     ) -> Dict[str, Any]:
         """Simulate the volatility balancing algorithm using the actual trading use cases."""
         from infrastructure.persistence.memory.positions_repo_mem import InMemoryPositionsRepo
         from infrastructure.persistence.memory.events_repo_mem import InMemoryEventsRepo
 
+        # Safe progress reporting wrapper
+        def safe_report_progress(message: str, percentage: float):
+            if report_progress:
+                try:
+                    report_progress(message, percentage)
+                except Exception:
+                    pass  # Ignore progress reporting errors
+
         # Create temporary repositories for simulation
         temp_positions = InMemoryPositionsRepo()
         temp_orders = InMemoryOrdersRepo()
+        temp_trades = InMemoryTradesRepo()
         temp_events = InMemoryEventsRepo()
         temp_idempotency = InMemoryIdempotencyRepo()
 
@@ -313,7 +356,11 @@ class SimulationUnifiedUC:
             clock=self.clock,
         )
         execute_uc = ExecuteOrderUC(
-            positions=temp_positions, orders=temp_orders, events=temp_events, clock=self.clock
+            positions=temp_positions,
+            orders=temp_orders,
+            trades=temp_trades,
+            events=temp_events,
+            clock=self.clock,
         )
 
         # Create a temporary position for simulation
@@ -331,11 +378,33 @@ class SimulationUnifiedUC:
             max_orders_per_day=100,  # Allow more orders for simulation
         )
 
+        # Calculate initial position based on asset allocation
+        initial_qty = 0.0
+        initial_cash_after_asset = initial_cash
+
+        if initial_asset_value is not None and initial_asset_value > 0:
+            # Use asset value to calculate shares at first price
+            if sim_data.price_data:
+                first_price = sim_data.price_data[0].price
+                if first_price <= 0:
+                    raise ValueError(f"Invalid first price: {first_price}")
+                initial_qty = initial_asset_value / first_price
+                initial_cash_after_asset = initial_cash - initial_asset_value
+        elif initial_asset_units is not None and initial_asset_units > 0:
+            # Use specified number of units
+            if sim_data.price_data:
+                first_price = sim_data.price_data[0].price
+                if first_price <= 0:
+                    raise ValueError(f"Invalid first price: {first_price}")
+                initial_qty = initial_asset_units
+                cost = initial_qty * first_price
+                initial_cash_after_asset = initial_cash - cost
+
         position = Position(
             id=position_id,
             ticker=sim_data.ticker,
-            qty=0.0,
-            cash=initial_cash,
+            qty=initial_qty,
+            cash=initial_cash_after_asset,
             order_policy=order_policy,
             guardrails=guardrails,
         )
@@ -351,10 +420,22 @@ class SimulationUnifiedUC:
         trigger_analysis = []  # Track all trigger evaluations
         debug_info = []  # Track debug information
 
+        safe_report_progress("Starting simulation loop...", 20.0)
+        total_data_points = len(sim_data.price_data)
+        processed_points = 0
+
         for price_data in sim_data.price_data:
             current_price = price_data.price
             current_time = price_data.timestamp
             current_day = current_time.date()
+
+            # Update progress every 100 data points or at the end
+            processed_points += 1
+            if processed_points % 100 == 0 or processed_points == total_data_points:
+                progress_pct = 20.0 + (processed_points / total_data_points) * 70.0  # 20-90% range
+                safe_report_progress(
+                    f"Processing data point {processed_points}/{total_data_points}...", progress_pct
+                )
 
             # Debug: Collect first few price data points
             if len(trigger_analysis) < 3:
@@ -390,6 +471,7 @@ class SimulationUnifiedUC:
                 execute_uc = ExecuteOrderUC(
                     positions=temp_positions,
                     orders=temp_orders,
+                    trades=temp_trades,
                     events=temp_events,
                     clock=self.clock,
                 )
@@ -466,7 +548,7 @@ class SimulationUnifiedUC:
                 "shares_after": position.qty,
                 "dividend": 0.0,
             }
-            
+
             # Add detailed market data only if detailed analysis is enabled
             if detailed_trigger_analysis:
                 # Debug: Check price_data attributes (only for first few iterations)
@@ -477,20 +559,26 @@ class SimulationUnifiedUC:
                         "volume_value": getattr(price_data, "volume", "NO_VOLUME_ATTR"),
                         "price_data_type": type(price_data).__name__,
                         "price_data_dict": (
-                            str(price_data.__dict__) if hasattr(price_data, "__dict__") else "NO_DICT"
+                            str(price_data.__dict__)
+                            if hasattr(price_data, "__dict__")
+                            else "NO_DICT"
                         ),
                     }
-                
-                trigger_info.update({
-                    "bid": current_price - current_price * 0.0005,  # Bid price with 0.05% spread
-                    "ask": current_price + current_price * 0.0005,  # Ask price with 0.05% spread
-                    "open": getattr(price_data, "open", current_price),  # Daily open price
-                    "high": getattr(price_data, "high", current_price),  # Daily high price
-                    "low": getattr(price_data, "low", current_price),  # Daily low price
-                    "close": getattr(price_data, "close", current_price),  # Daily close price
-                    "volume": (getattr(price_data, "volume", 0)),
-                    "debug_price_data": debug_price_data,
-                })
+
+                trigger_info.update(
+                    {
+                        "bid": current_price
+                        - current_price * 0.0005,  # Bid price with 0.05% spread
+                        "ask": current_price
+                        + current_price * 0.0005,  # Ask price with 0.05% spread
+                        "open": getattr(price_data, "open", current_price),  # Daily open price
+                        "high": getattr(price_data, "high", current_price),  # Daily high price
+                        "low": getattr(price_data, "low", current_price),  # Daily low price
+                        "close": getattr(price_data, "close", current_price),  # Daily close price
+                        "volume": (getattr(price_data, "volume", 0)),
+                        "debug_price_data": debug_price_data,
+                    }
+                )
 
             # Evaluate position using the actual trading logic
             try:
@@ -608,7 +696,10 @@ class SimulationUnifiedUC:
 
             # Calculate daily returns
             if len(portfolio_values) > 1:
-                daily_return = (portfolio_values[-1] / portfolio_values[-2]) - 1
+                if portfolio_values[-2] <= 0:
+                    daily_return = 0.0  # Avoid division by zero
+                else:
+                    daily_return = (portfolio_values[-1] / portfolio_values[-2]) - 1
                 daily_returns.append(
                     {
                         "date": current_time.date().isoformat(),
@@ -623,6 +714,8 @@ class SimulationUnifiedUC:
 
         # Calculate final metrics
         final_value = portfolio_values[-1] if portfolio_values else initial_cash
+        if initial_cash <= 0:
+            raise ValueError(f"Invalid initial cash: {initial_cash}")
         total_return = (final_value - initial_cash) / initial_cash
 
         # Debug logging
@@ -668,6 +761,10 @@ class SimulationUnifiedUC:
 
         # Buy at first price
         first_price = sim_data.price_data[0].price
+        if first_price <= 0:
+            raise ValueError(f"Invalid first price for buy-hold: {first_price}")
+        if initial_cash <= 0:
+            raise ValueError(f"Invalid initial cash for buy-hold: {initial_cash}")
         shares = initial_cash / first_price
         cash = 0.0
 
@@ -682,7 +779,10 @@ class SimulationUnifiedUC:
 
             # Calculate daily returns
             if len(portfolio_values) > 1:
-                daily_return = (portfolio_values[-1] / portfolio_values[-2]) - 1
+                if portfolio_values[-2] <= 0:
+                    daily_return = 0.0  # Avoid division by zero
+                else:
+                    daily_return = (portfolio_values[-1] / portfolio_values[-2]) - 1
                 daily_returns.append(
                     {
                         "date": price_data.timestamp.date().isoformat(),
@@ -693,6 +793,8 @@ class SimulationUnifiedUC:
 
         # Calculate final metrics
         final_value = portfolio_values[-1] if portfolio_values else initial_cash
+        if initial_cash <= 0:
+            raise ValueError(f"Invalid initial cash for buy-hold: {initial_cash}")
         total_return = (final_value - initial_cash) / initial_cash
         volatility = self._calculate_volatility([r["return"] for r in daily_returns])
         sharpe_ratio = self._calculate_sharpe_ratio(daily_returns)

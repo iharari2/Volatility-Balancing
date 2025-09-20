@@ -34,6 +34,7 @@ from infrastructure.persistence.sql.positions_repo_sql import SQLPositionsRepo
 from infrastructure.persistence.sql.orders_repo_sql import SQLOrdersRepo
 from infrastructure.persistence.sql.trades_repo_sql import SQLTradesRepo
 from infrastructure.persistence.sql.events_repo_sql import SQLEventsRepo
+from infrastructure.persistence.sql.portfolio_state_repo_sql import SQLPortfolioStateRepo
 
 
 def _truthy(envval: str | None) -> bool:
@@ -53,6 +54,7 @@ class _Container:
     dividend: DividendRepo
     dividend_receivable: DividendReceivableRepo
     dividend_market_data: DividendMarketDataRepo
+    portfolio_state: SQLPortfolioStateRepo
     clock: Clock
 
     def __init__(self) -> None:
@@ -111,6 +113,18 @@ class _Container:
                 self.idempotency = InMemoryIdempotencyRepo()
         else:
             self.idempotency = InMemoryIdempotencyRepo()
+
+        # --- Portfolio State (always SQL when available) ---
+        if main_engine:
+            Session = sessionmaker(bind=main_engine, expire_on_commit=False, autoflush=False)
+            self.portfolio_state = SQLPortfolioStateRepo(Session)
+        else:
+            # Fallback to in-memory for development
+            from infrastructure.persistence.memory.portfolio_state_repo_mem import (
+                InMemoryPortfolioStateRepo,
+            )
+
+            self.portfolio_state = InMemoryPortfolioStateRepo()
 
     def reset(self) -> None:
         self.positions.clear()

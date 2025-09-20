@@ -3,7 +3,7 @@
 # =========================
 # backend/app/routes/positions.py  (only the relevant bits)
 
-from typing import Optional, cast
+from typing import Optional, cast, List
 from typing import Any, Dict
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -353,10 +353,13 @@ class SimulationRequest(BaseModel):
     start_date: str
     end_date: str
     initial_cash: float = 10000.0
+    initial_asset_value: Optional[float] = None
+    initial_asset_units: Optional[float] = None
     position_config: Optional[Dict[str, Any]] = None
     include_after_hours: bool = False
     intraday_interval_minutes: int = 30  # Configurable intraday simulation interval
     detailed_trigger_analysis: bool = True  # Performance optimization for long simulations
+    timeout_seconds: Optional[int] = None  # Timeout for long-running simulations
 
 
 @router.post("/simulation/run")
@@ -389,6 +392,9 @@ def run_simulation(request: SimulationRequest) -> Dict[str, Any]:
             include_after_hours=request.include_after_hours,
             intraday_interval_minutes=request.intraday_interval_minutes,
             detailed_trigger_analysis=request.detailed_trigger_analysis,
+            initial_asset_value=request.initial_asset_value,
+            initial_asset_units=request.initial_asset_units,
+            timeout_seconds=request.timeout_seconds,
         )
 
         # Convert result to API format
@@ -446,10 +452,7 @@ def get_simulation_presets() -> Dict[str, Any]:
     """Get all available simulation presets."""
     try:
         presets = SimulationPresetManager.get_all_presets()
-        return {
-            "presets": presets,
-            "count": len(presets)
-        }
+        return {"presets": presets, "count": len(presets)}
     except Exception as e:
         raise HTTPException(500, detail=f"Error fetching presets: {str(e)}")
 
@@ -461,10 +464,10 @@ def get_simulation_preset(preset_id: str) -> Dict[str, Any]:
         # Convert string to enum
         preset_enum = SimulationPreset(preset_id)
         config = SimulationPresetManager.get_preset_config(preset_enum)
-        
+
         if not config:
             raise HTTPException(404, detail=f"Preset '{preset_id}' not found")
-        
+
         config["preset_id"] = preset_id
         return config
     except ValueError:
@@ -475,30 +478,26 @@ def get_simulation_preset(preset_id: str) -> Dict[str, Any]:
 
 @router.post("/simulation/run-with-preset")
 def run_simulation_with_preset(
-    ticker: str,
-    start_date: str,
-    end_date: str,
-    preset_id: str,
-    initial_cash: float = 10000.0
+    ticker: str, start_date: str, end_date: str, preset_id: str, initial_cash: float = 10000.0
 ) -> Dict[str, Any]:
     """Run a simulation using a predefined preset."""
     try:
         from datetime import datetime
-        
+
         # Get preset configuration
         preset_enum = SimulationPreset(preset_id)
         preset_config = SimulationPresetManager.get_preset_config(preset_enum)
-        
+
         if not preset_config:
             raise HTTPException(404, detail=f"Preset '{preset_id}' not found")
-        
+
         # Parse dates
         start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
         end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
-        
+
         # Create simulation use case
         from application.use_cases.simulation_unified_uc import SimulationUnifiedUC
-        
+
         sim_uc = SimulationUnifiedUC(
             market_data=container.market_data,
             positions=container.positions,
@@ -506,7 +505,7 @@ def run_simulation_with_preset(
             clock=container.clock,
             dividend_market_data=container.dividend_market_data,
         )
-        
+
         # Run simulation with preset configuration
         result = sim_uc.run_simulation(
             ticker=ticker,
@@ -518,7 +517,7 @@ def run_simulation_with_preset(
             intraday_interval_minutes=preset_config["intraday_interval_minutes"],
             detailed_trigger_analysis=preset_config["detailed_trigger_analysis"],
         )
-        
+
         # Convert result to API format
         return {
             "ticker": result.ticker,
@@ -528,7 +527,7 @@ def run_simulation_with_preset(
             "preset_used": {
                 "preset_id": preset_id,
                 "name": preset_config["name"],
-                "description": preset_config["description"]
+                "description": preset_config["description"],
             },
             "final_cash": result.final_cash,
             "final_shares": result.final_shares,
@@ -577,7 +576,7 @@ def run_simulation_with_preset(
             "debug_storage_info": getattr(result, "debug_storage_info", {}),
             "debug_retrieval_info": getattr(result, "debug_retrieval_info", {}),
         }
-        
+
     except ValueError:
         raise HTTPException(400, detail=f"Invalid preset ID: {preset_id}")
     except Exception as e:
@@ -656,3 +655,125 @@ def auto_size_order(
         },
         "evaluation": evaluation,
     }
+
+
+# Portfolio State Management
+class PortfolioStateRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    initial_cash: float
+    initial_asset_value: float
+    initial_asset_units: float
+    current_cash: float
+    current_asset_value: float
+    current_asset_units: float
+    ticker: str
+
+
+class PortfolioStateResponse(BaseModel):
+    id: str
+    name: str
+    description: Optional[str]
+    initial_cash: float
+    initial_asset_value: float
+    initial_asset_units: float
+    current_cash: float
+    current_asset_value: float
+    current_asset_units: float
+    ticker: str
+    is_active: bool
+    created_at: str
+    updated_at: str
+
+
+@router.post("/portfolio-state/save", response_model=PortfolioStateResponse)
+def save_portfolio_state(request: PortfolioStateRequest) -> PortfolioStateResponse:
+    """Save the current portfolio state."""
+    try:
+        # Deactivate all existing states
+        container.portfolio_state.deactivate_all()
+
+        # Create new active state
+        state = container.portfolio_state.create(
+            name=request.name,
+            description=request.description,
+            initial_cash=request.initial_cash,
+            initial_asset_value=request.initial_asset_value,
+            initial_asset_units=request.initial_asset_units,
+            current_cash=request.current_cash,
+            current_asset_value=request.current_asset_value,
+            current_asset_units=request.current_asset_units,
+            ticker=request.ticker,
+        )
+
+        return PortfolioStateResponse(
+            id=state.id,
+            name=state.name,
+            description=state.description,
+            initial_cash=state.initial_cash,
+            initial_asset_value=state.initial_asset_value,
+            initial_asset_units=state.initial_asset_units,
+            current_cash=state.current_cash,
+            current_asset_value=state.current_asset_value,
+            current_asset_units=state.current_asset_units,
+            ticker=state.ticker,
+            is_active=state.is_active,
+            created_at=state.created_at.isoformat(),
+            updated_at=state.updated_at.isoformat(),
+        )
+    except Exception as e:
+        raise HTTPException(500, detail=f"Error saving portfolio state: {str(e)}")
+
+
+@router.get("/portfolio-state/active", response_model=Optional[PortfolioStateResponse])
+def get_active_portfolio_state() -> Optional[PortfolioStateResponse]:
+    """Get the currently active portfolio state."""
+    try:
+        state = container.portfolio_state.get_active()
+        if not state:
+            return None
+
+        return PortfolioStateResponse(
+            id=state.id,
+            name=state.name,
+            description=state.description,
+            initial_cash=state.initial_cash,
+            initial_asset_value=state.initial_asset_value,
+            initial_asset_units=state.initial_asset_units,
+            current_cash=state.current_cash,
+            current_asset_value=state.current_asset_value,
+            current_asset_units=state.current_asset_units,
+            ticker=state.ticker,
+            is_active=state.is_active,
+            created_at=state.created_at.isoformat(),
+            updated_at=state.updated_at.isoformat(),
+        )
+    except Exception as e:
+        raise HTTPException(500, detail=f"Error loading portfolio state: {str(e)}")
+
+
+@router.get("/portfolio-state/list", response_model=List[PortfolioStateResponse])
+def list_portfolio_states(limit: int = 10, offset: int = 0) -> List[PortfolioStateResponse]:
+    """List all portfolio states."""
+    try:
+        states = container.portfolio_state.list_all(limit=limit, offset=offset)
+        return [
+            PortfolioStateResponse(
+                id=state.id,
+                name=state.name,
+                description=state.description,
+                initial_cash=state.initial_cash,
+                initial_asset_value=state.initial_asset_value,
+                initial_asset_units=state.initial_asset_units,
+                current_cash=state.current_cash,
+                current_asset_value=state.current_asset_value,
+                current_asset_units=state.current_asset_units,
+                ticker=state.ticker,
+                is_active=state.is_active,
+                created_at=state.created_at.isoformat(),
+                updated_at=state.updated_at.isoformat(),
+            )
+            for state in states
+        ]
+    except Exception as e:
+        raise HTTPException(500, detail=f"Error listing portfolio states: {str(e)}")
