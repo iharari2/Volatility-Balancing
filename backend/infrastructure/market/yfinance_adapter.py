@@ -4,6 +4,7 @@
 from __future__ import annotations
 import yfinance as yf
 import pandas as pd
+import time
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, List
 import pytz
@@ -11,6 +12,7 @@ import pytz
 from domain.ports.market_data import MarketDataRepo, MarketStatus
 from domain.entities.market_data import PriceData, PriceSource, SimulationData
 from infrastructure.market.market_data_storage import MarketDataStorage
+from infrastructure.market.data_validator import DataValidator
 
 
 class YFinanceAdapter(MarketDataRepo):
@@ -245,10 +247,21 @@ class YFinanceAdapter(MarketDataRepo):
         return self.storage.get_simulation_data(ticker, start_date, end_date, include_after_hours)
 
     def fetch_historical_data(
-        self, ticker: str, start_date: datetime, end_date: datetime
+        self,
+        ticker: str,
+        start_date: datetime,
+        end_date: datetime,
+        intraday_interval_minutes: int = 30,
     ) -> List[PriceData]:
         """Fetch historical data from yfinance and store it."""
         try:
+            # Validate input parameters
+            if not ticker or not isinstance(ticker, str):
+                raise ValueError(f"Invalid ticker: {ticker}")
+
+            if start_date >= end_date:
+                raise ValueError(f"Start date {start_date} must be before end date {end_date}")
+
             # Convert to yfinance format
             start_str = start_date.strftime("%Y-%m-%d")
             end_str = end_date.strftime("%Y-%m-%d")
@@ -259,15 +272,28 @@ class YFinanceAdapter(MarketDataRepo):
             if days_diff <= 7:
                 interval = "1m"  # 1-minute data for short periods (max 7 days)
             else:
-                # For longer periods, use daily data but create multiple intraday points
-                # This simulates intraday trading by creating multiple evaluation points per day
-                interval = "1d"  # Daily data for longer periods
+                # For longer periods, use chunked minute-by-minute data to maintain high resolution
+                return self._fetch_chunked_minute_data(
+                    ticker, start_date, end_date, intraday_interval_minutes
+                )
 
-            # Fetch data
-            stock = yf.Ticker(ticker)
-            hist = stock.history(start=start_str, end=end_str, interval=interval)
+            # Fetch data with retry logic
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    stock = yf.Ticker(ticker)
+                    hist = stock.history(start=start_str, end=end_str, interval=interval)
+                    break
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        raise Exception(
+                            f"Failed to fetch data after {max_retries} attempts: {str(e)}"
+                        )
+                    print(f"Attempt {attempt + 1} failed, retrying...: {str(e)}")
+                    time.sleep(1)  # Wait 1 second before retry
 
             if hist.empty:
+                print(f"Warning: No data returned for {ticker} from {start_str} to {end_str}")
                 return []
 
             # Convert to PriceData objects
@@ -318,7 +344,8 @@ class YFinanceAdapter(MarketDataRepo):
                     # Create configurable evaluation points per day (default: every 30 minutes)
                     # Market hours: 9:30 AM - 4:00 PM ET (6.5 hours = 390 minutes)
                     # Default: every 30 minutes = 13 points per day
-                    intraday_interval_minutes = 30  # Configurable: 15, 30, 60 minutes
+                    # Use the provided intraday_interval_minutes parameter
+                    # Use the provided intraday_interval_minutes parameter
                     intraday_times = []
 
                     # Generate times every N minutes from 9:30 AM to 4:00 PM
@@ -342,6 +369,10 @@ class YFinanceAdapter(MarketDataRepo):
                             hour=hour, minute=minute, second=0, microsecond=0
                         )
                         intraday_timestamp = intraday_timestamp.astimezone(self.tz_utc)
+
+                        # Skip if not during market hours (weekends, holidays, outside trading hours)
+                        if not self.storage.is_market_hours(intraday_timestamp):
+                            continue
 
                         # Simulate price movement within the day using OHLC data
                         # Use a simple linear interpolation between open and close
@@ -386,11 +417,131 @@ class YFinanceAdapter(MarketDataRepo):
                         price_data_list.append(price_data)
                         self.storage.store_price_data(ticker, price_data)
 
+            # Validate data quality
+            validator = DataValidator()
+            validation_issues = validator.validate_price_data_series(price_data_list)
+
+            if validation_issues:
+                quality_summary = validator.get_quality_summary(validation_issues)
+                print(f"Data quality validation for {ticker}:")
+                print(f"  Quality score: {quality_summary['quality_score']}/100")
+                print(
+                    f"  Issues: {quality_summary['errors']} errors, {quality_summary['warnings']} warnings, {quality_summary['info']} info"
+                )
+
+                # Log critical issues
+                for issue in validation_issues:
+                    if issue.severity == "error":
+                        print(f"  ERROR: {issue.message}")
+                    elif issue.severity == "warning":
+                        print(f"  WARNING: {issue.message}")
+
             return price_data_list
 
         except Exception as e:
             print(f"Error fetching historical data for {ticker}: {e}")
             return []
+
+    def _fetch_chunked_minute_data(
+        self,
+        ticker: str,
+        start_date: datetime,
+        end_date: datetime,
+        intraday_interval_minutes: int = 30,
+    ) -> List[PriceData]:
+        """Fetch minute-by-minute data in chunks for periods >7 days."""
+        print(f"Fetching chunked minute data for {ticker} from {start_date} to {end_date}")
+
+        all_price_data = []
+        current_start = start_date
+
+        # Process in 7-day chunks
+        chunk_days = 7
+        chunk_delta = timedelta(days=chunk_days)
+
+        while current_start < end_date:
+            current_end = min(current_start + chunk_delta, end_date)
+
+            print(f"Fetching chunk: {current_start} to {current_end}")
+
+            try:
+                # Fetch this chunk
+                chunk_data = self._fetch_single_chunk(
+                    ticker, current_start, current_end, intraday_interval_minutes
+                )
+                all_price_data.extend(chunk_data)
+
+                print(f"  Got {len(chunk_data)} data points")
+
+            except Exception as e:
+                print(f"  Error fetching chunk {current_start} to {current_end}: {e}")
+                # Continue with next chunk instead of failing completely
+
+            # Move to next chunk
+            current_start = current_end
+
+        print(f"Total chunked data points: {len(all_price_data)}")
+        return all_price_data
+
+    def _fetch_single_chunk(
+        self,
+        ticker: str,
+        start_date: datetime,
+        end_date: datetime,
+        intraday_interval_minutes: int = 30,
+    ) -> List[PriceData]:
+        """Fetch a single chunk of minute-by-minute data."""
+        start_str = start_date.strftime("%Y-%m-%d")
+        end_str = end_date.strftime("%Y-%m-%d")
+
+        # Fetch minute data for this chunk
+        stock = yf.Ticker(ticker)
+        hist = stock.history(start=start_str, end=end_str, interval="1m")
+
+        if hist.empty:
+            return []
+
+        price_data_list = []
+
+        # Convert to PriceData objects
+        for timestamp, row in hist.iterrows():
+            # Convert timestamp to UTC
+            if timestamp.tzinfo is None:
+                timestamp = timestamp.replace(tzinfo=self.tz_utc)
+            else:
+                timestamp = timestamp.astimezone(self.tz_utc)
+
+            # Check if this is during market hours
+            is_market_hours = self.storage.is_market_hours(timestamp)
+
+            # For minute data, use close as both bid and ask (no spread)
+            bid_price = row["Close"]
+            ask_price = row["Close"]
+            mid_quote = row["Close"]
+
+            price_data = PriceData(
+                ticker=ticker,
+                price=mid_quote,  # Use mid-quote for trading calculations
+                source=PriceSource.LAST_TRADE,
+                timestamp=timestamp,
+                bid=bid_price,
+                ask=ask_price,
+                volume=int(row["Volume"]) if not pd.isna(row["Volume"]) else None,
+                last_trade_price=row["Close"],
+                last_trade_time=timestamp,
+                is_market_hours=bool(is_market_hours),
+                is_fresh=True,  # Historical data is considered fresh
+                is_inline=True,  # Historical data is considered inline
+                # OHLC data for daily bars
+                open=row["Open"],
+                high=row["High"],
+                low=row["Low"],
+                close=row["Close"],
+            )
+            price_data_list.append(price_data)
+            self.storage.store_price_data(ticker, price_data)
+
+        return price_data_list
 
     def _get_next_trading_day(self, date) -> datetime:
         """Get the next trading day (Monday-Friday)."""

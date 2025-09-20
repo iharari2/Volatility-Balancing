@@ -75,6 +75,27 @@ class OrderModel(Base):
     )
 
 
+class TradeModel(Base):
+    __tablename__ = "trades"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    order_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    position_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    side: Mapped[str] = mapped_column(String, nullable=False)
+    qty: Mapped[float] = mapped_column(Float, nullable=False)
+    price: Mapped[float] = mapped_column(Float, nullable=False)
+    commission: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    executed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+
+    __table_args__ = (
+        Index("ix_trades_position_executed_at", "position_id", "executed_at"),
+        Index("ix_trades_order_id", "order_id"),
+        CheckConstraint("side IN ('BUY','SELL')", name="ck_trades_side"),
+    )
+
+
 class EventModel(Base):
     __tablename__ = "events"
 

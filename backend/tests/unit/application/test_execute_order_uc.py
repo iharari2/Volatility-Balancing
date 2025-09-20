@@ -26,7 +26,9 @@ def _submit_buy_order(pos_id: str, qty: float = 2.0):
 def test_fill_buy_increases_qty_and_decreases_cash():
     pos = container.positions.create(ticker="AAA", qty=0.0, cash=1000.0)
     oid = _submit_buy_order(pos.id, qty=2.0)
-    uc = ExecuteOrderUC(container.positions, container.orders, container.events, container.clock)
+    uc = ExecuteOrderUC(
+        container.positions, container.orders, container.trades, container.events, container.clock
+    )
     r = uc.execute(
         order_id=oid, request=FillOrderRequest(qty=2.0, price=50.0, commission=1.0)
     )  # 2.0 * 50.0 = 100.0 notional
@@ -48,7 +50,9 @@ def test_fill_sell_rejects_if_insufficient_qty():
         )
     )
 
-    uc = ExecuteOrderUC(container.positions, container.orders, container.events, container.clock)
+    uc = ExecuteOrderUC(
+        container.positions, container.orders, container.trades, container.events, container.clock
+    )
     with pytest.raises(GuardrailBreach):
         uc.execute(
             order_id="ord_sell", request=FillOrderRequest(qty=2.0, price=50.0)
@@ -59,7 +63,9 @@ def test_buy_commission_decreases_cash():
     pos = container.positions.create(ticker="AAA", qty=0.0, cash=1000.0)
     oid = container.orders.create(position_id=pos.id, side="BUY", qty=2.0, idempotency_key="buy-1")
 
-    uc = ExecuteOrderUC(container.positions, container.orders, container.events, container.clock)
+    uc = ExecuteOrderUC(
+        container.positions, container.orders, container.trades, container.events, container.clock
+    )
     uc.execute(
         order_id=oid, request=FillOrderRequest(qty=2.0, price=50.0, commission=1.0)
     )  # 2.0 * 50.0 = 100.0 notional
@@ -76,7 +82,9 @@ def test_sell_commission_reduces_proceeds():
         position_id=pos.id, side="SELL", qty=2.0, idempotency_key="sell-1"
     )
 
-    uc = ExecuteOrderUC(container.positions, container.orders, container.events, container.clock)
+    uc = ExecuteOrderUC(
+        container.positions, container.orders, container.trades, container.events, container.clock
+    )
     uc.execute(
         order_id=oid, request=FillOrderRequest(qty=2.0, price=50.0, commission=1.5)
     )  # 2.0 * 50.0 = 100.0 notional
@@ -90,7 +98,9 @@ def test_sell_commission_reduces_proceeds():
 def test_commission_defaults_to_zero():
     pos = container.positions.create(ticker="CCC", qty=0.0, cash=100.0)
     oid = container.orders.create(position_id=pos.id, side="BUY", qty=1.0, idempotency_key="buy-2")
-    uc = ExecuteOrderUC(container.positions, container.orders, container.events, container.clock)
+    uc = ExecuteOrderUC(
+        container.positions, container.orders, container.trades, container.events, container.clock
+    )
     uc.execute(
         order_id=oid, request=FillOrderRequest(qty=1.0, price=100.0)
     )  # 1.0 * 100.0 = 100.0 notional, no commission

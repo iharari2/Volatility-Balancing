@@ -5,6 +5,7 @@ import os
 
 from domain.ports.positions_repo import PositionsRepo
 from domain.ports.orders_repo import OrdersRepo
+from domain.ports.trades_repo import TradesRepo
 from domain.ports.events_repo import EventsRepo
 from domain.ports.idempotency_repo import IdempotencyRepo
 from domain.ports.market_data import MarketDataRepo
@@ -16,6 +17,7 @@ from infrastructure.time.clock import Clock
 # In-memory backends
 from infrastructure.persistence.memory.positions_repo_mem import InMemoryPositionsRepo
 from infrastructure.persistence.memory.orders_repo_mem import InMemoryOrdersRepo
+from infrastructure.persistence.memory.trades_repo_mem import InMemoryTradesRepo
 from infrastructure.persistence.memory.events_repo_mem import InMemoryEventsRepo
 from infrastructure.persistence.memory.idempotency_repo_mem import InMemoryIdempotencyRepo
 from infrastructure.persistence.memory.dividend_repo import (
@@ -30,6 +32,7 @@ from sqlalchemy.orm import sessionmaker
 from infrastructure.persistence.sql.models import get_engine, create_all
 from infrastructure.persistence.sql.positions_repo_sql import SQLPositionsRepo
 from infrastructure.persistence.sql.orders_repo_sql import SQLOrdersRepo
+from infrastructure.persistence.sql.trades_repo_sql import SQLTradesRepo
 from infrastructure.persistence.sql.events_repo_sql import SQLEventsRepo
 
 
@@ -43,6 +46,7 @@ def _truthy(envval: str | None) -> bool:
 class _Container:
     positions: PositionsRepo
     orders: OrdersRepo
+    trades: TradesRepo
     events: EventsRepo
     idempotency: IdempotencyRepo
     market_data: MarketDataRepo
@@ -67,7 +71,7 @@ class _Container:
 
         main_engine = None
 
-        # --- Positions & Orders backend ---
+        # --- Positions & Orders & Trades backend ---
         if persistence == "sql":
             main_engine = get_engine(sql_url)
             if auto_create:
@@ -75,9 +79,11 @@ class _Container:
             Session = sessionmaker(bind=main_engine, expire_on_commit=False, autoflush=False)
             self.positions = SQLPositionsRepo(Session)
             self.orders = SQLOrdersRepo(Session)
+            self.trades = SQLTradesRepo(Session)
         else:
             self.positions = InMemoryPositionsRepo()
             self.orders = InMemoryOrdersRepo()
+            self.trades = InMemoryTradesRepo()
 
         # --- Events backend (can be independent of positions/orders) ---
         if events_backend == "sql":
@@ -109,6 +115,7 @@ class _Container:
     def reset(self) -> None:
         self.positions.clear()
         self.orders.clear()
+        self.trades.clear()
         self.events.clear()
         self.idempotency.clear()
         # Note: dividend repos don't have clear() methods yet, but they're in-memory so they reset on restart

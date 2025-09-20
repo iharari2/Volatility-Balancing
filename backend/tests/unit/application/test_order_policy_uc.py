@@ -28,7 +28,10 @@ def test_fill_below_min_qty_hold(mocker):
 
     events = mocker.Mock()
     clock = mocker.Mock()
-    uc = ExecuteOrderUC(positions=positions, orders=orders, events=events, clock=clock)
+    trades = mocker.Mock()
+    uc = ExecuteOrderUC(
+        positions=positions, orders=orders, trades=trades, events=events, clock=clock
+    )
 
     # Pretend order exists
     order = Order(id="o1", position_id="pos1", side="BUY", qty=1.0, status="submitted")
@@ -49,7 +52,10 @@ def test_fill_below_min_qty_reject(mocker):
     )
     events = mocker.Mock()
     clock = mocker.Mock()
-    uc = ExecuteOrderUC(positions=positions, orders=orders, events=events, clock=clock)
+    trades = mocker.Mock()
+    uc = ExecuteOrderUC(
+        positions=positions, orders=orders, trades=trades, events=events, clock=clock
+    )
 
     resp = uc.execute(order_id="o1", request=FillOrderRequest(qty=1.0, price=10.0))
     assert resp.status == "rejected"

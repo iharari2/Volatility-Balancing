@@ -101,6 +101,8 @@ class SimulationUnifiedUC:
         initial_cash: float = 10000.0,
         position_config: Optional[Dict[str, Any]] = None,
         include_after_hours: bool = False,
+        intraday_interval_minutes: int = 30,
+        detailed_trigger_analysis: bool = True,
     ) -> SimulationResult:
         """Run a complete trading simulation using actual trading use cases."""
 
@@ -145,16 +147,26 @@ class SimulationUnifiedUC:
         fetch_end = end_date + timedelta(days=1)
 
         print(f"Fetching historical data for {ticker} from {fetch_start} to {fetch_end}")
-        historical_data = self.market_data.fetch_historical_data(ticker, fetch_start, fetch_end)
+        try:
+            historical_data = self.market_data.fetch_historical_data(ticker, fetch_start, fetch_end, intraday_interval_minutes)
+        except Exception as e:
+            raise Exception(f"Failed to fetch historical data for {ticker}: {str(e)}")
+        
+        if not historical_data:
+            raise Exception(f"No historical data available for {ticker} from {fetch_start} to {fetch_end}")
 
         # Fetch dividend history if dividend market data is available
         dividend_history = []
         if self.dividend_market_data:
-            print(f"Fetching dividend history for {ticker} from {fetch_start} to {fetch_end}")
-            dividend_history = self.dividend_market_data.get_dividend_history(
-                ticker, fetch_start, fetch_end
-            )
-            print(f"Found {len(dividend_history)} dividend events")
+            try:
+                print(f"Fetching dividend history for {ticker} from {fetch_start} to {fetch_end}")
+                dividend_history = self.dividend_market_data.get_dividend_history(
+                    ticker, fetch_start, fetch_end
+                )
+                print(f"Found {len(dividend_history)} dividend events")
+            except Exception as e:
+                print(f"Warning: Failed to fetch dividend history for {ticker}: {str(e)}")
+                dividend_history = []
 
         # Store the fetched data in market data storage for simulation
         from infrastructure.market.market_data_storage import MarketDataStorage
@@ -431,32 +443,12 @@ class SimulationUnifiedUC:
                         # Update position in repository
                         temp_positions.save(position)
 
-            # Track trigger analysis
-            # Debug: Check price_data attributes (only for first few iterations)
-            debug_price_data = {}
-            if len(trigger_analysis) < 3:
-                debug_price_data = {
-                    "has_volume": hasattr(price_data, "volume"),
-                    "volume_value": getattr(price_data, "volume", "NO_VOLUME_ATTR"),
-                    "price_data_type": type(price_data).__name__,
-                    "price_data_dict": (
-                        str(price_data.__dict__) if hasattr(price_data, "__dict__") else "NO_DICT"
-                    ),
-                }
-
+            # Track trigger analysis (optimized for performance)
             trigger_info = {
                 "timestamp": current_time.isoformat(),
                 "date": current_time.strftime("%Y-%m-%d"),
                 "time": current_time.strftime("%H:%M:%S"),
                 "price": current_price,  # Mid-quote used for trading
-                "bid": current_price - current_price * 0.0005,  # Bid price with 0.05% spread
-                "ask": current_price + current_price * 0.0005,  # Ask price with 0.05% spread
-                "open": getattr(price_data, "open", current_price),  # Daily open price
-                "high": getattr(price_data, "high", current_price),  # Daily high price
-                "low": getattr(price_data, "low", current_price),  # Daily low price
-                "close": getattr(price_data, "close", current_price),  # Daily close price
-                "volume": (getattr(price_data, "volume", 0)),
-                "debug_price_data": debug_price_data,
                 "anchor_price": position.anchor_price,
                 "price_change_pct": (
                     ((current_price / position.anchor_price) - 1) * 100
@@ -474,6 +466,31 @@ class SimulationUnifiedUC:
                 "shares_after": position.qty,
                 "dividend": 0.0,
             }
+            
+            # Add detailed market data only if detailed analysis is enabled
+            if detailed_trigger_analysis:
+                # Debug: Check price_data attributes (only for first few iterations)
+                debug_price_data = {}
+                if len(trigger_analysis) < 3:
+                    debug_price_data = {
+                        "has_volume": hasattr(price_data, "volume"),
+                        "volume_value": getattr(price_data, "volume", "NO_VOLUME_ATTR"),
+                        "price_data_type": type(price_data).__name__,
+                        "price_data_dict": (
+                            str(price_data.__dict__) if hasattr(price_data, "__dict__") else "NO_DICT"
+                        ),
+                    }
+                
+                trigger_info.update({
+                    "bid": current_price - current_price * 0.0005,  # Bid price with 0.05% spread
+                    "ask": current_price + current_price * 0.0005,  # Ask price with 0.05% spread
+                    "open": getattr(price_data, "open", current_price),  # Daily open price
+                    "high": getattr(price_data, "high", current_price),  # Daily high price
+                    "low": getattr(price_data, "low", current_price),  # Daily low price
+                    "close": getattr(price_data, "close", current_price),  # Daily close price
+                    "volume": (getattr(price_data, "volume", 0)),
+                    "debug_price_data": debug_price_data,
+                })
 
             # Evaluate position using the actual trading logic
             try:

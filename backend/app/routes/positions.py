@@ -7,6 +7,7 @@ from typing import Optional, cast
 from typing import Any, Dict
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
+from infrastructure.market.simulation_presets import SimulationPresetManager, SimulationPreset
 from app.di import container
 from dataclasses import asdict
 from domain.value_objects.order_policy import OrderPolicy
@@ -354,6 +355,8 @@ class SimulationRequest(BaseModel):
     initial_cash: float = 10000.0
     position_config: Optional[Dict[str, Any]] = None
     include_after_hours: bool = False
+    intraday_interval_minutes: int = 30  # Configurable intraday simulation interval
+    detailed_trigger_analysis: bool = True  # Performance optimization for long simulations
 
 
 @router.post("/simulation/run")
@@ -384,6 +387,8 @@ def run_simulation(request: SimulationRequest) -> Dict[str, Any]:
             initial_cash=request.initial_cash,
             position_config=request.position_config,
             include_after_hours=request.include_after_hours,
+            intraday_interval_minutes=request.intraday_interval_minutes,
+            detailed_trigger_analysis=request.detailed_trigger_analysis,
         )
 
         # Convert result to API format
@@ -434,6 +439,149 @@ def run_simulation(request: SimulationRequest) -> Dict[str, Any]:
 
     except Exception as e:
         raise HTTPException(400, detail=f"Error running simulation: {str(e)}")
+
+
+@router.get("/simulation/presets")
+def get_simulation_presets() -> Dict[str, Any]:
+    """Get all available simulation presets."""
+    try:
+        presets = SimulationPresetManager.get_all_presets()
+        return {
+            "presets": presets,
+            "count": len(presets)
+        }
+    except Exception as e:
+        raise HTTPException(500, detail=f"Error fetching presets: {str(e)}")
+
+
+@router.get("/simulation/presets/{preset_id}")
+def get_simulation_preset(preset_id: str) -> Dict[str, Any]:
+    """Get a specific simulation preset by ID."""
+    try:
+        # Convert string to enum
+        preset_enum = SimulationPreset(preset_id)
+        config = SimulationPresetManager.get_preset_config(preset_enum)
+        
+        if not config:
+            raise HTTPException(404, detail=f"Preset '{preset_id}' not found")
+        
+        config["preset_id"] = preset_id
+        return config
+    except ValueError:
+        raise HTTPException(400, detail=f"Invalid preset ID: {preset_id}")
+    except Exception as e:
+        raise HTTPException(500, detail=f"Error fetching preset: {str(e)}")
+
+
+@router.post("/simulation/run-with-preset")
+def run_simulation_with_preset(
+    ticker: str,
+    start_date: str,
+    end_date: str,
+    preset_id: str,
+    initial_cash: float = 10000.0
+) -> Dict[str, Any]:
+    """Run a simulation using a predefined preset."""
+    try:
+        from datetime import datetime
+        
+        # Get preset configuration
+        preset_enum = SimulationPreset(preset_id)
+        preset_config = SimulationPresetManager.get_preset_config(preset_enum)
+        
+        if not preset_config:
+            raise HTTPException(404, detail=f"Preset '{preset_id}' not found")
+        
+        # Parse dates
+        start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+        end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+        
+        # Create simulation use case
+        from application.use_cases.simulation_unified_uc import SimulationUnifiedUC
+        
+        sim_uc = SimulationUnifiedUC(
+            market_data=container.market_data,
+            positions=container.positions,
+            events=container.events,
+            clock=container.clock,
+            dividend_market_data=container.dividend_market_data,
+        )
+        
+        # Run simulation with preset configuration
+        result = sim_uc.run_simulation(
+            ticker=ticker,
+            start_date=start_dt,
+            end_date=end_dt,
+            initial_cash=initial_cash,
+            position_config=preset_config["position_config"],
+            include_after_hours=preset_config["include_after_hours"],
+            intraday_interval_minutes=preset_config["intraday_interval_minutes"],
+            detailed_trigger_analysis=preset_config["detailed_trigger_analysis"],
+        )
+        
+        # Convert result to API format
+        return {
+            "ticker": result.ticker,
+            "start_date": result.start_date.isoformat(),
+            "end_date": result.end_date.isoformat(),
+            "initial_cash": result.initial_cash,
+            "preset_used": {
+                "preset_id": preset_id,
+                "name": preset_config["name"],
+                "description": preset_config["description"]
+            },
+            "final_cash": result.final_cash,
+            "final_shares": result.final_shares,
+            "final_total_value": result.final_total_value,
+            "total_pnl": result.total_pnl,
+            "total_return_pct": result.total_return_pct,
+            "total_commission": result.total_commission,
+            "total_trades": result.total_trades,
+            "buy_trades": result.buy_trades,
+            "sell_trades": result.sell_trades,
+            # Algorithm performance
+            "algorithm": {
+                "pnl": result.algorithm_pnl,
+                "return_pct": result.algorithm_return_pct,
+                "volatility": result.algorithm_volatility,
+                "sharpe_ratio": result.algorithm_sharpe_ratio,
+                "max_drawdown": result.algorithm_max_drawdown,
+            },
+            # Buy & Hold performance
+            "buy_hold": {
+                "pnl": result.buy_hold_pnl,
+                "return_pct": result.buy_hold_return_pct,
+                "volatility": result.buy_hold_volatility,
+                "sharpe_ratio": result.buy_hold_sharpe_ratio,
+                "max_drawdown": result.buy_hold_max_drawdown,
+            },
+            # Comparison metrics
+            "comparison": {
+                "excess_return": result.excess_return,
+                "alpha": result.alpha,
+                "beta": result.beta,
+                "information_ratio": result.information_ratio,
+            },
+            # Trade details
+            "trade_log": result.trade_log,
+            "daily_returns": result.daily_returns,
+            # Dividend data
+            "total_dividends_received": result.total_dividends_received,
+            "dividend_events": result.dividend_events,
+            # Market data for visualization
+            "price_data": result.price_data,
+            # Trigger analysis
+            "trigger_analysis": result.trigger_analysis,
+            # Debug info
+            "debug_info": getattr(result, "debug_info", []),
+            "debug_storage_info": getattr(result, "debug_storage_info", {}),
+            "debug_retrieval_info": getattr(result, "debug_retrieval_info", {}),
+        }
+        
+    except ValueError:
+        raise HTTPException(400, detail=f"Invalid preset ID: {preset_id}")
+    except Exception as e:
+        raise HTTPException(400, detail=f"Error running simulation with preset: {str(e)}")
 
 
 @router.get("/simulation/volatility/{ticker}")

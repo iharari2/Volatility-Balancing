@@ -10,6 +10,7 @@ from domain.errors import GuardrailBreach
 from domain.ports.events_repo import EventsRepo
 from domain.ports.orders_repo import OrdersRepo
 from domain.ports.positions_repo import PositionsRepo
+from domain.ports.trades_repo import TradesRepo
 from infrastructure.time.clock import Clock
 
 
@@ -33,11 +34,13 @@ class ExecuteOrderUC:
         self,
         positions: PositionsRepo,
         orders: OrdersRepo,
+        trades: TradesRepo,
         events: EventsRepo,
         clock: Optional[Clock] = None,
     ) -> None:
         self.positions = positions
         self.orders = orders
+        self.trades = trades
         self.events = events
         self.clock = clock or Clock()
 
@@ -149,6 +152,21 @@ class ExecuteOrderUC:
             # SELL
             pos.qty -= q_req
             pos.cash += (q_req * request.price) - commission
+
+        # Create and persist trade record
+        from domain.entities.trade import Trade
+
+        trade = Trade(
+            id=f"trd_{uuid4().hex[:8]}",
+            order_id=order.id,
+            position_id=order.position_id,
+            side=order.side,  # OrderSide is a Literal type, so we can use the string directly
+            qty=q_req,
+            price=request.price,
+            commission=commission,
+            executed_at=now,
+        )
+        self.trades.save(trade)
 
         self.positions.save(pos)
 

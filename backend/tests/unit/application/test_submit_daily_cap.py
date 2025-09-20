@@ -76,7 +76,7 @@ def test_daily_cap_at_fill_is_enforced():
 
     # Fill the first order (should work)
     exec_uc = ExecuteOrderUC(
-        container.positions, container.orders, container.events, container.clock
+        container.positions, container.orders, container.trades, container.events, container.clock
     )
     r1 = exec_uc.execute(
         order_id=first,

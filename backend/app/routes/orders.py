@@ -59,6 +59,7 @@ def fill_order(order_id: str, payload: FillOrderRequest) -> FillOrderResponse:
     uc = ExecuteOrderUC(
         positions=container.positions,
         orders=container.orders,
+        trades=container.trades,
         events=container.events,
         clock=container.clock,
     )
@@ -261,3 +262,21 @@ def list_orders(position_id: str, limit: int = 100) -> Dict[str, Any]:
         raise HTTPException(404, detail="position_not_found")
     orders = container.orders.list_for_position(position_id, limit=limit)
     return {"position_id": position_id, "orders": [asdict(o) for o in orders]}
+
+
+@router.get("/positions/{position_id}/trades")
+def list_trades(position_id: str, limit: int = 100) -> Dict[str, Any]:
+    """List trades for a position, ordered by execution time (newest first)."""
+    if not container.positions.get(position_id):
+        raise HTTPException(404, detail="position_not_found")
+    trades = container.trades.list_for_position(position_id, limit=limit)
+    return {"position_id": position_id, "trades": [asdict(t) for t in trades]}
+
+
+@router.get("/orders/{order_id}/trades")
+def list_trades_for_order(order_id: str) -> Dict[str, Any]:
+    """List trades for a specific order."""
+    if not container.orders.get(order_id):
+        raise HTTPException(404, detail="order_not_found")
+    trades = container.trades.list_for_order(order_id)
+    return {"order_id": order_id, "trades": [asdict(t) for t in trades]}
