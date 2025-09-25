@@ -104,6 +104,21 @@ def create_position(payload: CreatePositionRequest) -> CreatePositionResponse:
             existing_pos.cash = payload.cash
             if payload.anchor_price is not None:
                 existing_pos.anchor_price = payload.anchor_price
+            elif existing_pos.anchor_price is None:
+                # Set anchor price if not already set
+                try:
+                    market_data = container.market_data
+                    price_data = market_data.get_price(payload.ticker)
+                    current_price = price_data.price if price_data else None
+                    if current_price:
+                        existing_pos.anchor_price = current_price
+                        print(f"Set anchor price to current market price: {current_price}")
+                    else:
+                        print(f"Warning: Could not fetch current price for {payload.ticker}")
+                except Exception as e:
+                    print(f"Warning: Failed to fetch current price for {payload.ticker}: {e}")
+            # Save the updated position
+            pos_repo.save(existing_pos)
             pos = existing_pos
         else:
             # Create new position
@@ -195,6 +210,26 @@ def list_positions() -> Dict[str, Any]:
             for pos in positions
         ]
     }
+
+
+@router.delete("/positions/{position_id}")
+def delete_position(position_id: str) -> Dict[str, Any]:
+    """Delete a specific position."""
+    try:
+        pos_repo = container.positions
+        deleted = pos_repo.delete(position_id)
+
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Position not found")
+
+        return {
+            "message": f"Position {position_id} deleted successfully",
+            "position_id": position_id,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting position: {str(e)}")
 
 
 @router.post("/clear-positions")

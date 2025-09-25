@@ -31,6 +31,17 @@ export const useCreatePosition = () => {
   });
 };
 
+export const useDeletePosition = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (positionId: string) => positionsApi.delete(positionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['positions'] });
+    },
+  });
+};
+
 export const useSetAnchorPrice = (positionId: string) => {
   const queryClient = useQueryClient();
 

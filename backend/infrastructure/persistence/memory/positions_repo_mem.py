@@ -30,8 +30,17 @@ class InMemoryPositionsRepo(PositionsRepo):
             f"DEBUG: Saved position {position.id}, stored anchor_price={self._items[position.id].anchor_price}"
         )
 
+    def delete(self, position_id: str) -> bool:
+        """Delete a position by ID. Returns True if deleted, False if not found."""
+        if position_id in self._items:
+            del self._items[position_id]
+            return True
+        return False
+
     def clear(self) -> None:
+        """Clear all positions."""
         self._items.clear()
 
     def list_all(self) -> list[Position]:
+        """List all positions."""
         return list(self._items.values())

@@ -1,8 +1,9 @@
 import { useParams } from 'react-router-dom';
 import { useState } from 'react';
-import { ArrowLeft, Target, Settings, DollarSign } from 'lucide-react';
+import { ArrowLeft, Target, Settings, DollarSign, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { usePosition, useSetAnchorPrice, usePositionEvents } from '../hooks/usePositions';
+import { useMarketPrice } from '../hooks/useMarketData';
 import TradingInterface from '../components/TradingInterface';
 import EventTimeline from '../components/EventTimeline';
 import DividendManagement from '../components/DividendManagement';
@@ -20,6 +21,14 @@ export default function PositionDetail() {
   const { data: events, isLoading: eventsLoading } = usePositionEvents(id!);
   const setAnchorPriceMutation = useSetAnchorPrice(id!);
 
+  // Fetch current market price for the position's ticker
+  const {
+    data: marketData,
+    isLoading: priceLoading,
+    error: priceError,
+    refetch: refetchPrice,
+  } = useMarketPrice(position?.ticker || '');
+
   const handleSetAnchor = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!anchorPrice) return;
@@ -30,6 +39,12 @@ export default function PositionDetail() {
       setAnchorPrice(0);
     } catch (error) {
       console.error('Failed to set anchor price:', error);
+    }
+  };
+
+  const handleSetCurrentPrice = () => {
+    if (marketData?.price) {
+      setAnchorPrice(marketData.price);
     }
   };
 
@@ -283,6 +298,57 @@ export default function PositionDetail() {
               </p>
 
               <form onSubmit={handleSetAnchor} className="space-y-4">
+                {/* Current Market Price Info */}
+                {marketData && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium text-blue-900">Current Market Price</h4>
+                        <p className="text-2xl font-bold text-blue-900">
+                          ${marketData.price.toFixed(2)}
+                        </p>
+                        <p className="text-sm text-blue-700">
+                          {marketData.is_market_hours ? 'Market Open' : 'After Hours'} •
+                          {marketData.is_fresh ? ' Live Data' : ' Delayed Data'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSetCurrentPrice}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center space-x-2"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        <span>Use Current Price</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {priceLoading && (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center space-x-2">
+                      <RefreshCw className="w-4 h-4 animate-spin text-gray-500" />
+                      <p className="text-gray-700">Fetching current market price...</p>
+                    </div>
+                  </div>
+                )}
+
+                {priceError && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <p className="text-red-700">
+                      Unable to fetch current market price. You can still set an anchor price
+                      manually.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => refetchPrice()}
+                      className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+                    >
+                      Try Again
+                    </button>
+                  </div>
+                )}
+
                 <div>
                   <label className="label">Anchor Price</label>
                   <input

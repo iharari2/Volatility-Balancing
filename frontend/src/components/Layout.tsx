@@ -1,6 +1,16 @@
 import { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { BarChart3, Home, TrendingUp, Activity, Settings, Menu, X, Play } from 'lucide-react';
+import {
+  BarChart3,
+  Home,
+  TrendingUp,
+  Activity,
+  Settings,
+  Menu,
+  X,
+  Play,
+  Target,
+} from 'lucide-react';
 import { useState } from 'react';
 
 interface LayoutProps {
@@ -12,6 +22,7 @@ const navigation = [
   { name: 'Positions', href: '/positions', icon: TrendingUp },
   { name: 'Trading', href: '/trading', icon: Activity },
   { name: 'Simulation', href: '/simulation', icon: Play },
+  { name: 'Optimization', href: '/optimization', icon: Target },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
 ];
 

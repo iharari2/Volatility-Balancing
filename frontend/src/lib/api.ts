@@ -80,6 +80,11 @@ export const positionsApi = {
       method: 'POST',
       headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {},
     }),
+
+  delete: (id: string) =>
+    request<{ message: string; position_id: string }>(`/positions/${id}`, {
+      method: 'DELETE',
+    }),
 };
 
 // Orders API

@@ -66,6 +66,7 @@ def _apply_entity_to_row(row: PositionModel, p: Position) -> None:
     row.ticker = p.ticker
     row.qty = p.qty
     row.cash = p.cash
+    row.anchor_price = p.anchor_price
     row.updated_at = p.updated_at
 
     row.op_min_qty = p.order_policy.min_qty
@@ -140,6 +141,16 @@ class SQLPositionsRepo(PositionsRepo):
         )
         self.save(pos)
         return pos
+
+    def delete(self, position_id: str) -> bool:
+        """Delete a position by ID. Returns True if deleted, False if not found."""
+        with self._sf() as s:
+            row = s.get(PositionModel, position_id)
+            if row is None:
+                return False
+            s.delete(row)
+            s.commit()
+            return True
 
     def clear(self) -> None:
         """Wipe all positions (test helper / dev)."""

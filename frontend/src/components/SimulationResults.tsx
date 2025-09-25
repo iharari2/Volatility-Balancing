@@ -816,54 +816,54 @@ export default function SimulationResults({
               <div className="bg-blue-50 p-4 rounded-lg">
                 <div className="text-sm font-medium text-blue-600">Per Share</div>
                 <div className="text-2xl font-bold text-blue-900">
-                  ${result.dividend_analysis.total_dividend_amount.toFixed(4)}
+                  ${result.dividend_analysis?.total_dividend_amount?.toFixed(4) || '0.0000'}
                 </div>
                 <div className="text-xs text-blue-700">total per share</div>
               </div>
               <div className="bg-green-50 p-4 rounded-lg">
                 <div className="text-sm font-medium text-green-600">Net Received</div>
                 <div className="text-2xl font-bold text-green-900">
-                  ${result.dividend_analysis.net_dividends_received.toFixed(2)}
+                  ${result.dividend_analysis?.net_dividends_received?.toFixed(2) || '0.00'}
                 </div>
                 <div className="text-xs text-green-700">after tax (25%)</div>
               </div>
               <div className="bg-purple-50 p-4 rounded-lg">
                 <div className="text-sm font-medium text-purple-600">Dividend Yield</div>
                 <div className="text-2xl font-bold text-purple-900">
-                  {result.dividend_analysis.dividend_yield.toFixed(2)}%
+                  {result.dividend_analysis?.dividend_yield?.toFixed(2) || '0.00'}%
                 </div>
                 <div className="text-xs text-purple-700">annualized</div>
               </div>
               <div className="bg-orange-50 p-4 rounded-lg">
                 <div className="text-sm font-medium text-orange-600">Count</div>
                 <div className="text-2xl font-bold text-orange-900">
-                  {result.dividend_analysis.dividend_count}
+                  {result.dividend_analysis?.dividend_count || 0}
                 </div>
                 <div className="text-xs text-orange-700">payments</div>
               </div>
             </div>
 
             {/* Additional Dividend Details */}
-            {result.dividend_analysis.dividend_count > 0 && (
+            {(result.dividend_analysis?.dividend_count || 0) > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <div className="text-sm font-medium text-gray-600">Gross Total</div>
                   <div className="text-lg font-bold text-gray-900">
-                    ${result.dividend_analysis.total_dividends_received.toFixed(2)}
+                    ${result.dividend_analysis?.total_dividends_received?.toFixed(2) || '0.00'}
                   </div>
                   <div className="text-xs text-gray-700">before tax</div>
                 </div>
                 <div className="bg-red-50 p-4 rounded-lg">
                   <div className="text-sm font-medium text-red-600">Tax Withheld</div>
                   <div className="text-lg font-bold text-red-900">
-                    ${result.dividend_analysis.withholding_tax_amount.toFixed(2)}
+                    ${result.dividend_analysis?.withholding_tax_amount?.toFixed(2) || '0.00'}
                   </div>
                   <div className="text-xs text-red-700">25% withholding</div>
                 </div>
                 <div className="bg-indigo-50 p-4 rounded-lg">
                   <div className="text-sm font-medium text-indigo-600">Cash Impact</div>
                   <div className="text-lg font-bold text-indigo-900">
-                    +${result.dividend_analysis.net_dividends_received.toFixed(2)}
+                    +${result.dividend_analysis?.net_dividends_received?.toFixed(2) || '0.00'}
                   </div>
                   <div className="text-xs text-indigo-700">added to cash</div>
                 </div>
@@ -871,7 +871,7 @@ export default function SimulationResults({
             )}
 
             {/* Dividend Details */}
-            {result.dividend_analysis.dividends.length > 0 ? (
+            {(result.dividend_analysis?.dividends?.length || 0) > 0 ? (
               <div>
                 <h4 className="text-md font-semibold text-gray-800 mb-3">Dividend History</h4>
                 <div className="overflow-x-auto">

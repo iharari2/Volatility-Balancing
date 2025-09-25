@@ -11,6 +11,12 @@ from domain.ports.idempotency_repo import IdempotencyRepo
 from domain.ports.market_data import MarketDataRepo
 from domain.ports.dividend_repo import DividendRepo, DividendReceivableRepo
 from domain.ports.dividend_market_data import DividendMarketDataRepo
+from domain.ports.optimization_repo import (
+    OptimizationConfigRepo,
+    OptimizationResultRepo,
+    HeatmapDataRepo,
+)
+from domain.ports.simulation_repo import SimulationRepo
 
 from infrastructure.time.clock import Clock
 
@@ -36,6 +42,17 @@ from infrastructure.persistence.sql.trades_repo_sql import SQLTradesRepo
 from infrastructure.persistence.sql.events_repo_sql import SQLEventsRepo
 from infrastructure.persistence.sql.portfolio_state_repo_sql import SQLPortfolioStateRepo
 
+# Optimization repositories
+from infrastructure.persistence.memory.optimization_repo_mem import (
+    InMemoryOptimizationConfigRepo,
+    InMemoryOptimizationResultRepo,
+    InMemoryHeatmapDataRepo,
+)
+from infrastructure.persistence.memory.simulation_repo_mem import InMemorySimulationRepo
+
+# Use cases
+from application.use_cases.parameter_optimization_uc import ParameterOptimizationUC
+
 
 def _truthy(envval: str | None) -> bool:
     """Interpret common truthy env values."""
@@ -57,12 +74,35 @@ class _Container:
     portfolio_state: SQLPortfolioStateRepo
     clock: Clock
 
+    # Optimization repositories (placeholder implementations)
+    optimization_config: OptimizationConfigRepo
+    optimization_result: OptimizationResultRepo
+    heatmap_data: HeatmapDataRepo
+    simulation: SimulationRepo
+
+    # Use cases
+    parameter_optimization_uc: ParameterOptimizationUC
+
     def __init__(self) -> None:
         self.clock = Clock()
         self.market_data = YFinanceAdapter()
         self.dividend_market_data = YFinanceDividendAdapter()
         self.dividend = InMemoryDividendRepo()
         self.dividend_receivable = InMemoryDividendReceivableRepo()
+
+        # Initialize optimization repositories
+        self.optimization_config = InMemoryOptimizationConfigRepo()
+        self.optimization_result = InMemoryOptimizationResultRepo()
+        self.heatmap_data = InMemoryHeatmapDataRepo()
+        self.simulation = InMemorySimulationRepo()
+
+        # Initialize use cases
+        self.parameter_optimization_uc = ParameterOptimizationUC(
+            config_repo=self.optimization_config,
+            result_repo=self.optimization_result,
+            heatmap_repo=self.heatmap_data,
+            simulation_repo=self.simulation,
+        )
 
         persistence = os.getenv("APP_PERSISTENCE", "memory").lower()
         events_backend = os.getenv("APP_EVENTS", "memory").lower()
@@ -137,3 +177,9 @@ class _Container:
 
 
 container = _Container()
+
+
+# Dependency injection functions for FastAPI
+def get_parameter_optimization_uc() -> ParameterOptimizationUC:
+    """Get the parameter optimization use case."""
+    return container.parameter_optimization_uc

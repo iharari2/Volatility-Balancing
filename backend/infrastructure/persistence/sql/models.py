@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from sqlalchemy import (
     String,
@@ -16,9 +16,10 @@ from sqlalchemy import (
     Text,
     CheckConstraint,
     Boolean,
+    ForeignKey,
 )
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
@@ -168,7 +169,7 @@ def create_all(engine: Engine) -> None:
         # If there are index conflicts, try to create tables without indexes first
         if "already exists" in str(e).lower():
             print(
-                f"Warning: Some database objects already exist. Attempting to create missing tables only..."
+                "Warning: Some database objects already exist. Attempting to create missing tables only..."
             )
             # Create tables without indexes first
             for table in Base.metadata.tables.values():
@@ -188,3 +189,106 @@ def create_all(engine: Engine) -> None:
                             print(f"Warning: Could not create index {index.name}: {index_error}")
         else:
             raise e
+
+
+# Optimization System Models
+
+
+class OptimizationConfigModel(Base):
+    __tablename__ = "optimization_configs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    ticker: Mapped[str] = mapped_column(String, nullable=False)
+    start_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    end_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    parameter_ranges: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
+    optimization_criteria: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="draft")
+    created_by: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=True)
+    max_combinations: Mapped[int] = mapped_column(Integer, nullable=True)
+    batch_size: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+
+    # Relationships
+    results: Mapped[List["OptimizationResultModel"]] = relationship(
+        "OptimizationResultModel", back_populates="config", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        Index("ix_optimization_configs_created_by", "created_by"),
+        Index("ix_optimization_configs_status", "status"),
+        Index("ix_optimization_configs_created_at", "created_at"),
+        CheckConstraint(
+            "status IN ('draft', 'running', 'completed', 'failed', 'cancelled')",
+            name="ck_optimization_configs_status",
+        ),
+    )
+
+
+class OptimizationResultModel(Base):
+    __tablename__ = "optimization_results"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    config_id: Mapped[str] = mapped_column(
+        String, ForeignKey("optimization_configs.id"), nullable=False
+    )
+    parameter_combination: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
+    combination_id: Mapped[str] = mapped_column(String, nullable=False)
+    metrics: Mapped[Dict[str, float]] = mapped_column(JSON, nullable=False)
+    simulation_result: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=True)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="pending")
+    error_message: Mapped[str] = mapped_column(Text, nullable=True)
+    execution_time_seconds: Mapped[float] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    config: Mapped["OptimizationConfigModel"] = relationship(
+        "OptimizationConfigModel", back_populates="results"
+    )
+
+    __table_args__ = (
+        Index("ix_optimization_results_config_id", "config_id"),
+        Index("ix_optimization_results_status", "status"),
+        Index("ix_optimization_results_created_at", "created_at"),
+        Index("ix_optimization_results_combination_id", "combination_id"),
+        CheckConstraint(
+            "status IN ('pending', 'running', 'completed', 'failed', 'cancelled')",
+            name="ck_optimization_results_status",
+        ),
+    )
+
+
+class HeatmapDataModel(Base):
+    __tablename__ = "heatmap_data"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    config_id: Mapped[str] = mapped_column(
+        String, ForeignKey("optimization_configs.id"), nullable=False
+    )
+    x_parameter: Mapped[str] = mapped_column(String, nullable=False)
+    y_parameter: Mapped[str] = mapped_column(String, nullable=False)
+    metric: Mapped[str] = mapped_column(String, nullable=False)
+    heatmap_data: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+
+    # Relationships
+    config: Mapped["OptimizationConfigModel"] = relationship("OptimizationConfigModel")
+
+    __table_args__ = (
+        Index("ix_heatmap_data_config_id", "config_id"),
+        Index("ix_heatmap_data_parameters", "x_parameter", "y_parameter"),
+        Index("ix_heatmap_data_metric", "metric"),
+        Index("ix_heatmap_data_created_at", "created_at"),
+    )

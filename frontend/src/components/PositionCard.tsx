@@ -1,12 +1,13 @@
 import { Position } from '../types';
-import { TrendingUp, TrendingDown, DollarSign, Target } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Target, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface PositionCardProps {
   position: Position;
+  onDelete?: (positionId: string) => void;
 }
 
-export default function PositionCard({ position }: PositionCardProps) {
+export default function PositionCard({ position, onDelete }: PositionCardProps) {
   const totalValue = position.qty * (position.anchor_price || 0) + position.cash;
   const assetPercentage = position.anchor_price
     ? ((position.qty * position.anchor_price) / totalValue) * 100
@@ -24,12 +25,23 @@ export default function PositionCard({ position }: PositionCardProps) {
             <p className="text-sm text-gray-500">Position #{position.id.slice(-8)}</p>
           </div>
         </div>
-        <Link
-          to={`/positions/${position.id}`}
-          className="text-primary-600 hover:text-primary-700 text-sm font-medium"
-        >
-          View Details →
-        </Link>
+        <div className="flex items-center space-x-2">
+          <Link
+            to={`/positions/${position.id}`}
+            className="text-primary-600 hover:text-primary-700 text-sm font-medium"
+          >
+            View Details →
+          </Link>
+          {onDelete && (
+            <button
+              onClick={() => onDelete(position.id)}
+              className="text-red-600 hover:text-red-700 p-1 rounded hover:bg-red-50"
+              title="Delete position"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-4">
@@ -89,5 +101,3 @@ export default function PositionCard({ position }: PositionCardProps) {
     </div>
   );
 }
-
-

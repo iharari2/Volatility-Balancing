@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Plus, Search, Filter } from 'lucide-react';
-import { usePositions, useCreatePosition } from '../hooks/usePositions';
+import { usePositions, useCreatePosition, useDeletePosition } from '../hooks/usePositions';
 import PositionCard from '../components/PositionCard';
 import CreatePositionForm from '../components/CreatePositionForm';
 import { CreatePositionRequest } from '../types';
@@ -12,6 +12,7 @@ export default function Positions() {
 
   const { data: positions = [], isLoading } = usePositions();
   const createPosition = useCreatePosition();
+  const deletePosition = useDeletePosition();
 
   const handleCreatePosition = async (data: CreatePositionRequest) => {
     try {
@@ -19,6 +20,18 @@ export default function Positions() {
       setShowCreateForm(false);
     } catch (error) {
       console.error('Failed to create position:', error);
+    }
+  };
+
+  const handleDeletePosition = async (positionId: string) => {
+    if (
+      window.confirm('Are you sure you want to delete this position? This action cannot be undone.')
+    ) {
+      try {
+        await deletePosition.mutateAsync(positionId);
+      } catch (error) {
+        console.error('Failed to delete position:', error);
+      }
     }
   };
 
@@ -113,7 +126,7 @@ export default function Positions() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredPositions.map((position) => (
-              <PositionCard key={position.id} position={position} />
+              <PositionCard key={position.id} position={position} onDelete={handleDeletePosition} />
             ))}
           </div>
         )}
@@ -140,5 +153,3 @@ export default function Positions() {
     </div>
   );
 }
-
-

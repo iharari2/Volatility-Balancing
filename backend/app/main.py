@@ -15,11 +15,12 @@ if not os.getenv("SQL_URL"):
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from app.routes.health import router as health_router
 from app.routes.positions import router as positions_router
 from app.routes.orders import router as orders_router
 from app.routes.dividends import router as dividends_router
+from app.routes.optimization import router as optimization_router
+from app.routes.market import router as market_router
 
 API_PREFIX = "/v1"
 
@@ -37,3 +38,5 @@ app.include_router(health_router, prefix=API_PREFIX)
 app.include_router(positions_router)  # positions_router already has /v1 prefix
 app.include_router(orders_router, prefix=API_PREFIX)
 app.include_router(dividends_router)  # dividends_router already has /v1 prefix
+app.include_router(optimization_router)  # optimization_router already has /v1 prefix
+app.include_router(market_router)  # market_router already has /v1 prefix
