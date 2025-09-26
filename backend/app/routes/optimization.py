@@ -257,8 +257,11 @@ async def list_optimization_configs(
     optimization_uc: ParameterOptimizationUC = Depends(get_parameter_optimization_uc),
 ):
     """List optimization configurations."""
-    # This would need to be implemented in the use case
-    raise HTTPException(status_code=501, detail="Not implemented yet")
+    try:
+        configs = optimization_uc.config_repo.get_all(limit=limit, offset=offset)
+        return [OptimizationConfigResponse.from_domain(config) for config in configs]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @router.get("/configs/{config_id}", response_model=OptimizationConfigResponse)
@@ -268,12 +271,17 @@ async def get_optimization_config(
 ):
     """Get a specific optimization configuration."""
     try:
-        config = optimization_uc.config_repo.get_by_id(UUID(config_id))
+        config_uuid = UUID(config_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid config ID format")
+    
+    try:
+        config = optimization_uc.config_repo.get_by_id(config_uuid)
         if not config:
             raise HTTPException(status_code=404, detail="Optimization config not found")
         return OptimizationConfigResponse.from_domain(config)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
@@ -285,8 +293,20 @@ async def start_optimization(
 ):
     """Start an optimization run."""
     try:
-        optimization_uc.run_optimization(UUID(config_id))
+        config_uuid = UUID(config_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid config ID format")
+    
+    try:
+        # Check if config exists first
+        config = optimization_uc.config_repo.get_by_id(config_uuid)
+        if not config:
+            raise HTTPException(status_code=404, detail="Optimization config not found")
+        
+        optimization_uc.run_optimization(config_uuid)
         return {"message": "Optimization started successfully"}
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

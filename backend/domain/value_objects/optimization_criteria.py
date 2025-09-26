@@ -66,6 +66,9 @@ class OptimizationCriteria:
 
     def __post_init__(self):
         """Validate the optimization criteria after initialization."""
+        if not self.secondary_metrics:
+            raise ValueError("At least one secondary metric must be specified")
+            
         if self.primary_metric in self.secondary_metrics:
             raise ValueError("Primary metric cannot be in secondary metrics")
 

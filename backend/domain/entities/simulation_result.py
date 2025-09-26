@@ -3,7 +3,7 @@
 # =========================
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from uuid import UUID, uuid4
 
@@ -24,7 +24,7 @@ class SimulationResult:
     def __post_init__(self):
         """Initialize timestamps."""
         if self.created_at is None:
-            self.created_at = datetime.utcnow()
+            self.created_at = datetime.now(timezone.utc)
 
     @classmethod
     def create(

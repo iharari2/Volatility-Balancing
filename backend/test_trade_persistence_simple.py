@@ -73,8 +73,8 @@ def test_sql_trades():
     print("🧪 Testing SQL Trade Repository")
     print("-" * 40)
 
-    # Use a unique database file for this test
-    db_url = "sqlite:///./test_trades_persistence.sqlite"
+    # Use an in-memory database for this test
+    db_url = "sqlite:///:memory:"
 
     try:
         # Create engine and tables
@@ -143,7 +143,7 @@ def test_trade_persistence_integration():
     print("🧪 Testing Trade Persistence Integration")
     print("-" * 40)
 
-    db_url = "sqlite:///./test_persistence_integration.sqlite"
+    db_url = "sqlite:///:memory:"
 
     try:
         # Create first repository instance

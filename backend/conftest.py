@@ -1,5 +1,5 @@
 # =========================
-# backend/tests/conftest.py
+# backend/conftest.py
 # =========================
 import os
 import pytest

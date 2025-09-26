@@ -3,7 +3,7 @@
 # =========================
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 from domain.entities.optimization_config import OptimizationConfig, OptimizationStatus
 from domain.entities.optimization_result import (
@@ -25,7 +25,7 @@ class TestParameterCombination:
         combination = ParameterCombination(
             parameters={"trigger_threshold": 0.02, "rebalance_ratio": 1.5},
             combination_id="test_001",
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
 
         assert combination.parameters == {"trigger_threshold": 0.02, "rebalance_ratio": 1.5}
@@ -38,7 +38,7 @@ class TestParameterCombination:
             ParameterCombination(
                 parameters={},
                 combination_id="test_001",
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
             )
 
     def test_parameter_combination_validation_empty_id(self):
@@ -47,7 +47,7 @@ class TestParameterCombination:
             ParameterCombination(
                 parameters={"trigger_threshold": 0.02},
                 combination_id="",
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
             )
 
 
@@ -58,7 +58,7 @@ class TestOptimizationResult:
         combination = ParameterCombination(
             parameters={"trigger_threshold": 0.02},
             combination_id="test_001",
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
 
         result = OptimizationResult(
@@ -111,7 +111,7 @@ class TestOptimizationResult:
                 parameter_combination=ParameterCombination(
                     parameters={"trigger_threshold": 0.02},
                     combination_id="test_001",
-                    created_at=datetime.utcnow(),
+                    created_at=datetime.now(timezone.utc),
                 ),
                 metrics={},
                 status=OptimizationResultStatus.COMPLETED,
@@ -122,7 +122,7 @@ class TestOptimizationResult:
         combination = ParameterCombination(
             parameters={"trigger_threshold": 0.02},
             combination_id="test_001",
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
 
         return OptimizationResult(
@@ -222,7 +222,7 @@ class TestOptimizationResults:
         combination = ParameterCombination(
             parameters={"trigger_threshold": 0.02},
             combination_id=f"test_{value}",
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
 
         result = OptimizationResult(
@@ -246,7 +246,7 @@ class TestOptimizationConfig:
         """Test creating an optimization configuration."""
         config_id = uuid4()
         created_by = uuid4()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Create parameter ranges
         param_ranges = {
@@ -342,8 +342,8 @@ class TestOptimizationConfig:
                 optimization_criteria=self._create_test_criteria(),
                 status=OptimizationStatus.DRAFT,
                 created_by=uuid4(),
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
             )
 
     def test_optimization_config_validation_empty_parameter_ranges(self):
@@ -359,8 +359,8 @@ class TestOptimizationConfig:
                 optimization_criteria=self._create_test_criteria(),
                 status=OptimizationStatus.DRAFT,
                 created_by=uuid4(),
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
             )
 
     def _create_test_config(self) -> OptimizationConfig:
@@ -394,8 +394,8 @@ class TestOptimizationConfig:
             optimization_criteria=self._create_test_criteria(),
             status=OptimizationStatus.DRAFT,
             created_by=uuid4(),
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
 
     def _create_test_criteria(self) -> OptimizationCriteria:

@@ -4,7 +4,7 @@
 
 from typing import List, Optional, Dict
 from uuid import UUID, uuid4
-from datetime import datetime
+from datetime import datetime, timezone
 
 from domain.entities.optimization_config import OptimizationConfig, OptimizationStatus
 from domain.entities.optimization_result import (
@@ -162,6 +162,10 @@ class ParameterOptimizationUC:
         if not config:
             raise ValueError(f"Optimization config not found: {config_id}")
 
+        # Check if optimization has been started (not in DRAFT status)
+        if config.status == OptimizationStatus.DRAFT:
+            raise ValueError("Optimization is not running")
+
         results = self.result_repo.get_by_config(config_id)
         completed = len([r for r in results if r.is_completed()])
         failed = len([r for r in results if r.is_failed()])
@@ -172,7 +176,7 @@ class ParameterOptimizationUC:
             completed_combinations=completed,
             failed_combinations=failed,
             status=config.status.value,
-            started_at=config.created_at if config.status == OptimizationStatus.RUNNING else None,
+            started_at=config.created_at if config.status in [OptimizationStatus.RUNNING, OptimizationStatus.COMPLETED] else None,
         )
 
     def get_optimization_results(self, config_id: UUID) -> List[OptimizationResult]:
@@ -248,7 +252,7 @@ class ParameterOptimizationUC:
             min_value=min_val,
             max_value=max_val,
             mean_value=mean_val,
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
         )
 
         # Save the heatmap data
@@ -290,7 +294,7 @@ class ParameterOptimizationUC:
 
             # Create combination
             combination_obj = ParameterCombination(
-                parameters=params, combination_id=f"{config.id}_{i}", created_at=datetime.utcnow()
+                parameters=params, combination_id=f"{config.id}_{i}", created_at=datetime.now(timezone.utc)
             )
             combinations.append(combination_obj)
 
@@ -345,7 +349,7 @@ class ParameterOptimizationUC:
             if result:
                 result.metrics = metrics
                 result.status = OptimizationResultStatus.COMPLETED
-                result.completed_at = datetime.utcnow()
+                result.completed_at = datetime.now(timezone.utc)
                 self.result_repo.save_result(result)
         
         # Update config status to completed

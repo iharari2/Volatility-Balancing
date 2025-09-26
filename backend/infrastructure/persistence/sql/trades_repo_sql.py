@@ -19,7 +19,7 @@ def _to_entity(row: TradeModel) -> Trade:
         id=row.id,
         order_id=row.order_id,
         position_id=row.position_id,
-        side=OrderSide(row.side),
+        side=row.side,  # type: OrderSide
         qty=row.qty,
         price=row.price,
         commission=row.commission,
@@ -33,7 +33,7 @@ def _new_row_from_entity(trade: Trade) -> TradeModel:
         id=trade.id,
         order_id=trade.order_id,
         position_id=trade.position_id,
-        side=trade.side.value,
+        side=trade.side,
         qty=trade.qty,
         price=trade.price,
         commission=trade.commission,

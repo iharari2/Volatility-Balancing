@@ -3,7 +3,7 @@
 # =========================
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Optional
 from uuid import UUID, uuid4
 from enum import Enum
@@ -82,7 +82,7 @@ class OptimizationConfig:
             raise ValueError(f"Cannot start optimization in status: {self.status}")
 
         self.status = new_status
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
     @classmethod
     def create(
@@ -99,7 +99,7 @@ class OptimizationConfig:
         batch_size: int = 10,
     ) -> "OptimizationConfig":
         """Create a new optimization configuration."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         return cls(
             id=uuid4(),

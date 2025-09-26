@@ -33,6 +33,13 @@ class InMemoryOptimizationConfigRepo(OptimizationConfigRepo):
         """Get all optimization configurations for a user."""
         return [config for config in self._configs.values() if config.created_by == user_id]
 
+    def get_all(self, limit: int = 100, offset: int = 0) -> List[OptimizationConfig]:
+        """Get all optimization configurations with pagination."""
+        configs = list(self._configs.values())
+        # Sort by created_at descending (newest first)
+        configs.sort(key=lambda x: x.created_at, reverse=True)
+        return configs[offset:offset + limit]
+
     def update_status(self, config_id: UUID, status: str) -> None:
         """Update the status of an optimization configuration."""
         if config_id in self._configs:

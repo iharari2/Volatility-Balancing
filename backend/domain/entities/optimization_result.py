@@ -3,7 +3,7 @@
 # =========================
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from uuid import UUID
 from enum import Enum
@@ -56,14 +56,14 @@ class OptimizationResult:
     def __post_init__(self):
         """Validate the optimization result."""
         if self.created_at is None:
-            self.created_at = datetime.utcnow()
+            self.created_at = datetime.now(timezone.utc)
 
         # Allow empty metrics for pending results
         if self.status != OptimizationResultStatus.PENDING and not self.metrics:
             raise ValueError("Metrics cannot be empty for non-pending results")
 
         if self.status == OptimizationResultStatus.COMPLETED and not self.completed_at:
-            self.completed_at = datetime.utcnow()
+            self.completed_at = datetime.now(timezone.utc)
 
     def is_completed(self) -> bool:
         """Check if the optimization result is completed."""
@@ -76,7 +76,7 @@ class OptimizationResult:
     def mark_completed(self, execution_time: Optional[float] = None) -> None:
         """Mark the result as completed."""
         self.status = OptimizationResultStatus.COMPLETED
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
         if execution_time is not None:
             self.execution_time_seconds = execution_time
 
@@ -84,7 +84,7 @@ class OptimizationResult:
         """Mark the result as failed."""
         self.status = OptimizationResultStatus.FAILED
         self.error_message = error_message
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
 
     def get_metric_value(self, metric: OptimizationMetric) -> Optional[float]:
         """Get the value of a specific metric."""
@@ -109,9 +109,9 @@ class OptimizationResults:
     def __post_init__(self):
         """Initialize timestamps and find best/worst results."""
         if self.created_at is None:
-            self.created_at = datetime.utcnow()
+            self.created_at = datetime.now(timezone.utc)
         if self.updated_at is None:
-            self.updated_at = datetime.utcnow()
+            self.updated_at = datetime.now(timezone.utc)
 
         if self.results:
             self._find_best_and_worst()
@@ -165,7 +165,7 @@ class OptimizationResults:
     def add_result(self, result: OptimizationResult) -> None:
         """Add a new result to the collection."""
         self.results.append(result)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self._find_best_and_worst()
 
     def get_results_by_parameter(

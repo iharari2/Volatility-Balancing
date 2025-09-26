@@ -150,7 +150,6 @@ def get_engine(url: str) -> Engine:
             future=True,
             pool_pre_ping=True,
             pool_size=1,  # Single connection for SQLite
-            max_overflow=0,  # No overflow connections
             connect_args={
                 "check_same_thread": False,
                 "timeout": 30,

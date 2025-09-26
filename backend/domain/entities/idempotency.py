@@ -2,7 +2,7 @@
 # backend/domain/entities/idempotency.py
 # =========================
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 @dataclass
@@ -17,4 +17,4 @@ class IdempotencyRecord:
 
     @staticmethod
     def ttl(hours: int = 48) -> datetime:
-        return datetime.utcnow() + timedelta(hours=hours)
+        return datetime.now(timezone.utc) + timedelta(hours=hours)

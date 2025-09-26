@@ -3,7 +3,7 @@
 # =========================
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 from unittest.mock import Mock, patch
 
@@ -26,7 +26,7 @@ class TestCreateOptimizationRequest:
     def test_create_optimization_request_creation(self):
         """Test creating a create optimization request."""
         created_by = uuid4()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         param_ranges = {
             "trigger_threshold": ParameterRange(
@@ -163,8 +163,13 @@ class TestParameterOptimizationUC:
         self.uc.run_optimization(config_id)
 
         # Verify
-        self.mock_config_repo.update_status.assert_called_once_with(
+        # Should be called twice: once for running, once for completed
+        assert self.mock_config_repo.update_status.call_count == 2
+        self.mock_config_repo.update_status.assert_any_call(
             config_id, OptimizationStatus.RUNNING.value
+        )
+        self.mock_config_repo.update_status.assert_any_call(
+            config.id, OptimizationStatus.COMPLETED.value
         )
 
     def test_run_optimization_config_not_found(self):
@@ -236,14 +241,14 @@ class TestParameterOptimizationUC:
             self._create_test_result("test_001", OptimizationResultStatus.COMPLETED),
             self._create_test_result("test_002", OptimizationResultStatus.COMPLETED),
         ]
-        self.mock_result_repo.get_by_config.return_value = expected_results
+        self.mock_result_repo.get_completed_results.return_value = expected_results
 
         # Execute
         results = self.uc.get_optimization_results(config_id)
 
         # Verify
         assert results == expected_results
-        self.mock_result_repo.get_by_config.assert_called_once_with(config_id)
+        self.mock_result_repo.get_completed_results.assert_called_once_with(config_id)
 
     def _create_test_request(self) -> CreateOptimizationRequest:
         """Helper to create a test request."""
@@ -314,8 +319,8 @@ class TestParameterOptimizationUC:
             optimization_criteria=criteria,
             status=OptimizationStatus.DRAFT,
             created_by=uuid4(),
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
 
     def _create_test_result(
@@ -328,7 +333,7 @@ class TestParameterOptimizationUC:
         combination = ParameterCombination(
             parameters={"trigger_threshold": 0.02},
             combination_id=combination_id,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
 
         result = OptimizationResult(
