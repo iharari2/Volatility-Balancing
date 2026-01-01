@@ -9,7 +9,6 @@ This test verifies that:
 3. SQL persistence works for trades
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -20,7 +19,6 @@ sys.path.insert(0, str(backend_dir))
 # ruff: noqa: E402
 from datetime import datetime, timezone
 from domain.entities.trade import Trade
-from domain.value_objects.types import OrderSide
 from infrastructure.persistence.memory.trades_repo_mem import InMemoryTradesRepo
 from infrastructure.persistence.sql.trades_repo_sql import SQLTradesRepo
 from infrastructure.persistence.sql.models import get_engine, create_all

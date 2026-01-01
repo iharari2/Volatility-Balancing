@@ -9,7 +9,6 @@ This test verifies that:
 3. The system integrates properly with the existing test framework
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -21,7 +20,6 @@ sys.path.insert(0, str(backend_dir))
 import pytest
 from datetime import datetime, timezone
 from domain.entities.trade import Trade
-from domain.value_objects.types import OrderSide
 from infrastructure.persistence.memory.trades_repo_mem import InMemoryTradesRepo
 
 
