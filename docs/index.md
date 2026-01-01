@@ -1,5 +1,7 @@
 # Volatility Balancing Documentation
 
+> **📚 Start here**: See [Documentation Index](README.md) for the complete documentation structure and navigation.
+
 Welcome to the comprehensive documentation for the Volatility Balancing trading system.
 
 ## 🎯 System Overview
@@ -10,8 +12,17 @@ Volatility Balancing is a semi-passive trading platform designed for blue-chip e
 
 ### Architecture Documentation
 
+- **[Clean Architecture Overview](architecture/clean_architecture_overview.md)** - Clean architecture implementation with domain, application, and infrastructure layers
 - **[System Architecture v1](architecture/system_architecture_v1.md)** - Complete system overview with current implementation details
 - **[Component Architecture](architecture/component_architecture.md)** - Detailed component relationships and dependencies
+- **[Services Architecture](architecture/services_architecture.md)** - All services catalog with clean architecture section
+- **[Commissions & Dividends Review](backend/docs/COMMISSIONS_DIVIDENDS_REVIEW.md)** - Specification review and implementation notes
+- **[Commissions & Dividends Implementation](backend/docs/COMMISSIONS_DIVIDENDS_IMPLEMENTATION.md)** - Implementation details
+- **[Architecture Cleanup](backend/docs/ARCHITECTURE_CLEANUP.md)** - Detailed backend architecture documentation
+- **[Implementation Progress](backend/docs/IMPLEMENTATION_PROGRESS.md)** - Progress tracking for clean architecture
+- **[AWS Architecture](architecture/aws_architecture.md)** - AWS-native architecture with Cognito, DynamoDB, Lambda, and serverless services
+- **[AWS Architecture Comparison](architecture/aws_architecture_comparison.md)** - Comparison of current system vs AWS architecture with recommendations
+- **[Multi-Cloud Architecture](architecture/multi_cloud_architecture.md)** - Cloud-agnostic design for easy migration between AWS, Azure, and GCP
 - **[Deployment Architecture](architecture/deployment_architecture.md)** - Infrastructure, containerization, and deployment strategies
 - **[Sequence Diagrams](architecture/SEQUENCE_EXAMPLE.md)** - Comprehensive API flow documentation
 
@@ -22,10 +33,17 @@ Volatility Balancing is a semi-passive trading platform designed for blue-chip e
 
 ### Development Documentation
 
+- **[Working Version Plan](dev/working_version_plan.md)** - **CURRENT FOCUS**: Complete working version, zero cost, single tenant
 - **[Developer Notes](DEVELOPER_NOTES.md)** - Development guidelines and best practices
 - **[Migration Guide](MIGRATION.md)** - System migration and upgrade procedures
 - **[Test Plan](dev/test-plan.md)** - Testing strategy and procedures
 - **[CI/CD Guide](dev/ci-cd.md)** - Continuous integration and deployment
+
+### Setup & Verification Guides
+
+- **[Quick Start WSL](../QUICK_START_WSL.md)** - **NEW**: Fast 3-step guide for WSL users
+- **[WSL Verification Steps](../WSL_VERIFY_STEPS.md)** - Detailed step-by-step WSL verification guide
+- **[WSL Setup Guide](../WSL_SETUP_GUIDE.md)** - Comprehensive WSL troubleshooting guide
 
 ### Product Documentation
 
@@ -68,13 +86,38 @@ open http://localhost:3000
 
 ### Clean Architecture Implementation
 
+The system follows a clean architecture pattern with clear separation of concerns:
+
 - **Domain Layer**: Pure business logic with no external dependencies
-- **Application Layer**: Use cases and application services
+
+  - Value Objects: MarketQuote, PositionState, TriggerConfig, GuardrailConfig, TradeIntent
+  - Domain Services: PriceTrigger, GuardrailEvaluator (pure functions)
+  - Shared between live trading and simulation
+
+- **Application Layer**: Orchestration and use cases
+
+  - Orchestrators: LiveTradingOrchestrator, SimulationOrchestrator
+  - Ports: Interfaces for market data, orders, repositories, event logging
+  - Uses domain services, depends on ports (not concrete implementations)
+
 - **Infrastructure Layer**: External concerns (database, APIs, frameworks)
+
+  - Adapters: Implement application ports (YFinance, SQL repositories, etc.)
+  - Repositories: SQL, Memory, Redis implementations
+  - External Services: Market data providers, broker APIs
+
 - **Presentation Layer**: FastAPI routes and React components
+
+**See**: [Clean Architecture Overview](architecture/clean_architecture_overview.md) for detailed documentation
 
 ### Key Features
 
+- **Position Cell Model**: Each position is a self-contained trading cell (cash + stock)
+- **Performance Measurement**: Position performance vs stock performance (alpha calculation)
+- **Independent Strategies**: Each position has its own strategy configuration
+- **Position Cell Model**: Each position is a self-contained trading cell (cash + stock)
+- **Performance Measurement**: Position performance vs stock performance (alpha calculation)
+- **Independent Strategies**: Each position has its own strategy configuration
 - **Volatility Trading**: Automated buy/sell signals based on price thresholds
 - **Position Management**: Comprehensive position tracking with anchor prices
 - **Order Execution**: Idempotent order submission with broker integration

@@ -1,442 +1,571 @@
 # Component Architecture
 
-This document provides detailed component architecture diagrams for the Volatility Balancing system.
+**Last Updated:** 2025-01-27  
+**Purpose:** Detailed component relationships and dependencies in the Volatility Balancing system
 
-## System Overview
+---
 
-```mermaid
-graph TB
-  subgraph "Client Layer"
-    WEB["Web Browser"]
-    MOBILE["Mobile App (Future)"]
-  end
+## Overview
 
-  subgraph "Frontend Layer"
-    REACT["React SPA"]
-    COMPONENTS["UI Components"]
-    HOOKS["Custom Hooks"]
-    STATE["State Management"]
-  end
+The Volatility Balancing system follows **Clean Architecture** principles with clear separation of concerns across four main layers:
 
-  subgraph "API Gateway Layer"
-    LB["Load Balancer"]
-    API_GW["API Gateway"]
-  end
+1. **Presentation Layer** - API routes and UI
+2. **Application Layer** - Use cases and orchestration
+3. **Domain Layer** - Business logic and entities
+4. **Infrastructure Layer** - External adapters and implementations
 
-  subgraph "Backend Services"
-    AUTH["Authentication Service"]
-    POSITION["Position Service"]
-    ORDER["Order Service"]
-    DIVIDEND["Dividend Service"]
-    MARKET["Market Data Service"]
-  end
+---
 
-  subgraph "Data Layer"
-    DB["PostgreSQL"]
-    CACHE["Redis Cache"]
-    FILES["File Storage"]
-  end
+## Architecture Layers
 
-  subgraph "External Services"
-    YFIN["YFinance API"]
-    BROKER["Brokerage APIs"]
-    NOTIFY["Notification Service"]
-  end
-
-  WEB --> REACT
-  MOBILE --> REACT
-  REACT --> COMPONENTS
-  REACT --> HOOKS
-  REACT --> STATE
-
-  REACT --> LB
-  LB --> API_GW
-  API_GW --> AUTH
-  API_GW --> POSITION
-  API_GW --> ORDER
-  API_GW --> DIVIDEND
-  API_GW --> MARKET
-
-  POSITION --> DB
-  ORDER --> DB
-  DIVIDEND --> DB
-  MARKET --> CACHE
-
-  POSITION --> CACHE
-  ORDER --> CACHE
-
-  MARKET --> YFIN
-  ORDER --> BROKER
-  AUTH --> NOTIFY
-```
-
-## Frontend Component Architecture
+### High-Level Component Diagram
 
 ```mermaid
 graph TB
-  subgraph "React Application"
-    subgraph "Pages"
-      DASH["Dashboard"]
-      POS["Positions"]
-      TRADE["Trading"]
-      SIM["Simulation"]
-      ANAL["Analytics"]
-    end
-
-    subgraph "Components"
-      LAYOUT["Layout"]
-      NAV["Navigation"]
-      CARDS["Position Cards"]
-      CHARTS["Charts"]
-      FORMS["Forms"]
-    end
-
-    subgraph "Hooks"
-      POS_HOOK["usePositions"]
-      TRADE_HOOK["useTrading"]
-      MARKET_HOOK["useMarketData"]
-    end
-
-    subgraph "State Management"
-      ZUSTAND["Zustand Store"]
-      QUERY["React Query"]
-    end
-
-    subgraph "Services"
-      API["API Client"]
-      UTILS["Utilities"]
-    end
-  end
-
-  DASH --> CARDS
-  POS --> CARDS
-  TRADE --> FORMS
-  SIM --> CHARTS
-  ANAL --> CHARTS
-
-  CARDS --> POS_HOOK
-  FORMS --> TRADE_HOOK
-  CHARTS --> MARKET_HOOK
-
-  POS_HOOK --> API
-  TRADE_HOOK --> API
-  MARKET_HOOK --> API
-
-  API --> ZUSTAND
-  API --> QUERY
-```
-
-## Backend Service Architecture
-
-```mermaid
-graph TB
-  subgraph "FastAPI Application"
     subgraph "Presentation Layer"
-      ROUTES["API Routes"]
-      MIDDLEWARE["Middleware"]
-      VALIDATION["Request Validation"]
+        API["FastAPI Routes<br/>(app/routes/)"]
+        UI["React Frontend<br/>(frontend/src/)"]
     end
 
     subgraph "Application Layer"
-      UC_POS["Position Use Cases"]
-      UC_ORDER["Order Use Cases"]
-      UC_DIV["Dividend Use Cases"]
-      UC_MKT["Market Use Cases"]
-      DTO["Data Transfer Objects"]
+        ORCH["Orchestrators<br/>(LiveTrading, Simulation)"]
+        UC["Use Cases<br/>(SubmitOrder, EvaluatePosition, etc.)"]
+        PORTS["Ports/Interfaces<br/>(MarketData, Repositories)"]
     end
 
     subgraph "Domain Layer"
-      ENTITIES["Domain Entities"]
-      VO["Value Objects"]
-      PORTS["Repository Ports"]
-      RULES["Business Rules"]
+        ENT["Entities<br/>(Position, Order, Trade, Portfolio)"]
+        VO["Value Objects<br/>(MarketQuote, TriggerConfig, etc.)"]
+        DS["Domain Services<br/>(PriceTrigger, GuardrailEvaluator)"]
     end
 
     subgraph "Infrastructure Layer"
-      REPO_SQL["SQL Repositories"]
-      REPO_REDIS["Redis Repositories"]
-      REPO_MEM["Memory Repositories"]
-      MKT_ADAPTER["Market Data Adapter"]
-      TIME_SVC["Time Service"]
+        REPO["Repositories<br/>(SQL, Memory, Redis)"]
+        ADAPT["Adapters<br/>(YFinance, Broker, EventLogger)"]
+        EXT["External Services<br/>(Market Data, Broker APIs)"]
     end
-  end
 
-  ROUTES --> UC_POS
-  ROUTES --> UC_ORDER
-  ROUTES --> UC_DIV
-  ROUTES --> UC_MKT
-
-  UC_POS --> ENTITIES
-  UC_ORDER --> ENTITIES
-  UC_DIV --> ENTITIES
-  UC_MKT --> ENTITIES
-
-  ENTITIES --> VO
-  ENTITIES --> RULES
-
-  UC_POS --> PORTS
-  UC_ORDER --> PORTS
-  UC_DIV --> PORTS
-  UC_MKT --> PORTS
-
-  PORTS --> REPO_SQL
-  PORTS --> REPO_REDIS
-  PORTS --> REPO_MEM
-
-  UC_MKT --> MKT_ADAPTER
-  UC_POS --> TIME_SVC
-  UC_ORDER --> TIME_SVC
+    API --> ORCH
+    UI --> API
+    ORCH --> UC
+    UC --> PORTS
+    UC --> DS
+    PORTS --> REPO
+    PORTS --> ADAPT
+    ADAPT --> EXT
+    DS --> ENT
+    DS --> VO
+    REPO --> ENT
 ```
 
-## Data Flow Architecture
+**Dependency Rule:** Dependencies point inward. Domain has no dependencies on outer layers.
+
+---
+
+## Component Details by Layer
+
+### 1. Presentation Layer
+
+**Location:** `backend/app/`, `frontend/src/`
+
+#### FastAPI Routes (`backend/app/routes/`)
+
+- **Portfolio Routes** - Portfolio CRUD operations
+- **Position Routes** - Position management
+- **Order Routes** - Order submission and querying
+- **Trade Routes** - Trade history
+- **Simulation Routes** - Backtesting endpoints
+- **Optimization Routes** - Parameter optimization endpoints
+- **Export Routes** - Excel export functionality
+
+**Responsibilities:**
+
+- HTTP request/response handling
+- Request validation (Pydantic models)
+- Dependency injection setup
+- Error handling and status codes
+
+#### React Frontend (`frontend/src/`)
+
+- **Pages** - Main application pages (Dashboard, Positions, Trading, etc.)
+- **Components** - Reusable UI components
+- **Hooks** - Custom React hooks for data fetching
+- **Types** - TypeScript type definitions
+
+---
+
+### 2. Application Layer
+
+**Location:** `backend/application/`
+
+#### Orchestrators (`application/orchestrators/`)
+
+**LiveTradingOrchestrator**
+
+- Coordinates live trading cycles
+- Manages position evaluation
+- Handles order submission and execution
+- Integrates with market data and event logging
+
+**SimulationOrchestrator**
+
+- Coordinates backtesting simulations
+- Manages historical data processing
+- Handles simulated order execution
+- Tracks simulation results
+
+**Responsibilities:**
+
+- High-level workflow orchestration
+- Coordinating multiple use cases
+- Managing transaction boundaries
+- Error recovery
+
+#### Use Cases (`application/use_cases/`)
+
+**SubmitOrderUC**
+
+- Validates order requests
+- Checks guardrails
+- Creates order entities
+- Persists orders
+
+**EvaluatePositionUC**
+
+- Evaluates price triggers
+- Checks guardrail constraints
+- Determines if trading action needed
+- Returns evaluation results
+
+**ExecuteOrderUC**
+
+- Executes orders via broker adapter
+- Records trades
+- Updates positions
+- Logs events
+
+**ProcessDividendUC**
+
+- Processes dividend events
+- Updates position anchor prices
+- Records dividend transactions
+
+**ParameterOptimizationUC**
+
+- Manages optimization runs
+- Coordinates parameter sweeps
+- Calculates optimization metrics
+- Stores results
+
+**Responsibilities:**
+
+- Single business operation
+- Input validation
+- Business rule enforcement
+- Coordination with domain services
+
+#### Ports/Interfaces (`application/ports/`)
+
+**Repository Ports:**
+
+- `PositionsRepo` - Position persistence
+- `PortfolioRepo` - Portfolio persistence
+- `OrdersRepo` - Order persistence
+- `TradesRepo` - Trade persistence
+- `EventsRepo` - Event logging
+- `MarketDataRepo` - Market data access
+- `DividendRepo` - Dividend data
+- `ConfigRepo` - Configuration storage
+
+**Service Ports:**
+
+- `MarketDataPort` - Market data interface
+- `OrderServicePort` - Order execution interface
+- `EventLoggerPort` - Event logging interface
+
+**Responsibilities:**
+
+- Define contracts for infrastructure
+- Enable dependency inversion
+- Support testing with mocks
+
+#### Services (`application/services/`)
+
+**Helper Services:**
+
+- Position calculation services
+- Performance calculation services
+- Data transformation services
+
+---
+
+### 3. Domain Layer
+
+**Location:** `backend/domain/`
+
+#### Entities (`domain/entities/`)
+
+**Position**
+
+- Represents a trading position (cash + stock)
+- Tracks quantity, anchor price, trigger config
+- Encapsulates position state
+
+**Order**
+
+- Represents a trade order
+- Tracks order type (BUY/SELL), quantity, status
+- Links to position and portfolio
+
+**Trade**
+
+- Represents an executed trade
+- Records execution price, commission, timestamp
+- Links to order and position
+
+**Portfolio**
+
+- Represents a trading portfolio
+- Contains multiple positions
+- Tracks portfolio-level state
+
+**Dividend**
+
+- Represents dividend events
+- Tracks ex-dividend dates, amounts
+- Links to positions
+
+**Responsibilities:**
+
+- Encapsulate business logic
+- Maintain invariants
+- No external dependencies
+
+#### Value Objects (`domain/value_objects/`)
+
+**MarketQuote**
+
+- Price, volume, timestamp
+- Immutable price data
+
+**TriggerConfig**
+
+- Trigger thresholds (buy/sell percentages)
+- Rebalance ratio
+- Immutable configuration
+
+**GuardrailConfig**
+
+- Asset percentage bounds
+- Max trade size
+- Risk constraints
+
+**OrderPolicyConfig**
+
+- Order execution policies
+- Market hours configuration
+
+**Responsibilities:**
+
+- Represent domain concepts
+- Immutable
+- Value equality
+
+#### Domain Services (`domain/services/`)
+
+**PriceTrigger**
+
+- Evaluates price triggers
+- Determines if buy/sell threshold met
+- Pure function (no side effects)
+
+**GuardrailEvaluator**
+
+- Evaluates guardrail constraints
+- Checks asset percentage bounds
+- Validates trade sizes
+- Pure function (no side effects)
+
+**Responsibilities:**
+
+- Domain logic that doesn't belong to entities
+- Stateless operations
+- Pure functions (testable)
+
+---
+
+### 4. Infrastructure Layer
+
+**Location:** `backend/infrastructure/`
+
+#### Repositories (`infrastructure/persistence/`)
+
+**SQL Repositories:**
+
+- `SQLPositionsRepo` - PostgreSQL/SQLite persistence
+- `SQLPortfolioRepo` - Portfolio persistence
+- `SQLOrdersRepo` - Order persistence
+- `SQLTradesRepo` - Trade persistence
+- `SQLEventsRepo` - Event logging
+
+**Memory Repositories:**
+
+- `InMemoryPositionsRepo` - In-memory storage (testing)
+- `InMemoryOrdersRepo` - In-memory storage
+- `InMemoryTradesRepo` - In-memory storage
+
+**Redis Repositories:**
+
+- `RedisIdempotencyRepo` - Idempotency key storage
+
+**Responsibilities:**
+
+- Implement repository ports
+- Handle persistence details
+- Manage database connections
+- Data transformation (entity ↔ database)
+
+#### Adapters (`infrastructure/adapters/`)
+
+**Market Data Adapters:**
+
+- `YFinanceMarketDataAdapter` - Yahoo Finance integration
+- `HistoricalDataAdapter` - Historical data access
+
+**Order Service Adapters:**
+
+- `LiveOrderServiceAdapter` - Live broker integration
+- `SimOrderServiceAdapter` - Simulated execution
+
+**Event Logger Adapter:**
+
+- `EventLoggerAdapter` - Event logging implementation
+
+**Position Repo Adapters:**
+
+- `PositionRepoAdapter` - Position repository wrapper
+- `SimPositionRepoAdapter` - Simulation-specific adapter
+
+**Responsibilities:**
+
+- Implement application ports
+- Handle external service integration
+- Error handling and retries
+- Data transformation
+
+#### External Services
+
+**Market Data:**
+
+- YFinance API - Real-time and historical prices
+- Dividend data sources
+
+**Broker APIs:**
+
+- Order execution (future: multiple brokers)
+
+**Storage:**
+
+- PostgreSQL/SQLite - Primary database
+- Redis - Caching and idempotency
+- File system - Excel exports
+
+---
+
+## Component Interaction Flow
+
+### Trading Cycle Flow
 
 ```mermaid
-graph LR
-  subgraph "User Interface"
-    UI["React Components"]
-  end
+sequenceDiagram
+    participant API as FastAPI Route
+    participant ORCH as LiveTradingOrchestrator
+    participant UC as EvaluatePositionUC
+    participant DS as PriceTrigger
+    participant DS2 as GuardrailEvaluator
+    participant UC2 as SubmitOrderUC
+    participant ADAPT as OrderServiceAdapter
+    participant REPO as PositionsRepo
 
-  subgraph "API Layer"
-    API["FastAPI Routes"]
-    VAL["Pydantic Validation"]
-  end
-
-  subgraph "Business Logic"
-    UC["Use Cases"]
-    ENT["Domain Entities"]
-  end
-
-  subgraph "Data Access"
-    REPO["Repositories"]
-    CACHE["Cache Layer"]
-  end
-
-  subgraph "Storage"
-    DB["PostgreSQL"]
-    REDIS["Redis"]
-  end
-
-  subgraph "External"
-    YFIN["YFinance"]
-    BROKER["Brokerage"]
-  end
-
-  UI -->|HTTP/JSON| API
-  API --> VAL
-  VAL --> UC
-  UC --> ENT
-  UC --> REPO
-  REPO --> CACHE
-  REPO --> DB
-  CACHE --> REDIS
-  UC --> YFIN
-  UC --> BROKER
+    API->>ORCH: Evaluate Position
+    ORCH->>UC: Evaluate Position
+    UC->>DS: Check Price Trigger
+    DS-->>UC: Trigger Result
+    UC->>DS2: Check Guardrails
+    DS2-->>UC: Guardrail Result
+    UC-->>ORCH: Evaluation Result
+    ORCH->>UC2: Submit Order (if triggered)
+    UC2->>ADAPT: Execute Order
+    ADAPT-->>UC2: Execution Result
+    UC2->>REPO: Update Position
+    REPO-->>UC2: Updated Position
+    UC2-->>ORCH: Order Result
+    ORCH-->>API: Trading Result
 ```
 
-## Microservices Architecture (Future)
+### Simulation Flow
 
 ```mermaid
-graph TB
-  subgraph "API Gateway"
-    GATEWAY["Kong/Envoy"]
-  end
+sequenceDiagram
+    participant API as FastAPI Route
+    participant ORCH as SimulationOrchestrator
+    participant ADAPT as HistoricalDataAdapter
+    participant UC as EvaluatePositionUC
+    participant UC2 as ExecuteOrderUC
+    participant REPO as SimPositionRepo
 
-  subgraph "Core Services"
-    POS_SVC["Position Service"]
-    ORDER_SVC["Order Service"]
-    DIV_SVC["Dividend Service"]
-    MKT_SVC["Market Data Service"]
-  end
-
-  subgraph "Supporting Services"
-    AUTH_SVC["Auth Service"]
-    NOTIFY_SVC["Notification Service"]
-    AUDIT_SVC["Audit Service"]
-  end
-
-  subgraph "Data Services"
-    DB_SVC["Database Service"]
-    CACHE_SVC["Cache Service"]
-    FILE_SVC["File Service"]
-  end
-
-  subgraph "External Services"
-    YFIN_EXT["YFinance API"]
-    BROKER_EXT["Brokerage APIs"]
-  end
-
-  GATEWAY --> POS_SVC
-  GATEWAY --> ORDER_SVC
-  GATEWAY --> DIV_SVC
-  GATEWAY --> MKT_SVC
-
-  POS_SVC --> AUTH_SVC
-  ORDER_SVC --> AUTH_SVC
-  DIV_SVC --> AUTH_SVC
-
-  POS_SVC --> AUDIT_SVC
-  ORDER_SVC --> AUDIT_SVC
-  DIV_SVC --> AUDIT_SVC
-
-  POS_SVC --> DB_SVC
-  ORDER_SVC --> DB_SVC
-  DIV_SVC --> DB_SVC
-  MKT_SVC --> CACHE_SVC
-
-  MKT_SVC --> YFIN_EXT
-  ORDER_SVC --> BROKER_EXT
+    API->>ORCH: Run Simulation
+    ORCH->>ADAPT: Get Historical Data
+    ADAPT-->>ORCH: Price History
+    loop For Each Time Point
+        ORCH->>UC: Evaluate Position
+        UC-->>ORCH: Evaluation Result
+        ORCH->>UC2: Execute Order (if triggered)
+        UC2->>REPO: Update Position
+    end
+    ORCH-->>API: Simulation Results
 ```
 
-## Security Architecture
+---
 
-```mermaid
-graph TB
-  subgraph "Client Security"
-    HTTPS["HTTPS/TLS"]
-    CSP["Content Security Policy"]
-    CORS["CORS Headers"]
-  end
+## Dependency Injection
 
-  subgraph "API Security"
-    AUTH["Authentication"]
-    AUTHZ["Authorization"]
-    RATE["Rate Limiting"]
-    VALID["Input Validation"]
-  end
+The system uses dependency injection (see `backend/app/di.py`) to:
 
-  subgraph "Data Security"
-    ENCRYPT["Encryption at Rest"]
-    TRANSPORT["Encryption in Transit"]
-    SECRETS["Secrets Management"]
-  end
+- Wire up components
+- Swap implementations (SQL vs Memory repos)
+- Enable testing with mocks
+- Manage lifecycle (singletons, request-scoped)
 
-  subgraph "Network Security"
-    VPC["VPC"]
-    SG["Security Groups"]
-    WAF["Web Application Firewall"]
-  end
+**Key Container:**
 
-  HTTPS --> AUTH
-  CSP --> AUTHZ
-  CORS --> RATE
+- `_Container` class manages all dependencies
+- Routes get dependencies via FastAPI's dependency injection
+- Supports multiple persistence backends
 
-  AUTH --> ENCRYPT
-  AUTHZ --> TRANSPORT
-  RATE --> SECRETS
+---
 
-  ENCRYPT --> VPC
-  TRANSPORT --> SG
-  SECRETS --> WAF
+## Component Relationships
+
+### Repository Pattern
+
+```
+Application Layer (Use Cases)
+    ↓ (depends on)
+Ports (Interfaces)
+    ↓ (implemented by)
+Infrastructure Layer (Repositories)
+    ↓ (persists)
+Domain Entities
 ```
 
-## Monitoring Architecture
+### Adapter Pattern
 
-```mermaid
-graph TB
-  subgraph "Application Metrics"
-    APP["Application Logs"]
-    PERF["Performance Metrics"]
-    ERR["Error Tracking"]
-  end
-
-  subgraph "Infrastructure Metrics"
-    CPU["CPU Usage"]
-    MEM["Memory Usage"]
-    DISK["Disk Usage"]
-    NET["Network I/O"]
-  end
-
-  subgraph "Business Metrics"
-    TRADES["Trade Volume"]
-    PNL["P&L Tracking"]
-    RISK["Risk Metrics"]
-  end
-
-  subgraph "Monitoring Stack"
-    PROM["Prometheus"]
-    GRAF["Grafana"]
-    JAEGER["Jaeger"]
-    ALERT["AlertManager"]
-  end
-
-  APP --> PROM
-  PERF --> PROM
-  ERR --> PROM
-
-  CPU --> PROM
-  MEM --> PROM
-  DISK --> PROM
-  NET --> PROM
-
-  TRADES --> PROM
-  PNL --> PROM
-  RISK --> PROM
-
-  PROM --> GRAF
-  PROM --> JAEGER
-  PROM --> ALERT
+```
+Application Layer (Orchestrators)
+    ↓ (depends on)
+Ports (Service Interfaces)
+    ↓ (implemented by)
+Infrastructure Layer (Adapters)
+    ↓ (calls)
+External Services
 ```
 
-## Component Dependencies
+### Domain Services
 
-```mermaid
-graph TD
-  subgraph "Frontend Dependencies"
-    REACT_DEP["React 18"]
-    TS_DEP["TypeScript"]
-    VITE_DEP["Vite"]
-    TAILWIND_DEP["Tailwind CSS"]
-    RQ_DEP["React Query"]
-    ROUTER_DEP["React Router"]
-    CHARTS_DEP["Recharts"]
-    ZUSTAND_DEP["Zustand"]
-  end
-
-  subgraph "Backend Dependencies"
-    FASTAPI_DEP["FastAPI"]
-    PYDANTIC_DEP["Pydantic"]
-    SQLALCHEMY_DEP["SQLAlchemy"]
-    REDIS_DEP["Redis"]
-    YFINANCE_DEP["yfinance"]
-    PYTZ_DEP["pytz"]
-  end
-
-  subgraph "Database Dependencies"
-    POSTGRES_DEP["PostgreSQL"]
-    SQLITE_DEP["SQLite"]
-    REDIS_DB_DEP["Redis"]
-  end
-
-  subgraph "Testing Dependencies"
-    PYTEST_DEP["pytest"]
-    RUF_DEP["ruff"]
-    MYPY_DEP["mypy"]
-    JEST_DEP["Jest"]
-    RTL_DEP["React Testing Library"]
-  end
-
-  REACT_DEP --> TS_DEP
-  TS_DEP --> VITE_DEP
-  VITE_DEP --> TAILWIND_DEP
-  TAILWIND_DEP --> RQ_DEP
-  RQ_DEP --> ROUTER_DEP
-  ROUTER_DEP --> CHARTS_DEP
-  CHARTS_DEP --> ZUSTAND_DEP
-
-  FASTAPI_DEP --> PYDANTIC_DEP
-  PYDANTIC_DEP --> SQLALCHEMY_DEP
-  SQLALCHEMY_DEP --> REDIS_DEP
-  REDIS_DEP --> YFINANCE_DEP
-  YFINANCE_DEP --> PYTZ_DEP
-
-  SQLALCHEMY_DEP --> POSTGRES_DEP
-  SQLALCHEMY_DEP --> SQLITE_DEP
-  REDIS_DEP --> REDIS_DB_DEP
-
-  FASTAPI_DEP --> PYTEST_DEP
-  PYTEST_DEP --> RUF_DEP
-  RUF_DEP --> MYPY_DEP
-
-  REACT_DEP --> JEST_DEP
-  JEST_DEP --> RTL_DEP
 ```
+Application Layer (Use Cases)
+    ↓ (uses)
+Domain Services (Pure Functions)
+    ↓ (operates on)
+Domain Entities & Value Objects
+```
+
+---
+
+## Key Design Principles
+
+### 1. Dependency Inversion
+
+- Application layer depends on ports (interfaces), not implementations
+- Infrastructure implements ports
+- Enables easy swapping of implementations
+
+### 2. Single Responsibility
+
+- Each component has one clear responsibility
+- Use cases handle single business operations
+- Domain services handle specific domain logic
+
+### 3. Separation of Concerns
+
+- Presentation: HTTP handling
+- Application: Orchestration and use cases
+- Domain: Business logic
+- Infrastructure: Technical details
+
+### 4. Testability
+
+- Domain layer is easily testable (pure functions)
+- Use cases testable with mock repositories
+- Infrastructure testable in isolation
+
+---
+
+## Component Organization
+
+### Backend Structure
+
+```
+backend/
+├── app/                    # Presentation Layer
+│   ├── routes/            # API endpoints
+│   ├── di.py             # Dependency injection
+│   └── main.py           # FastAPI app
+│
+├── application/           # Application Layer
+│   ├── orchestrators/    # High-level orchestration
+│   ├── use_cases/        # Business operations
+│   ├── ports/            # Interfaces
+│   ├── services/         # Application services
+│   └── dto/              # Data transfer objects
+│
+├── domain/                # Domain Layer
+│   ├── entities/         # Business entities
+│   ├── value_objects/    # Value objects
+│   ├── services/        # Domain services
+│   └── ports/            # Domain interfaces
+│
+└── infrastructure/        # Infrastructure Layer
+    ├── persistence/     # Repositories
+    ├── adapters/         # External adapters
+    ├── market/           # Market data
+    └── time/             # Time utilities
+```
+
+### Frontend Structure
+
+```
+frontend/src/
+├── pages/                # Page components
+├── components/           # Reusable components
+├── hooks/                # Custom hooks
+├── types/                # TypeScript types
+└── services/             # API clients
+```
+
+---
+
+## Related Documentation
+
+- [Clean Architecture Overview](clean_architecture_overview.md) - Architectural principles
+- [Domain Model](domain-model.md) - Domain entities and concepts
+- [Trading Cycle](trading-cycle.md) - Trading flow details
+- [Persistence](persistence.md) - Database schema
+- [System Context](context.md) - High-level system view
+
+---
+
+_Last updated: 2025-01-27_
+
+

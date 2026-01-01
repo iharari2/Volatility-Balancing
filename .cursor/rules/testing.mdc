@@ -1,0 +1,10 @@
+---
+description: Rules for preventing regressions
+globs: ['**/*']
+---
+
+# Regression Prevention
+
+- Before modifying a function, check for its usages across the codebase (@codebase).
+- If you modify a shared utility or API, you MUST list all affected files before applying.
+- Always generate a corresponding unit test for any logic change to ensure the fix is permanent.

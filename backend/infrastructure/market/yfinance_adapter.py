@@ -22,27 +22,361 @@ class YFinanceAdapter(MarketDataRepo):
         self.tz_eastern = pytz.timezone("US/Eastern")
         self.tz_utc = timezone.utc
         self.storage = MarketDataStorage()
-        self.cache_ttl = 5  # 5 seconds cache TTL
+        self.cache_ttl = 30  # 30 seconds cache TTL (reduced from 5 to allow more frequent updates)
 
-    def get_price(self, ticker: str) -> Optional[PriceData]:
-        """Get current price data for a ticker."""
+    def clear_cache(self, ticker: str = None):
+        """Clear cached price data for a ticker or all tickers."""
+        self.storage.clear_price_cache(ticker)
+
+    def get_price(self, ticker: str, force_refresh: bool = False) -> Optional[PriceData]:
+        """Get current price data for a ticker.
+
+        Args:
+            ticker: Stock ticker symbol
+            force_refresh: If True, bypass cache and fetch fresh data
+        """
         try:
-            # Check storage cache first
-            cached_data = self.storage.get_price_data(ticker)
-            if cached_data and self._is_cache_valid(cached_data):
-                return cached_data
+            # NEVER use cache for get_price - always fetch fresh data
+            # The cache might contain weeks-old data from previous runs
+            print(f"🔍 Fetching fresh market data for {ticker} (cache bypassed)")
 
-            # Fetch fresh data
+            # Fetch fresh data using multiple methods for better accuracy
+            # Create a NEW Ticker instance each time to avoid yfinance caching
             stock = yf.Ticker(ticker)
-            info = stock.info
+            # Force refresh by accessing info with a fresh request
+            current_time = datetime.now(self.tz_utc)
+
+            # ALWAYS try fast_info first (most current data)
+            try:
+                # Access fast_info - this should be fresh
+                fast_info = stock.fast_info
+                # fast_info has the most current data
+                current_price = (
+                    fast_info.get("lastPrice")
+                    or fast_info.get("regularMarketPrice")
+                    or fast_info.get("previousClose")
+                )
+                bid = fast_info.get("bid")
+                ask = fast_info.get("ask")
+
+                if current_price and current_price > 0:
+                    # Use fast_info data (most current)
+                    mid_quote = (
+                        (bid + ask) / 2 if (bid and ask and bid > 0 and ask > 0) else current_price
+                    )
+                    price = current_price
+                    source = PriceSource.LAST_TRADE
+                    is_fresh = True
+                    is_inline = True
+                    last_trade_price = current_price
+                    last_trade_time = current_time  # Use current time for fast_info
+
+                    # Get volume from fast_info if available
+                    volume = fast_info.get("regularMarketVolume") or fast_info.get("volume")
+
+                    # Fetch today's OHLC data - prefer intraday from info object (most current during market hours)
+                    today_ohlc = None
+                    try:
+                        # Get fresh info object - this has the most current intraday OHLC values
+                        # Create a NEW ticker instance to ensure fresh data (yfinance may cache)
+                        fresh_stock = yf.Ticker(ticker)
+                        info = fresh_stock.info
+
+                        # Debug: log what we're getting from info
+                        print(
+                            f"🔍 Debug {ticker} info values: regularMarketOpen={info.get('regularMarketOpen')}, regularMarketDayHigh={info.get('regularMarketDayHigh')}, regularMarketDayLow={info.get('regularMarketDayLow')}"
+                        )
+
+                        # Use intraday values from info (most accurate during market hours)
+                        day_open = info.get("regularMarketOpen") or info.get("open")
+                        day_high = info.get("regularMarketDayHigh") or info.get("dayHigh")
+                        day_low = info.get("regularMarketDayLow") or info.get("dayLow")
+                        day_close = (
+                            current_price  # Use current price as today's close (most recent)
+                        )
+
+                        # If we have at least open, use it (high/low might not be available early in the day)
+                        if day_open:
+                            today_ohlc = {
+                                "open": float(day_open),
+                                "high": float(day_high)
+                                if day_high
+                                else float(
+                                    current_price
+                                ),  # Use current price if high not available
+                                "low": float(day_low)
+                                if day_low
+                                else float(current_price),  # Use current price if low not available
+                                "close": float(day_close),
+                            }
+                            print(
+                                f"✅ Using intraday OHLC from info for {ticker}: O=${day_open:.2f}, H=${today_ohlc['high']:.2f}, L=${today_ohlc['low']:.2f}, C=${day_close:.2f}"
+                            )
+                        else:
+                            print(
+                                f"⚠️ No open price in info for {ticker} (got {day_open}), will try intraday history"
+                            )
+                    except Exception as e:
+                        import traceback
+
+                        print(f"⚠️ Could not access info for {ticker}: {e}")
+                        traceback.print_exc()
+
+                    # Fallback: try intraday history (1m bars) for today's OHLC
+                    if not today_ohlc:
+                        try:
+                            # Try to get today's intraday data (more accurate than daily bars)
+                            intraday_hist = stock.history(period="1d", interval="1m")
+                            if not intraday_hist.empty:
+                                # Get today's data (most recent day)
+                                today_ohlc = {
+                                    "open": float(
+                                        intraday_hist.iloc[0]["Open"]
+                                    ),  # First bar of the day
+                                    "high": float(
+                                        intraday_hist["High"].max()
+                                    ),  # Max high of the day
+                                    "low": float(intraday_hist["Low"].min()),  # Min low of the day
+                                    "close": float(current_price),  # Most recent price
+                                }
+                                print(
+                                    f"✅ Using intraday history OHLC for {ticker}: O=${today_ohlc['open']:.2f}, H=${today_ohlc['high']:.2f}, L=${today_ohlc['low']:.2f}, C=${today_ohlc['close']:.2f}"
+                                )
+                        except Exception as e:
+                            print(f"⚠️ Could not fetch intraday history for {ticker}: {e}")
+
+                    # Final fallback: daily history (may be stale)
+                    if not today_ohlc:
+                        try:
+                            daily_hist = stock.history(period="2d", interval="1d")
+                            if not daily_hist.empty:
+                                latest_day = daily_hist.iloc[-1]
+                                today_ohlc = {
+                                    "open": float(latest_day["Open"]),
+                                    "high": float(latest_day["High"]),
+                                    "low": float(latest_day["Low"]),
+                                    "close": float(latest_day["Close"]),
+                                }
+                                print(
+                                    f"⚠️ Using daily history OHLC for {ticker} (may be stale): O=${today_ohlc['open']:.2f}, C=${today_ohlc['close']:.2f}"
+                                )
+                        except Exception as e:
+                            print(f"⚠️ Could not fetch daily history for {ticker}: {e}")
+
+                    # Check if market is open
+                    market_status = self.get_market_status()
+                    is_market_hours = market_status.is_open
+
+                    print(f"✅ Using fast_info for {ticker}: ${price:.2f} (fresh data)")
+
+                    price_data = PriceData(
+                        ticker=ticker,
+                        price=price,
+                        source=source,
+                        timestamp=current_time,
+                        bid=bid if (bid and bid > 0) else price * 0.999,
+                        ask=ask if (ask and ask > 0) else price * 1.001,
+                        volume=int(volume) if volume else None,
+                        last_trade_price=last_trade_price,
+                        last_trade_time=last_trade_time,
+                        is_market_hours=bool(is_market_hours),
+                        is_fresh=bool(is_fresh),
+                        is_inline=bool(is_inline),
+                        open=today_ohlc["open"] if today_ohlc else None,
+                        high=today_ohlc["high"] if today_ohlc else None,
+                        low=today_ohlc["low"] if today_ohlc else None,
+                        close=today_ohlc["close"] if today_ohlc else None,
+                    )
+
+                    # Store in comprehensive storage system
+                    self.storage.store_price_data(ticker, price_data)
+                    return price_data
+                else:
+                    print(f"⚠️ fast_info returned invalid price for {ticker}, trying info...")
+            except Exception as e:
+                print(f"⚠️ fast_info not available for {ticker}, trying info: {e}")
+
+            # Fallback to info (currentPrice/regularMarketPrice) - more current than history
+            # Force fresh info - create new ticker instance to avoid yfinance caching
+            try:
+                info = stock.info
+            except Exception:
+                # If info access fails, create fresh ticker
+                stock = yf.Ticker(ticker)
+                info = stock.info
+            current_price = (
+                info.get("currentPrice")
+                or info.get("regularMarketPrice")
+                or info.get("regularMarketPreviousClose")
+            )
+
+            if current_price and current_price > 0:
+                # Use info data (more current than history)
+                bid = info.get("bid", current_price * 0.999)
+                ask = info.get("ask", current_price * 1.001)
+                mid_quote = (bid + ask) / 2 if (bid and ask) else current_price
+
+                market_status = self.get_market_status()
+                is_market_hours = market_status.is_open
+
+                # Fetch today's OHLC data - prefer intraday from info, fallback to daily history
+                today_ohlc = None
+                try:
+                    # Use intraday values from info object (more accurate during market hours)
+                    # Debug: log what we're getting from info
+                    print(
+                        f"🔍 Debug {ticker} info values: regularMarketOpen={info.get('regularMarketOpen')}, regularMarketDayHigh={info.get('regularMarketDayHigh')}, regularMarketDayLow={info.get('regularMarketDayLow')}"
+                    )
+
+                    day_open = info.get("regularMarketOpen") or info.get("open")
+                    day_high = info.get("regularMarketDayHigh") or info.get("dayHigh")
+                    day_low = info.get("regularMarketDayLow") or info.get("dayLow")
+                    day_close = current_price  # Use current price as today's close (most recent)
+
+                    # If we have at least open, use it (high/low might not be available early in the day)
+                    if day_open:
+                        today_ohlc = {
+                            "open": float(day_open),
+                            "high": float(day_high)
+                            if day_high
+                            else float(current_price),  # Use current price if high not available
+                            "low": float(day_low)
+                            if day_low
+                            else float(current_price),  # Use current price if low not available
+                            "close": float(day_close),
+                        }
+                        print(
+                            f"✅ Using intraday OHLC from info for {ticker}: O=${day_open:.2f}, H=${today_ohlc['high']:.2f}, L=${today_ohlc['low']:.2f}, C=${day_close:.2f}"
+                        )
+                    else:
+                        print(
+                            f"⚠️ No open price in info for {ticker} (got {day_open}), will try intraday history"
+                        )
+                except Exception as e:
+                    import traceback
+
+                    print(f"⚠️ Could not access info for {ticker}: {e}")
+                    traceback.print_exc()
+
+                    # Fallback: try intraday history (1m bars) for today's OHLC
+                    if not today_ohlc:
+                        try:
+                            # Try to get today's intraday data (more accurate than daily bars)
+                            intraday_hist = stock.history(period="1d", interval="1m")
+                            if not intraday_hist.empty:
+                                # Get today's data
+                                today_ohlc = {
+                                    "open": float(
+                                        intraday_hist.iloc[0]["Open"]
+                                    ),  # First bar of the day
+                                    "high": float(
+                                        intraday_hist["High"].max()
+                                    ),  # Max high of the day
+                                    "low": float(intraday_hist["Low"].min()),  # Min low of the day
+                                    "close": float(current_price),  # Most recent price
+                                }
+                                print(
+                                    f"✅ Using intraday history OHLC for {ticker}: O=${today_ohlc['open']:.2f}, H=${today_ohlc['high']:.2f}, L=${today_ohlc['low']:.2f}, C=${today_ohlc['close']:.2f}"
+                                )
+                        except Exception as e:
+                            print(f"⚠️ Could not fetch intraday history for {ticker}: {e}")
+
+                    # Final fallback: daily history (may be stale)
+                    if not today_ohlc:
+                        try:
+                            daily_hist = stock.history(period="2d", interval="1d")
+                            if not daily_hist.empty:
+                                latest_day = daily_hist.iloc[-1]
+                                today_ohlc = {
+                                    "open": float(latest_day["Open"]),
+                                    "high": float(latest_day["High"]),
+                                    "low": float(latest_day["Low"]),
+                                    "close": float(latest_day["Close"]),
+                                }
+                                print(
+                                    f"⚠️ Using daily history OHLC for {ticker} (may be stale): O=${today_ohlc['open']:.2f}, C=${today_ohlc['close']:.2f}"
+                                )
+                        except Exception as e:
+                            print(f"⚠️ Could not fetch daily history for {ticker}: {e}")
+                except Exception as e:
+                    print(f"⚠️ Could not fetch OHLC for {ticker}: {e}")
+
+                print(f"✅ Using info.currentPrice for {ticker}: ${current_price:.2f} (from info)")
+
+                price_data = PriceData(
+                    ticker=ticker,
+                    price=current_price,
+                    source=PriceSource.LAST_TRADE,
+                    timestamp=current_time,
+                    bid=bid if bid else current_price * 0.999,
+                    ask=ask if ask else current_price * 1.001,
+                    volume=info.get("volume"),
+                    last_trade_price=current_price,
+                    last_trade_time=current_time,
+                    is_market_hours=bool(is_market_hours),
+                    is_fresh=True,
+                    is_inline=True,
+                    open=today_ohlc["open"] if today_ohlc else None,
+                    high=today_ohlc["high"] if today_ohlc else None,
+                    low=today_ohlc["low"] if today_ohlc else None,
+                    close=today_ohlc["close"] if today_ohlc else None,
+                )
+
+                self.storage.store_price_data(ticker, price_data)
+                print(
+                    f"✅ Stored fresh price data from info for {ticker}: ${current_price:.2f} at {current_time}"
+                )
+                return price_data
+            else:
+                print(f"⚠️ info.currentPrice not available for {ticker}, trying history...")
+
+            # Last resort: try history (but this might be stale)
+            print(f"⚠️ WARNING: Using history for {ticker} - this may be stale!")
             hist = stock.history(period="1d", interval="1m")
 
             if hist.empty:
+                # Try getting just the latest quote
+                try:
+                    current_price = info.get("currentPrice") or info.get("regularMarketPrice")
+                    if current_price:
+                        bid = info.get("bid", current_price * 0.999)
+                        ask = info.get("ask", current_price * 1.001)
+                        mid_quote = (bid + ask) / 2
+
+                        market_status = self.get_market_status()
+                        is_market_hours = market_status.is_open
+
+                        price_data = PriceData(
+                            ticker=ticker,
+                            price=current_price,
+                            source=PriceSource.LAST_TRADE,
+                            timestamp=current_time,
+                            bid=bid,
+                            ask=ask,
+                            volume=info.get("volume"),
+                            last_trade_price=current_price,
+                            last_trade_time=current_time,
+                            is_market_hours=bool(is_market_hours),
+                            is_fresh=True,
+                            is_inline=True,
+                        )
+
+                        self.storage.store_price_data(ticker, price_data)
+                        return price_data
+                except Exception as e2:
+                    print(f"Could not get price from info: {e2}")
+
                 return None
 
-            # Get latest data
+            # Get latest data from history
             latest = hist.iloc[-1]
-            current_time = datetime.now(self.tz_utc)
+            last_trade_time = latest.name.to_pydatetime()
+            if last_trade_time.tzinfo is None:
+                last_trade_time = last_trade_time.replace(tzinfo=self.tz_eastern).astimezone(
+                    self.tz_utc
+                )
+            else:
+                last_trade_time = last_trade_time.astimezone(self.tz_utc)
 
             # Calculate mid-quote if bid/ask available
             bid = info.get("bid", latest["Low"])
@@ -51,11 +385,26 @@ class YFinanceAdapter(MarketDataRepo):
 
             # Determine price source following specification policy
             last_trade_price = latest["Close"]
-            last_trade_time = latest.name.to_pydatetime().replace(tzinfo=self.tz_utc)
 
             # Reference price policy: Last trade if age ≤3s & within ±1% of mid
             age_seconds = (current_time - last_trade_time).total_seconds()
             price_diff_pct = abs(last_trade_price - mid_quote) / mid_quote if mid_quote > 0 else 1.0
+
+            # For stale data (more than 15 minutes old), warn and try to get currentPrice
+            if age_seconds > 900:  # 15 minutes
+                print(f"⚠️ WARNING: History data for {ticker} is {age_seconds/60:.1f} minutes old!")
+                current_price = info.get("currentPrice") or info.get("regularMarketPrice")
+                if current_price and current_price > 0:
+                    last_trade_price = current_price
+                    last_trade_time = current_time  # Use current time for info-based price
+                    age_seconds = 0  # Consider it fresh if from info
+                    print(
+                        f"✅ Using currentPrice from info (${current_price:.2f}) instead of stale history data"
+                    )
+                else:
+                    print(
+                        f"❌ ERROR: Cannot get current price for {ticker} - data is {age_seconds/60:.1f} minutes old!"
+                    )
 
             if age_seconds <= 3 and price_diff_pct <= 0.01:
                 price = last_trade_price
@@ -85,6 +434,10 @@ class YFinanceAdapter(MarketDataRepo):
                 is_market_hours=bool(is_market_hours),
                 is_fresh=bool(is_fresh),
                 is_inline=bool(is_inline),
+                open=float(latest["Open"]) if not pd.isna(latest["Open"]) else None,
+                high=float(latest["High"]) if not pd.isna(latest["High"]) else None,
+                low=float(latest["Low"]) if not pd.isna(latest["Low"]) else None,
+                close=float(latest["Close"]) if not pd.isna(latest["Close"]) else None,
             )
 
             # Store in comprehensive storage system
@@ -94,6 +447,9 @@ class YFinanceAdapter(MarketDataRepo):
 
         except Exception as e:
             print(f"Error fetching price for {ticker}: {e}")
+            import traceback
+
+            traceback.print_exc()
             return None
 
     def get_market_status(self) -> MarketStatus:
@@ -218,7 +574,80 @@ class YFinanceAdapter(MarketDataRepo):
     def _is_cache_valid(self, price_data: PriceData) -> bool:
         """Check if cached price data is still valid."""
         age_seconds = (datetime.now(self.tz_utc) - price_data.timestamp).total_seconds()
-        return age_seconds < self.cache_ttl
+        # NEVER use cache older than 5 minutes - always fetch fresh
+        if age_seconds > 300:  # 5 minutes
+            print(f"⚠️ Cache invalid: data is {age_seconds/60:.1f} minutes old")
+            return False
+        # Even if within TTL, don't trust cache for current prices
+        return False  # Always return False to force fresh fetch
+
+    def get_current_quote(self, ticker: str) -> Optional[PriceData]:
+        """Get the most current quote available, bypassing cache for fresh data."""
+        try:
+            stock = yf.Ticker(ticker)
+            current_time = datetime.now(self.tz_utc)
+
+            # Try fast_info first (most current)
+            try:
+                fast_info = stock.fast_info
+                current_price = fast_info.get("lastPrice") or fast_info.get("regularMarketPrice")
+                if current_price:
+                    bid = fast_info.get("bid", current_price * 0.999)
+                    ask = fast_info.get("ask", current_price * 1.001)
+
+                    market_status = self.get_market_status()
+
+                    return PriceData(
+                        ticker=ticker,
+                        price=current_price,
+                        source=PriceSource.LAST_TRADE,
+                        timestamp=current_time,
+                        bid=bid,
+                        ask=ask,
+                        volume=fast_info.get("regularMarketVolume"),
+                        last_trade_price=current_price,
+                        last_trade_time=current_time,
+                        is_market_hours=market_status.is_open,
+                        is_fresh=True,
+                        is_inline=True,
+                    )
+            except Exception:
+                pass
+
+            # Fallback to info
+            info = stock.info
+            current_price = (
+                info.get("currentPrice")
+                or info.get("regularMarketPrice")
+                or info.get("regularMarketPreviousClose")
+            )
+            if current_price:
+                bid = info.get("bid", current_price * 0.999)
+                ask = info.get("ask", current_price * 1.001)
+
+                market_status = self.get_market_status()
+
+                return PriceData(
+                    ticker=ticker,
+                    price=current_price,
+                    source=PriceSource.LAST_TRADE,
+                    timestamp=current_time,
+                    bid=bid,
+                    ask=ask,
+                    volume=info.get("volume"),
+                    last_trade_price=current_price,
+                    last_trade_time=current_time,
+                    is_market_hours=market_status.is_open,
+                    is_fresh=True,
+                    is_inline=True,
+                )
+
+            # Last resort: use get_price which will try history
+            return self.get_price(ticker)
+
+        except Exception as e:
+            print(f"Error getting current quote for {ticker}: {e}")
+            return None
 
     def get_historical_data(
         self, ticker: str, start_date: datetime, end_date: datetime, market_hours_only: bool = False
@@ -258,6 +687,12 @@ class YFinanceAdapter(MarketDataRepo):
             # Validate input parameters
             if not ticker or not isinstance(ticker, str):
                 raise ValueError(f"Invalid ticker: {ticker}")
+
+            # Ensure both dates are timezone-aware for comparison
+            if start_date.tzinfo is None:
+                start_date = start_date.replace(tzinfo=self.tz_utc)
+            if end_date.tzinfo is None:
+                end_date = end_date.replace(tzinfo=self.tz_utc)
 
             if start_date >= end_date:
                 raise ValueError(f"Start date {start_date} must be before end date {end_date}")

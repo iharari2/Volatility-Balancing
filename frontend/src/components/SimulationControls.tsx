@@ -94,19 +94,27 @@ export default function SimulationControls({
   const validateDates = () => {
     const startDate = new Date(config.startDate);
     const endDate = new Date(config.endDate);
-    const today = new Date();
+    const now = new Date();
+    // Compare dates only (ignore time)
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startDateOnly = new Date(
+      startDate.getFullYear(),
+      startDate.getMonth(),
+      startDate.getDate(),
+    );
+    const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
     const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     const errors = [];
     const warnings = [];
 
-    if (startDate > today) {
+    if (startDateOnly > today) {
       errors.push('Start date cannot be in the future');
     }
-    if (endDate > today) {
+    if (endDateOnly > today) {
       errors.push('End date cannot be in the future');
     }
-    if (startDate >= endDate) {
+    if (startDateOnly >= endDateOnly) {
       errors.push('Start date must be before end date');
     }
     // Allow exactly 30 days (with some tolerance)

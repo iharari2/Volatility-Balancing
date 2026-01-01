@@ -276,7 +276,7 @@ class TestOptimizationConfig:
             name="Test Config",
             ticker="AAPL",
             start_date=now,
-            end_date=datetime(2026, 1, 1),
+            end_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
             parameter_ranges=param_ranges,
             optimization_criteria=criteria,
             status=OptimizationStatus.DRAFT,

@@ -4,7 +4,6 @@ Simple test script for the Parameter Optimization System
 """
 
 import requests
-import json
 from datetime import datetime, timedelta
 from uuid import uuid4
 
@@ -121,7 +120,7 @@ def test_simple_optimization():
     print("=" * 60)
     print("📊 The Parameter Optimization System is working!")
     print(f"🔧 Configuration ID: {config_id}")
-    print(f"📖 API Documentation: http://localhost:8000/docs")
+    print("📖 API Documentation: http://localhost:8000/docs")
 
     return config_id
 
@@ -130,20 +129,14 @@ if __name__ == "__main__":
     try:
         config_id = test_simple_optimization()
         if config_id:
-            print(f"\n💡 Next steps:")
-            print(f"   1. Visit http://localhost:8000/docs to explore the API")
+            print("\n💡 Next steps:")
+            print("   1. Visit http://localhost:8000/docs to explore the API")
             print(f"   2. Use the configuration ID {config_id} for further testing")
             print(
-                f"   3. The optimization results will be empty until we implement actual simulation processing"
+                "   3. The optimization results will be empty until we implement actual simulation processing"
             )
     except requests.exceptions.ConnectionError:
         print("❌ Could not connect to the API server.")
         print("   Make sure the server is running on http://localhost:8000")
     except Exception as e:
         print(f"❌ Test failed with error: {e}")
-
-
-
-
-
-

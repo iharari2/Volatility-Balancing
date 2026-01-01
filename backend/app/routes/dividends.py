@@ -68,13 +68,20 @@ async def announce_dividend(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/positions/{position_id}/process-ex-dividend")
+@router.post(
+    "/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/process-ex-dividend"
+)
 async def process_ex_dividend_date(
-    position_id: str, dividend_uc: ProcessDividendUC = Depends(get_dividend_uc)
+    tenant_id: str,
+    portfolio_id: str,
+    position_id: str,
+    dividend_uc: ProcessDividendUC = Depends(get_dividend_uc),
 ) -> Dict[str, Any]:
     """Process ex-dividend date for a position."""
     try:
-        result = dividend_uc.process_ex_dividend_date(position_id)
+        result = dividend_uc.process_ex_dividend_date(
+            tenant_id=tenant_id, portfolio_id=portfolio_id, position_id=position_id
+        )
 
         if not result:
             return {
@@ -107,15 +114,24 @@ async def process_ex_dividend_date(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/positions/{position_id}/process-payment")
+@router.post(
+    "/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/process-payment"
+)
 async def process_dividend_payment(
+    tenant_id: str,
+    portfolio_id: str,
     position_id: str,
     request: DividendPaymentRequest,
     dividend_uc: ProcessDividendUC = Depends(get_dividend_uc),
 ) -> Dict[str, Any]:
     """Process dividend payment for a receivable."""
     try:
-        result = dividend_uc.process_dividend_payment(position_id, request.receivable_id)
+        result = dividend_uc.process_dividend_payment(
+            tenant_id=tenant_id,
+            portfolio_id=portfolio_id,
+            position_id=position_id,
+            receivable_id=request.receivable_id,
+        )
 
         if not result:
             raise HTTPException(status_code=404, detail="Receivable not found")
@@ -132,13 +148,18 @@ async def process_dividend_payment(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/positions/{position_id}/status")
+@router.get("/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/status")
 async def get_dividend_status(
-    position_id: str, dividend_uc: ProcessDividendUC = Depends(get_dividend_uc)
+    tenant_id: str,
+    portfolio_id: str,
+    position_id: str,
+    dividend_uc: ProcessDividendUC = Depends(get_dividend_uc),
 ) -> Dict[str, Any]:
     """Get dividend status for a position."""
     try:
-        status = dividend_uc.get_dividend_status(position_id)
+        status = dividend_uc.get_dividend_status(
+            tenant_id=tenant_id, portfolio_id=portfolio_id, position_id=position_id
+        )
 
         if not status:
             raise HTTPException(status_code=404, detail="Position not found")

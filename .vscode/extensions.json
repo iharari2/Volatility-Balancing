@@ -4,6 +4,7 @@
     "charliermarsh.ruff",
     "ms-python.black-formatter",
     "esbenp.prettier-vscode",
-    "bradlc.vscode-tailwindcss"
+    "bradlc.vscode-tailwindcss",
+    "openai.chatgpt"
   ]
 }

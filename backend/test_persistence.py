@@ -33,7 +33,12 @@ def test_persistence():
 
     # Create a position
     print("1. Creating position...")
-    position = container.positions.create(ticker="AAPL", qty=10.0, cash=10000.0)
+    position = container.positions.create(
+        tenant_id="default",
+        portfolio_id="test_portfolio",
+        asset_symbol="AAPL",
+        qty=10.0,
+    )
     print(f"   ✅ Created position: {position.id}")
 
     # Submit an order

@@ -10,12 +10,17 @@ from domain.value_objects.types import OrderSide
 @dataclass
 class Order:
     id: str
+    tenant_id: str
+    portfolio_id: str
     position_id: str
     side: OrderSide
     qty: float
     status: Literal["submitted", "filled", "rejected"] = "submitted"
     idempotency_key: Optional[str] = None
     request_signature: Optional[Dict[str, Any]] = None
+    # Commission fields (per spec)
+    commission_rate_snapshot: Optional[float] = None  # Copied from config at order creation
+    commission_estimated: Optional[float] = None  # Optional, for UI only
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 

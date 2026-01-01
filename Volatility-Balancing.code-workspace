@@ -5,7 +5,6 @@
 		}
 	],
 	"settings": {
-		"ruff.lint.run": "onSave",
 		"ruff.fixAll": true,
 		"terminal.integrated.env.windows": {
 			"PYTHONPATH": "backend"

@@ -39,8 +39,9 @@ class ParameterRange:
             if self.categorical_values is not None:
                 raise ValueError("Non-categorical parameters cannot have categorical_values")
 
-            if self.min_value >= self.max_value:
-                raise ValueError("min_value must be less than max_value")
+            # Allow min_value to equal max_value (for single-value parameters)
+            if self.min_value > self.max_value:
+                raise ValueError("min_value must be less than or equal to max_value")
 
             if self.step_size <= 0:
                 raise ValueError("step_size must be positive")
@@ -52,6 +53,14 @@ class ParameterRange:
 
         values = []
         current = self.min_value
+
+        # Handle single-value parameters (min_value == max_value)
+        if self.min_value == self.max_value:
+            if self.parameter_type == ParameterType.INTEGER:
+                values.append(int(current))
+            else:
+                values.append(current)
+            return values
 
         while current <= self.max_value:
             if self.parameter_type == ParameterType.INTEGER:
@@ -66,6 +75,10 @@ class ParameterRange:
         """Get the number of possible values for this parameter."""
         if self.parameter_type == ParameterType.CATEGORICAL:
             return len(self.categorical_values)
+
+        # Handle single-value parameters (min_value == max_value)
+        if self.min_value == self.max_value:
+            return 1
 
         return int((self.max_value - self.min_value) / self.step_size) + 1
 
@@ -101,5 +114,3 @@ class ParameterRange:
             return int(round(value))
 
         return value
-
-

@@ -25,3 +25,4 @@ class FillOrderResponse(BaseModel):
     order_id: str
     status: OrderFillStatus
     filled_qty: float = 0.0
+    trade_id: str | None = None

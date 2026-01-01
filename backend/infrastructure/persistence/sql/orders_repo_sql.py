@@ -31,13 +31,24 @@ class SQLOrdersRepo(OrdersRepo):
             )
             return int(s.scalar(stmt) or 0)
 
-    def create(self, *, position_id: str, side: OrderSide, qty: float, idempotency_key: str) -> str:
+    def create(
+        self,
+        *,
+        tenant_id: str,
+        portfolio_id: str,
+        position_id: str,
+        side: OrderSide,
+        qty: float,
+        idempotency_key: str,
+    ) -> str:
         """Create a submitted order and return its generated ID."""
         from uuid import uuid4
 
         order_id = f"ord_{uuid4().hex[:8]}"
         order = Order(
             id=order_id,
+            tenant_id=tenant_id,
+            portfolio_id=portfolio_id,
             position_id=position_id,
             side=side,
             qty=qty,
@@ -54,11 +65,15 @@ class SQLOrdersRepo(OrdersRepo):
                 return None
             return Order(
                 id=row.id,
+                tenant_id=row.tenant_id,
+                portfolio_id=row.portfolio_id,
                 position_id=row.position_id,
                 side=cast(OrderSide, row.side),
                 qty=row.qty,
                 status=cast(OrderStatus, row.status),
                 idempotency_key=row.idempotency_key,
+                commission_rate_snapshot=getattr(row, "commission_rate_snapshot", None),
+                commission_estimated=getattr(row, "commission_estimated", None),
                 created_at=row.created_at,
                 updated_at=row.updated_at,
             )
@@ -70,21 +85,29 @@ class SQLOrdersRepo(OrdersRepo):
                 s.add(
                     OrderModel(
                         id=order.id,
+                        tenant_id=order.tenant_id,
+                        portfolio_id=order.portfolio_id,
                         position_id=order.position_id,
                         side=order.side,
                         qty=order.qty,
                         status=order.status,
                         idempotency_key=order.idempotency_key,
+                        commission_rate_snapshot=order.commission_rate_snapshot,
+                        commission_estimated=order.commission_estimated,
                         created_at=order.created_at,
                         updated_at=order.updated_at,
                     )
                 )
             else:
+                obj.tenant_id = order.tenant_id
+                obj.portfolio_id = order.portfolio_id
                 obj.position_id = order.position_id
                 obj.side = order.side
                 obj.qty = order.qty
                 obj.status = order.status
                 obj.idempotency_key = order.idempotency_key or ""
+                obj.commission_rate_snapshot = order.commission_rate_snapshot
+                obj.commission_estimated = order.commission_estimated
                 obj.updated_at = order.updated_at
             s.commit()
 
@@ -123,6 +146,8 @@ class SQLOrdersRepo(OrdersRepo):
                     qty=r.qty,
                     status=cast(OrderStatus, r.status),
                     idempotency_key=r.idempotency_key,
+                    commission_rate_snapshot=getattr(r, "commission_rate_snapshot", None),
+                    commission_estimated=getattr(r, "commission_estimated", None),
                     created_at=r.created_at,
                     updated_at=r.updated_at,
                 )

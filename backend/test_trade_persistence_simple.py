@@ -8,7 +8,6 @@ This test verifies that:
 3. SQL persistence works for trades
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -18,7 +17,6 @@ sys.path.insert(0, str(backend_dir))
 
 from datetime import datetime, timezone
 from domain.entities.trade import Trade
-from domain.value_objects.types import OrderSide
 from infrastructure.persistence.memory.trades_repo_mem import InMemoryTradesRepo
 from infrastructure.persistence.sql.trades_repo_sql import SQLTradesRepo
 from infrastructure.persistence.sql.models import get_engine, create_all
@@ -35,6 +33,8 @@ def test_in_memory_trades():
     # Create a test trade
     trade = Trade(
         id="trd_test_001",
+        tenant_id="default",
+        portfolio_id="test_portfolio",
         order_id="ord_123",
         position_id="pos_456",
         side="BUY",  # type: OrderSide
@@ -89,6 +89,8 @@ def test_sql_trades():
         # Create a test trade
         trade = Trade(
             id="trd_sql_001",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
             order_id="ord_sql_123",
             position_id="pos_sql_456",
             side="SELL",  # type: OrderSide
@@ -155,6 +157,8 @@ def test_trade_persistence_integration():
         # Create and save trade
         trade = Trade(
             id="trd_persist_001",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
             order_id="ord_persist_123",
             position_id="pos_persist_456",
             side="BUY",  # type: OrderSide

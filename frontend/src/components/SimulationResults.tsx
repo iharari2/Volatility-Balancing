@@ -27,7 +27,9 @@ import {
   CheckCircle,
   Clock,
   BarChart3,
+  FileText,
 } from 'lucide-react';
+import VerboseTimelineView from './VerboseTimelineView';
 
 export interface SimulationResult {
   ticker: string;
@@ -102,16 +104,18 @@ interface SimulationResultsProps {
   result: SimulationResult | null;
   isLoading: boolean;
   className?: string;
+  simulationId?: string; // Optional simulation ID for verbose timeline
 }
 
 export default function SimulationResults({
   result,
   isLoading,
   className = '',
+  simulationId,
 }: SimulationResultsProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'performance' | 'trades' | 'charts'>(
-    'overview',
-  );
+  const [activeTab, setActiveTab] = useState<
+    'overview' | 'performance' | 'trades' | 'charts' | 'verbose'
+  >('overview');
 
   if (isLoading) {
     return (
@@ -275,6 +279,7 @@ export default function SimulationResults({
               { id: 'performance', name: 'Performance', icon: TrendingUp },
               { id: 'trades', name: 'Trades', icon: Activity },
               { id: 'charts', name: 'Charts', icon: Target },
+              { id: 'verbose', name: 'Verbose Timeline', icon: FileText },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -966,6 +971,34 @@ export default function SimulationResults({
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Verbose Timeline Tab */}
+      {activeTab === 'verbose' && (
+        <div className="space-y-6">
+          {simulationId && result ? (
+            <>
+              {console.log('[SimulationResults] Rendering VerboseTimelineView with:', {
+                simulationId,
+                ticker: result.ticker,
+              })}
+              <VerboseTimelineView simulationId={simulationId} ticker={result.ticker} />
+            </>
+          ) : (
+            <div className="card">
+              <div className="text-center py-12">
+                <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  Verbose Timeline Not Available
+                </h3>
+                <p className="text-gray-500">
+                  Simulation ID is required to load the verbose timeline. This feature is available
+                  when viewing saved simulation results.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

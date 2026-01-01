@@ -263,13 +263,47 @@ export default function PositionDetail() {
                 }
               }
               withholdingTaxRate={position.withholding_tax_rate || 0.25}
-              onSave={(config) => {
-                // TODO: Implement save configuration
-                console.log('Save config:', config);
+              onSave={async (config) => {
+                try {
+                  // Update position configuration
+                  const response = await fetch(`/api/positions/${position.id}`, {
+                    method: 'PUT',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      order_policy: {
+                        trigger_threshold_pct: config.triggers.triggerThresholdPct,
+                        rebalance_ratio: config.triggers.rebalanceRatio,
+                        commission_rate: config.triggers.commissionRate,
+                        min_notional: config.triggers.minNotional,
+                        allow_after_hours: config.triggers.allowAfterHours,
+                      },
+                      guardrails: {
+                        min_stock_alloc_pct: config.guardrails.minStockAllocPct,
+                        max_stock_alloc_pct: config.guardrails.maxStockAllocPct,
+                        max_orders_per_day: 5,
+                      },
+                    }),
+                  });
+
+                  if (response.ok) {
+                    alert('Configuration saved successfully!');
+                    // Refresh the page or update state
+                    window.location.reload();
+                  } else {
+                    alert('Failed to save configuration');
+                  }
+                } catch (error) {
+                  console.error('Error saving configuration:', error);
+                  alert('Error saving configuration');
+                }
               }}
               onReset={() => {
-                // TODO: Implement reset configuration
-                console.log('Reset config');
+                // Reset to default configuration
+                if (window.confirm('Are you sure you want to reset to default configuration?')) {
+                  window.location.reload();
+                }
               }}
             />
           )}

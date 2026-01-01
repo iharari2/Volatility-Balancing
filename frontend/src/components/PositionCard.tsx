@@ -1,6 +1,7 @@
 import { Position } from '../types';
 import { TrendingUp, TrendingDown, DollarSign, Target, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useMarketPrice } from '../hooks/useMarketData';
 
 interface PositionCardProps {
   position: Position;
@@ -8,7 +9,11 @@ interface PositionCardProps {
 }
 
 export default function PositionCard({ position, onDelete }: PositionCardProps) {
-  const totalValue = position.qty * (position.anchor_price || 0) + position.cash;
+  // Fetch real market price for this ticker
+  const { data: marketPrice } = useMarketPrice(position.ticker);
+  const currentPrice = marketPrice?.price || position.anchor_price || 0;
+  
+  const totalValue = position.qty * currentPrice + position.cash;
   const assetPercentage = position.anchor_price
     ? ((position.qty * position.anchor_price) / totalValue) * 100
     : 0;
@@ -68,6 +73,17 @@ export default function PositionCard({ position, onDelete }: PositionCardProps) 
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray-500">Anchor Price</span>
             <span className="font-medium">${position.anchor_price.toFixed(2)}</span>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-500">Current Price</span>
+            <span className="font-medium">
+              ${currentPrice.toFixed(2)}
+              {marketPrice && (
+                <span className={`ml-1 text-xs ${marketPrice.is_fresh ? 'text-green-600' : 'text-yellow-600'}`}>
+                  {marketPrice.is_fresh ? '●' : '○'}
+                </span>
+              )}
+            </span>
           </div>
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray-500">Asset %</span>

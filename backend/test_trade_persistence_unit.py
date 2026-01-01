@@ -8,7 +8,6 @@ This test verifies that:
 3. The system integrates properly with the existing test framework
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -19,7 +18,6 @@ sys.path.insert(0, str(backend_dir))
 import pytest
 from datetime import datetime, timezone
 from domain.entities.trade import Trade
-from domain.value_objects.types import OrderSide
 from infrastructure.persistence.memory.trades_repo_mem import InMemoryTradesRepo
 
 
@@ -33,6 +31,8 @@ class TestTradePersistence:
         # Create test trades
         trade1 = Trade(
             id="trd_001",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
             order_id="ord_123",
             position_id="pos_456",
             side="BUY",  # type: OrderSide
@@ -44,6 +44,8 @@ class TestTradePersistence:
 
         trade2 = Trade(
             id="trd_002",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
             order_id="ord_124",
             position_id="pos_456",
             side="SELL",  # type: OrderSide
@@ -127,6 +129,8 @@ class TestTradePersistence:
         # Valid trades
         valid_trade = Trade(
             id="trd_valid",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
             order_id="ord_valid",
             position_id="pos_valid",
             side="BUY",  # type: OrderSide
@@ -154,6 +158,8 @@ class TestTradePersistence:
         # Create a realistic trade scenario
         buy_trade = Trade(
             id="trd_buy_001",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
             order_id="ord_buy_123",
             position_id="pos_aapl_001",
             side="BUY",  # type: OrderSide
@@ -165,6 +171,8 @@ class TestTradePersistence:
 
         sell_trade = Trade(
             id="trd_sell_001",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
             order_id="ord_sell_124",
             position_id="pos_aapl_001",
             side="SELL",  # type: OrderSide

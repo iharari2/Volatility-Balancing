@@ -1,0 +1,199 @@
+import { useState } from 'react';
+import { Play } from 'lucide-react';
+import { usePortfolio } from '../../contexts/PortfolioContext';
+
+interface SimulationSetupProps {
+  onRun: (config: SimulationConfig) => void;
+  isRunning: boolean;
+}
+
+interface SimulationConfig {
+  asset: string;
+  startDate: string;
+  endDate: string;
+  strategy: 'portfolio' | 'template' | 'custom';
+  template?: string;
+  mode: 'single' | 'sweep';
+  resolution: '1min' | '5min' | '15min' | '30min' | '1hour' | 'daily';
+  allowAfterHours: boolean;
+}
+
+export default function SimulationSetup({ onRun, isRunning }: SimulationSetupProps) {
+  const { positions } = usePortfolio();
+  const [config, setConfig] = useState<SimulationConfig>({
+    asset: positions[0]?.ticker || 'AAPL',
+    startDate: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0],
+    strategy: 'portfolio',
+    mode: 'single',
+    resolution: '30min',
+    allowAfterHours: true,
+  });
+
+  const handleRun = () => {
+    onRun(config);
+  };
+
+  return (
+    <div className="card">
+      <h2 className="text-xl font-bold text-gray-900 mb-6">Simulation Setup</h2>
+
+      <div className="space-y-6">
+        <div>
+          <label className="label">Asset to Simulate</label>
+          <select
+            value={config.asset}
+            onChange={(e) => setConfig({ ...config, asset: e.target.value })}
+            className="input"
+          >
+            {positions.map((pos) => (
+              <option key={pos.id} value={pos.ticker || pos.asset}>
+                {pos.ticker || pos.asset}
+              </option>
+            ))}
+            {positions.length === 0 && <option value="AAPL">AAPL</option>}
+          </select>
+        </div>
+
+        <div>
+          <label className="label">Simulation Period</label>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <span className="text-xs text-gray-400 mb-1 block uppercase">Start Date</span>
+              <input
+                type="date"
+                value={config.startDate}
+                onChange={(e) => setConfig({ ...config, startDate: e.target.value })}
+                className="input"
+              />
+            </div>
+            <div>
+              <span className="text-xs text-gray-400 mb-1 block uppercase">End Date</span>
+              <input
+                type="date"
+                value={config.endDate}
+                onChange={(e) => setConfig({ ...config, endDate: e.target.value })}
+                className="input"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label">Price Resolution</label>
+            <select
+              value={config.resolution}
+              onChange={(e) =>
+                setConfig({
+                  ...config,
+                  resolution: e.target.value as SimulationConfig['resolution'],
+                })
+              }
+              className="input"
+            >
+              <option value="1min">1 Minute</option>
+              <option value="5min">5 Minutes</option>
+              <option value="15min">15 Minutes</option>
+              <option value="30min">30 Minutes</option>
+              <option value="1hour">1 Hour</option>
+              <option value="daily">Daily</option>
+            </select>
+          </div>
+          <div className="flex items-end">
+            <label className="flex items-center cursor-pointer mb-2">
+              <input
+                type="checkbox"
+                checked={config.allowAfterHours}
+                onChange={(e) => setConfig({ ...config, allowAfterHours: e.target.checked })}
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              />
+              <span className="ml-2 text-sm text-gray-700">Extended Hours</span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label className="label">Strategy Configuration</label>
+          <div className="space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-100">
+            <label className="flex items-center cursor-pointer">
+              <input
+                type="radio"
+                name="strategy"
+                value="portfolio"
+                checked={config.strategy === 'portfolio'}
+                onChange={(e) =>
+                  setConfig({ ...config, strategy: e.target.value as SimulationConfig['strategy'] })
+                }
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+              />
+              <span className="ml-2 text-sm font-medium text-gray-900">
+                Current Portfolio Config
+              </span>
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                type="radio"
+                name="strategy"
+                value="template"
+                checked={config.strategy === 'template'}
+                onChange={(e) =>
+                  setConfig({ ...config, strategy: e.target.value as SimulationConfig['strategy'] })
+                }
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+              />
+              <select
+                value={config.template || 'conservative'}
+                onChange={(e) => setConfig({ ...config, template: e.target.value })}
+                disabled={config.strategy !== 'template'}
+                className="flex-1 input py-1 text-sm disabled:opacity-50"
+              >
+                <option value="conservative">Conservative Template</option>
+                <option value="default">Standard Template</option>
+                <option value="aggressive">Aggressive Template</option>
+              </select>
+            </div>
+            <label className="flex items-center cursor-pointer">
+              <input
+                type="radio"
+                name="strategy"
+                value="custom"
+                checked={config.strategy === 'custom'}
+                onChange={(e) =>
+                  setConfig({ ...config, strategy: e.target.value as SimulationConfig['strategy'] })
+                }
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+              />
+              <span className="ml-2 text-sm font-medium text-gray-900">Custom Overrides</span>
+              <button
+                disabled={config.strategy !== 'custom'}
+                className="ml-auto text-xs font-bold text-primary-600 uppercase hover:text-primary-800 disabled:opacity-30"
+              >
+                Configure
+              </button>
+            </label>
+          </div>
+        </div>
+
+        <div className="pt-4">
+          <button
+            onClick={handleRun}
+            disabled={isRunning}
+            className="w-full btn btn-primary py-3 flex items-center justify-center shadow-lg"
+          >
+            {isRunning ? (
+              <div className="flex items-center gap-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                Running...
+              </div>
+            ) : (
+              <>
+                <Play className="h-5 w-5 mr-2 fill-current" /> Run Simulation
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

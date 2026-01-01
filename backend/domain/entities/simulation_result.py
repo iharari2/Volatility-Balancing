@@ -46,9 +46,3 @@ class SimulationResult:
             metrics=metrics,
             raw_data=raw_data,
         )
-
-
-
-
-
-

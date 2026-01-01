@@ -1,0 +1,15 @@
+---
+description: Standards for UI/UX development and component styling
+globs:
+  ['src/components/**/*.{tsx,jsx}', 'src/pages/**/*.{tsx,jsx}', '**/*.css', 'tailwind.config.js']
+alwaysApply: false
+---
+
+# UI/UX & Component Guidelines
+
+1. **Design System Adherence:** NEVER hardcode colors or spacing. ALWAYS use Tailwind classes or CSS variables defined in `@theme.css`.
+2. **Visual Continuity:** Before changing a shared component (e.g., `Button.tsx`), check all instances of its usage across the codebase using `@codebase`.
+3. **Component Structure:** - Use Functional Components with TypeScript interfaces for Props.
+   - Keep logic (hooks) at the top, followed by sub-components, then the main render.
+4. **No "Magic" Layouts:** Use Flexbox or Grid exclusively. Avoid `position: absolute` unless explicitly required for overlays.
+5. **Mobile First:** Ensure every UI change includes responsive classes (e.g., `md:`, `lg:`) and verify it doesn't break on small screens.

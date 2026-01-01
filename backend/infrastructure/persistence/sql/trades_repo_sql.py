@@ -13,16 +13,19 @@ from infrastructure.persistence.sql.models import TradeModel
 
 def _to_entity(row: TradeModel) -> Trade:
     """Convert SQLAlchemy row to domain entity."""
-    from domain.value_objects.types import OrderSide
 
     return Trade(
         id=row.id,
+        tenant_id=row.tenant_id,
+        portfolio_id=row.portfolio_id,
         order_id=row.order_id,
         position_id=row.position_id,
         side=row.side,  # type: OrderSide
         qty=row.qty,
         price=row.price,
         commission=row.commission,
+        commission_rate_effective=getattr(row, "commission_rate_effective", None),
+        status=getattr(row, "status", "executed"),
         executed_at=row.executed_at,
     )
 
@@ -31,12 +34,16 @@ def _new_row_from_entity(trade: Trade) -> TradeModel:
     """Create new SQLAlchemy row from domain entity."""
     return TradeModel(
         id=trade.id,
+        tenant_id=trade.tenant_id,
+        portfolio_id=trade.portfolio_id,
         order_id=trade.order_id,
         position_id=trade.position_id,
         side=trade.side,
         qty=trade.qty,
         price=trade.price,
         commission=trade.commission,
+        commission_rate_effective=trade.commission_rate_effective,
+        status=trade.status,
         executed_at=trade.executed_at,
     )
 
@@ -53,12 +60,16 @@ class SQLTradesRepo(TradesRepo):
                 s.add(_new_row_from_entity(trade))
             else:
                 # Update existing trade (shouldn't happen in practice)
+                row.tenant_id = trade.tenant_id
+                row.portfolio_id = trade.portfolio_id
                 row.order_id = trade.order_id
                 row.position_id = trade.position_id
                 row.side = trade.side.value
                 row.qty = trade.qty
                 row.price = trade.price
                 row.commission = trade.commission
+                row.commission_rate_effective = trade.commission_rate_effective
+                row.status = trade.status
                 row.executed_at = trade.executed_at
             s.commit()
 

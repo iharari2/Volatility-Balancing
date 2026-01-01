@@ -1,6 +1,9 @@
 # Volatility Balancing — Trading System
 
-A complete semi-passive trading platform for volatility balancing with blue-chip equities. Features a React frontend, FastAPI backend with Clean Architecture, and comprehensive trading capabilities including position management, order execution, dividend processing, and **advanced parameter optimization**.
+A semi-passive trading platform for volatility balancing with blue-chip equities. Features a React frontend, FastAPI backend with Clean Architecture, and comprehensive trading capabilities including position management, order execution, dividend processing, and parameter optimization.
+
+> **📚 New to the project?** Start with the [Onboarding Guide](docs/ONBOARDING.md)  
+> **🔍 Looking for documentation?** See the [Documentation Index](docs/DOCUMENTATION_INDEX.md)
 
 ## 🎉 **NEW: Parameter Optimization System**
 
@@ -17,6 +20,34 @@ A complete semi-passive trading platform for volatility balancing with blue-chip
 
 **Demo Results**: Successfully processed 20 parameter combinations with Sharpe ratios up to 1.616!
 
+## 📊 **Current Status**
+
+**✅ Core System Implemented** - Production-ready trading system with portfolio management
+
+### ✅ Implemented Features
+
+- **Portfolio Management**: Multi-tenant, portfolio-scoped architecture
+- **Position Management**: Create, manage, and track positions
+- **Order Execution**: Idempotent order submission with guardrails
+- **Trading Logic**: Volatility-triggered buy/sell with configurable thresholds
+- **Simulation**: Backtesting with production logic
+- **Parameter Optimization**: 8 REST endpoints for optimization management
+- **Excel Export**: Data export capabilities
+- **Audit Trails**: Complete event logging
+
+### ⚠️ In Progress / Known Issues
+
+- **UI Wiring**: Some UI components need better data connectivity (per UX feedback)
+- **Trade Event Logging**: Enhanced verbose logging for traders (planned)
+- **UX Improvements**: Error handling, empty states, confirmation dialogs (see [UX Feedback](docs/UX_FEEDBACK_REQUEST.md))
+
+### 📋 Planned Features
+
+- Enhanced trade event visualization
+- Multi-broker support
+- Advanced analytics and reporting
+- Mobile-responsive improvements
+
 ## 🏗️ Architecture Overview
 
 - **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS
@@ -24,6 +55,59 @@ A complete semi-passive trading platform for volatility balancing with blue-chip
 - **Database**: SQLite (dev) / PostgreSQL (prod) + Redis cache
 - **Market Data**: YFinance integration
 - **Architecture**: Domain-Driven Design with dependency injection
+
+### Clean Architecture Layers
+
+The system follows a clean architecture with three main layers:
+
+1. **Domain Layer** (`backend/domain/`): Pure business logic
+
+   - Value Objects: MarketQuote, PositionState, TriggerConfig, GuardrailConfig, TradeIntent
+   - Domain Services: PriceTrigger, GuardrailEvaluator (pure functions)
+   - Entities: Position, Order, Trade, Dividend (with commission/dividend aggregates)
+   - No infrastructure dependencies
+
+2. **Application Layer** (`backend/application/`): Orchestration
+
+   - Orchestrators: LiveTradingOrchestrator, SimulationOrchestrator
+   - Ports: Interfaces for market data, orders, repositories, event logging, config
+   - Use Cases: SubmitOrderUC, ExecuteOrderUC, ProcessDividendUC (with commission/dividend tracking)
+   - Uses domain services, depends on ports (not concrete implementations)
+
+3. **Infrastructure Layer** (`backend/infrastructure/`): Concrete implementations
+   - Adapters: Implement application ports (YFinance, SQL repositories, etc.)
+   - Repositories: SQL, Memory, Redis implementations
+   - Config Store: Commission rate management
+   - External Services: Market data providers, broker APIs
+
+**Key Design**:
+
+- Live trading and simulation share the same domain logic (PriceTrigger, GuardrailEvaluator)
+- Commissions and dividends are first-class, traceable, and correctly reflected in portfolio state
+- Config is separate from state (commission rates in Config store, not embedded in logic)
+
+**See**:
+
+- [Architecture Documentation](docs/architecture/system_architecture_v1.md)
+- [Clean Architecture Details](backend/docs/ARCHITECTURE_CLEANUP.md)
+- [Commissions & Dividends Implementation](backend/docs/COMMISSIONS_DIVIDENDS_IMPLEMENTATION.md)
+
+---
+
+## ✅ **Phase 1 Verification**
+
+**First, verify the system is working:**
+
+```bash
+# 1. Start backend
+cd backend
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# 2. In another terminal, run verification
+python verify_phase1.py
+```
+
+**See**: [Phase 1 Verification Guide](PHASE1_VERIFY.md) for details
 
 ---
 
@@ -138,186 +222,113 @@ The system follows Clean Architecture principles with clear separation of concer
 
 ## 📚 Documentation
 
-- **[System Architecture](docs/architecture/system_architecture_v1.md)** - Complete system overview with UML diagrams
-- **[Component Architecture](docs/architecture/component_architecture.md)** - Detailed component relationships
-- **[Deployment Architecture](docs/architecture/deployment_architecture.md)** - Infrastructure and deployment diagrams
-- **[Sequence Diagrams](docs/architecture/SEQUENCE_EXAMPLE.md)** - API flow documentation
-- **[API Documentation](docs/api/openapi.yaml)** - Complete OpenAPI 3.0 specification
+**📖 [Documentation Index](docs/DOCUMENTATION_INDEX.md)** - Master navigation hub for all documentation
 
-API Reference
-Base URL: http://localhost:8000
+### Quick Links
 
-Health
-GET /healthz → {"status":"ok"}
+- **[Onboarding Guide](docs/ONBOARDING.md)** ⭐ **Start here if you're new**
+- **[Quick Start](docs/QUICK_START.md)** - Get running in 5 minutes
+- **[Architecture Overview](docs/architecture/README.md)** - System architecture
+- **[API Documentation](docs/api/README.md)** - API reference
+- **[Developer Notes](docs/DEVELOPER_NOTES.md)** - Development guidelines
+- **[Product Specification](docs/product/volatility_trading_spec_v1.md)** - Product requirements (✅ Implemented)
+- **[Unimplemented Features](docs/product/unimplemented/README.md)** - Planned features documentation
+- **[Documentation Structure Guide](docs/DOCUMENTATION_STRUCTURE_GUIDE.md)** - Understanding the docs organization
 
-GET /v1/healthz → {"status":"ok","version":"v1"}
+### Documentation Structure
 
-Positions
-POST /v1/positions
+- **Architecture**: [System Context](docs/architecture/context.md), [Domain Model](docs/architecture/domain-model.md), [Trading Cycle](docs/architecture/trading-cycle.md)
+- **API**: [OpenAPI Spec](docs/api/openapi.yaml), [Migration Guide](docs/api/MIGRATION.md)
+- **Development**: [Test Plan](docs/dev/test-plan.md), [CI/CD](docs/dev/ci-cd.md)
+- **Product**: [Product Spec](docs/product/volatility_trading_spec_v1.md), [UX Design](docs/UX_DESIGN_DOCUMENT.md)
 
-Body: {"ticker": "ZIM", "qty": 0.0, "cash": 10000.0}
+See [Documentation Index](docs/DOCUMENTATION_INDEX.md) for complete documentation structure.
 
-201 → {"id","ticker","qty","cash"}
+## 🔌 API Reference
 
-GET /v1/positions/{position_id}
+**Base URL:** `http://localhost:8000`
 
-200 → position details, or 404 position_not_found
+### Interactive Documentation
 
-GET /v1/positions/{position_id}/events
+Visit **http://localhost:8000/docs** for interactive Swagger UI with full API documentation.
 
-200 → {"position_id","events":[...]}
+### Key Endpoints
 
-POST /v1/positions/{position_id}/evaluate
+**Portfolio-Scoped Endpoints** (Current - Recommended):
 
-Placeholder: returns {"position_id","proposals":[]}
+- `POST /api/tenants/{tenant_id}/portfolios` - Create portfolio
+- `GET /api/tenants/{tenant_id}/portfolios/{portfolio_id}/overview` - Get overview
+- `GET /api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions` - List positions
+- `POST /api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions` - Create position
 
-Orders (Flow A: Idempotent submit)
-POST /v1/positions/{position_id}/orders
+**Legacy Endpoints** (Deprecated):
 
-Headers: Idempotency-Key: <key> (required)
+- `/v1/positions/*` - Use portfolio-scoped endpoints instead
 
-Body: {"side":"BUY"|"SELL","qty": float>0}
+See [API Documentation](docs/api/README.md) and [Migration Guide](docs/api/MIGRATION.md) for details.
 
-First request for a given (key + body): 201 Created
-{ "order_id": "...", "accepted": true, "position_id": "..." }
+## 🧪 Testing & Quality
 
-Replay (same key + same body): 200 OK, same order_id
+```bash
+# Run tests
+cd backend
+python -m pytest -q
 
-Mismatched body for same key: 409 Conflict (idempotency_signature_mismatch)
+# Lint
+python -m ruff check backend
 
-Unknown position: 404 position_not_found
+# Type check
+python -m mypy backend
+```
 
-POST /v1/orders/{order_id}/fill (Flow C: simplistic fill)
+## 🐛 Troubleshooting
 
-Body: {"price": >0, "filled_qty": >0, "commission": >=0}
+### Common Issues
 
-200 → {"order_id","status":"filled","position_qty","position_cash"}
+**"No module named app" (pytest)**
 
-404 → order_not_found (or position_not_found behind it)
+- Ensure `pyproject.toml` has `pythonpath = ["backend"]`
+- Or run: `PYTHONPATH=backend python -m pytest -q`
 
-Curl Smoke (copy/paste)
-bash
-Copy
-Edit
+**"Port already in use"**
 
-# Create a position
+- Backend: `pkill -f uvicorn` or use `--port 8001`
+- Frontend: Use `npm run dev -- --port 3001`
 
-POS=$(curl -s -X POST localhost:8000/v1/positions \
-  -H 'Content-Type: application/json' \
-  -d '{"ticker":"ZIM","qty":0,"cash":10000}' \
-  | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
-echo "$POS"
+**"Missing idempotency key"**
 
-# First submit -> 201 Created
+- Use header: `Idempotency-Key: <value>` (hyphen, not underscore)
 
-curl -i -X POST "http://localhost:8000/v1/positions/$POS/orders" \
- -H "Content-Type: application/json" \
- -H "Idempotency-Key: k1" \
- -d '{"side":"BUY","qty":1.5}'
+See [Onboarding Guide](docs/ONBOARDING.md) for more troubleshooting tips.
 
-# Replay same key+body -> 200 OK, same order_id
+---
 
-curl -i -X POST "http://localhost:8000/v1/positions/$POS/orders" \
- -H "Content-Type: application/json" \
- -H "Idempotency-Key: k1" \
- -d '{"side":"BUY","qty":1.5}'
+## 📝 Additional Notes
 
-# Mismatch (same key, different body) -> 409 Conflict
+### Architecture Details
 
-curl -i -X POST "http://localhost:8000/v1/positions/$POS/orders" \
- -H "Content-Type: application/json" \
- -H "Idempotency-Key: k1" \
- -d '{"side":"SELL","qty":2.0}'
+- **Domain Layer**: Uses Python dataclasses (no validation overhead, library-agnostic)
+- **API Layer**: Uses Pydantic models (validation + JSON schema/OpenAPI)
+- **Persistence**: Default in-memory repos; SQL/Redis adapters available
+- **Time**: Testable time via `infrastructure/time/clock.py`
 
-# See audit events
+### Switching Persistence
 
-curl -s "http://localhost:8000/v1/positions/$POS/events" | sed 's/},{/},\n{/g'
-Architecture & Flows
-app/: FastAPI routers (positions.py, orders.py), DI container (di.py), and main.py.
+**Redis idempotency:**
 
-application/: Use cases
-
-SubmitOrderUC (Flow A): idempotent order submission.
-
-EvaluatePositionUC (Flow B): placeholder for proposal generation.
-
-ExecuteOrderUC (Flow C): simplistic fills updating position balances.
-
-ProcessDividendUC (Flow D): cash credit with tax (placeholder).
-
-domain/:
-
-Entities: Order, Position, Event (dataclasses).
-
-Ports: repository protocols (interfaces).
-
-Errors & value objects (guardrails, triggers).
-
-infrastructure/:
-
-In-memory repos (default), plus stubs for SQL (SQLAlchemy) and Redis idempotency.
-
-infrastructure/time/clock.py for testable time.
-
-Why dataclasses vs Pydantic?
-
-Dataclasses for domain (no validation overhead, library-agnostic).
-
-Pydantic for API DTOs (validation + JSON schema/OpenAPI).
-
-Conversion is trivial (dataclasses.asdict() and model.model_dump()).
-
-Switching Persistence (optional)
-Default: in-memory repos via app/di.py.
-
-Redis idempotency:
-
+```bash
 pip install '.[redis]'
+# Update app/di.py to use RedisIdempotencyRepo
+```
 
-In app/di.py, swap InMemoryIdempotencyRepo for RedisIdempotencyRepo and pass a Redis client.
+**SQL (SQLite/Postgres):**
 
-SQL (SQLite/Postgres):
-
+```bash
 pip install '.[sql]'
-
-Configure engine in infrastructure/persistence/sql/models.py
-
-Use SQLPositionsRepo / SQLOrdersRepo in app/di.py.
-
-The SQL and Redis adapters are basic and intended as starting points.
-
-Testing & Quality
-bash
-Copy
-Edit
-python -m pytest -q # run tests
-python -m ruff check backend # lint
-python -m mypy backend # types
-pyproject.toml configures pytest to use backend as PYTHONPATH. If you run into path issues, use:
-
-bash
-Copy
-Edit
-PYTHONPATH=backend python -m pytest -q
-Troubleshooting
-“No module named app” (pytest)
-Run tests with python -m pytest or ensure pyproject.toml has:
-
-toml
-Copy
-Edit
-[tool.pytest.ini_options]
-pythonpath = ["backend"]
-addopts = "-q"
-Idempotency 400 (“missing idempotency key”)
-The route expects idempotency_key: Optional[str] = Header(None) → send Idempotency-Key: <value> (hyphen, not underscore).
-
-404 with //orders
-Your $POS variable is empty. Echo it before use: echo "$POS".
-
-Port already in use
-pkill -f uvicorn or use another port: -–port 8001.
-
+# Configure engine in infrastructure/persistence/sql/models.py
+# Update app/di.py to use SQL repositories
 ```
 
-```
+---
+
+_Last updated: 2025-01-27_

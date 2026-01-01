@@ -8,8 +8,8 @@ import {
   FillOrderRequest,
 } from '../types';
 
-// const API_BASE = '/api'; // This will use the Vite proxy
-const API_BASE = 'http://localhost:8000/v1'; // Direct connection
+const API_BASE = '/api'; // This will use the Vite proxy
+// const API_BASE = 'http://localhost:8001/v1'; // Direct connection
 
 class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -32,8 +32,30 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   const response = await fetch(url, config);
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-    throw new ApiError(response.status, error.detail || 'Request failed');
+    let errorMessage = 'Request failed';
+    let errorData: any = null;
+    try {
+      errorData = await response.json();
+      errorMessage =
+        errorData.detail || errorData.message || `HTTP ${response.status}: ${response.statusText}`;
+    } catch {
+      // If response is not JSON, use status text
+      errorMessage =
+        response.status === 404
+          ? 'Not Found'
+          : `HTTP ${response.status}: ${response.statusText || 'Unknown error'}`;
+    }
+
+    // Log error details for debugging
+    console.error('API Error:', {
+      url,
+      status: response.status,
+      statusText: response.statusText,
+      errorData,
+      errorMessage,
+    });
+
+    throw new ApiError(response.status, errorMessage);
   }
 
   return response.json();
@@ -136,33 +158,104 @@ export const ordersApi = {
 
 // Simulation API
 export const simulationApi = {
+  getVerboseTimeline: (simulationId: string) =>
+    request<{
+      simulation_id: string;
+      ticker: string;
+      start_date: string;
+      end_date: string;
+      rows: Array<Record<string, any>>;
+      total_rows: number;
+    }>(`/v1/simulations/${simulationId}/verbose-timeline`),
+
   runSimulation: (config: any) => {
-    // Ensure dates are in ISO format with timezone
-    const startDate = new Date(config.startDate + 'T00:00:00.000Z').toISOString();
-    const endDate = new Date(config.endDate + 'T23:59:59.999Z').toISOString();
+    // Handle dates - SimulationLabPage sends start_date and end_date as ISO strings
+    // Legacy code might send startDate/endDate as strings
+    let startDate: string;
+    let endDate: string;
+
+    if (config.start_date && config.end_date) {
+      // Dates are already formatted as ISO strings (from SimulationLabPage)
+      startDate = config.start_date;
+      endDate = config.end_date;
+    } else if (config.startDate && config.endDate) {
+      // Legacy format - parse and format
+      try {
+        // Check if already ISO format (contains T and Z)
+        const startIsISO =
+          typeof config.startDate === 'string' &&
+          config.startDate.includes('T') &&
+          (config.startDate.includes('Z') || config.startDate.includes('+'));
+        const endIsISO =
+          typeof config.endDate === 'string' &&
+          config.endDate.includes('T') &&
+          (config.endDate.includes('Z') || config.endDate.includes('+'));
+
+        if (startIsISO) {
+          startDate = config.startDate;
+        } else {
+          // Parse date string (could be YYYY-MM-DD or MM/DD/YYYY)
+          const startDateObj = new Date(config.startDate);
+          if (isNaN(startDateObj.getTime())) {
+            throw new Error(`Invalid start date: ${config.startDate}`);
+          }
+          startDate = startDateObj.toISOString();
+        }
+
+        if (endIsISO) {
+          endDate = config.endDate;
+        } else {
+          // Parse date string and set to end of day
+          const endDateObj = new Date(config.endDate);
+          if (isNaN(endDateObj.getTime())) {
+            throw new Error(`Invalid end date: ${config.endDate}`);
+          }
+          // Set to end of day in UTC
+          endDateObj.setUTCHours(23, 59, 59, 999);
+          endDate = endDateObj.toISOString();
+        }
+      } catch (error: any) {
+        throw new Error(`Date parsing error: ${error.message || 'Invalid time value'}`);
+      }
+    } else {
+      throw new Error('Missing required dates: start_date/end_date or startDate/endDate');
+    }
+
+    // Convert resolution to intraday_interval_minutes if provided
+    const resolutionToMinutes: Record<string, number> = {
+      '1min': 1,
+      '5min': 5,
+      '15min': 15,
+      '30min': 30,
+      '1hour': 60,
+      daily: 1440, // 24 hours
+    };
+    const intradayIntervalMinutes =
+      resolutionToMinutes[config.resolution as string] || config.intraday_interval_minutes || 30;
 
     const requestData = {
-      ticker: config.ticker,
+      ticker: config.ticker || config.asset,
       start_date: startDate,
       end_date: endDate,
-      initial_cash: config.initialCash,
+      initial_cash: config.initialCash ?? 10000,
       initial_asset_value: config.initialAssetValue,
       initial_asset_units: config.initialAssetUnits,
-      include_after_hours: config.allowAfterHours,
-      position_config: {
-        trigger_threshold_pct: config.triggerThresholdPct,
-        rebalance_ratio: config.rebalanceRatio,
-        commission_rate: config.commissionRate,
-        min_notional: config.minNotional,
-        allow_after_hours: config.allowAfterHours,
+      include_after_hours: config.allowAfterHours ?? true,
+      intraday_interval_minutes: intradayIntervalMinutes,
+      position_config: config.position_config || {
+        trigger_threshold_pct: config.triggerThresholdPct ?? 0.03,
+        rebalance_ratio: config.rebalanceRatio ?? 1.6667,
+        commission_rate: config.commissionRate ?? 0.0001,
+        min_notional: config.minNotional ?? 100,
+        allow_after_hours: config.allowAfterHours ?? true,
         guardrails: {
-          min_stock_alloc_pct: config.guardrails.minStockAllocPct,
-          max_stock_alloc_pct: config.guardrails.maxStockAllocPct,
+          min_stock_alloc_pct: config.guardrails?.minStockAllocPct ?? 0.25,
+          max_stock_alloc_pct: config.guardrails?.maxStockAllocPct ?? 0.75,
         },
       },
     };
 
-    return request<any>('/simulation/run', {
+    return request<any>('/v1/simulation/run', {
       method: 'POST',
       body: JSON.stringify(requestData),
     });
@@ -206,12 +299,16 @@ export const marketApi = {
       is_market_hours: boolean;
       is_fresh: boolean;
       is_inline: boolean;
+      open?: number;
+      high?: number;
+      low?: number;
+      close?: number;
       validation: {
         valid: boolean;
         warnings: string[];
         rejections: string[];
       };
-    }>(`/market/price/${ticker}`),
+    }>(`/market/price/${ticker}?force_refresh=true&_t=${Date.now()}`), // Add cache-busting timestamp
 
   getStatus: () =>
     request<{
@@ -397,6 +494,258 @@ export const enhancedPositionsApi = {
 // Health API
 export const healthApi = {
   check: () => request<{ status: string; timestamp: string }>('/healthz'),
+};
+
+// Audit Trail API
+export const auditTrailApi = {
+  getTraces: (params?: {
+    tenant_id?: string;
+    portfolio_id?: string;
+    asset?: string;
+    trace_id?: string;
+    start_date?: string;
+    end_date?: string;
+    source?: string;
+    limit?: number;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.tenant_id) queryParams.append('tenant_id', params.tenant_id);
+    if (params?.portfolio_id) queryParams.append('portfolio_id', params.portfolio_id);
+    if (params?.asset) queryParams.append('asset', params.asset);
+    if (params?.trace_id) queryParams.append('trace_id', params.trace_id);
+    if (params?.start_date) queryParams.append('start_date', params.start_date);
+    if (params?.end_date) queryParams.append('end_date', params.end_date);
+    if (params?.source) queryParams.append('source', params.source);
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+
+    const query = queryParams.toString();
+    return request<{
+      traces: Array<{
+        trace_id: string;
+        tenant_id: string;
+        portfolio_id: string;
+        asset: string;
+        source: string;
+        created_at: string;
+        event_count: number;
+        summary: string;
+      }>;
+      total: number;
+    }>(`/v1/audit/traces${query ? `?${query}` : ''}`);
+  },
+
+  getTraceEvents: (traceId: string) =>
+    request<{
+      trace_id: string;
+      events: Array<{
+        event_id: string;
+        event_type: string;
+        trace_id: string;
+        parent_event_id?: string;
+        tenant_id: string;
+        portfolio_id: string;
+        asset_id?: string;
+        payload: any;
+        created_at: string;
+      }>;
+    }>(`/v1/audit/traces/${traceId}/events`),
+
+  getEvents: (params?: {
+    tenant_id?: string;
+    portfolio_id?: string;
+    asset?: string;
+    trace_id?: string;
+    event_type?: string;
+    start_date?: string;
+    end_date?: string;
+    limit?: number;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.tenant_id) queryParams.append('tenant_id', params.tenant_id);
+    if (params?.portfolio_id) queryParams.append('portfolio_id', params.portfolio_id);
+    if (params?.asset) queryParams.append('asset', params.asset);
+    if (params?.trace_id) queryParams.append('trace_id', params.trace_id);
+    if (params?.event_type) queryParams.append('event_type', params.event_type);
+    if (params?.start_date) queryParams.append('start_date', params.start_date);
+    if (params?.end_date) queryParams.append('end_date', params.end_date);
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+
+    const query = queryParams.toString();
+    return request<{
+      events: Array<{
+        event_id: string;
+        event_type: string;
+        trace_id: string;
+        parent_event_id?: string;
+        tenant_id: string;
+        portfolio_id: string;
+        asset_id?: string;
+        payload: any;
+        created_at: string;
+      }>;
+      total: number;
+    }>(`/v1/audit/events${query ? `?${query}` : ''}`);
+  },
+};
+
+// Portfolio API - All methods require tenantId and portfolioId
+export const portfolioApi = {
+  list: (tenantId: string, userId?: string) =>
+    request<
+      Array<{
+        id: string;
+        name: string;
+        description: string | null;
+        user_id: string;
+        created_at: string;
+        updated_at: string;
+      }>
+    >(`/v1/tenants/${tenantId}/portfolios${userId ? `?user_id=${userId}` : ''}`),
+
+  get: (tenantId: string, portfolioId: string) =>
+    request<{
+      id: string;
+      name: string;
+      description: string | null;
+      user_id: string;
+      created_at: string;
+      updated_at: string;
+    }>(`/v1/tenants/${tenantId}/portfolios/${portfolioId}`),
+
+  create: (
+    tenantId: string,
+    data: {
+      name: string;
+      description?: string;
+      type?: string;
+      starting_cash: { currency: string; amount: number };
+      holdings?: Array<{
+        asset: string;
+        qty: number;
+        avg_cost?: number;
+        anchor_price?: number;
+      }>;
+      template?: string;
+      hours_policy?: string;
+    },
+  ) =>
+    request<{
+      portfolio_id: string;
+    }>(`/v1/tenants/${tenantId}/portfolios`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (tenantId: string, portfolioId: string, data: { name?: string; description?: string }) =>
+    request<{
+      id: string;
+      name: string;
+      description: string | null;
+      user_id: string;
+      created_at: string;
+      updated_at: string;
+    }>(`/v1/tenants/${tenantId}/portfolios/${portfolioId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (tenantId: string, portfolioId: string) =>
+    request<void>(`/v1/tenants/${tenantId}/portfolios/${portfolioId}`, {
+      method: 'DELETE',
+    }),
+
+  getOverview: (tenantId: string, portfolioId: string) =>
+    request<{
+      portfolio: {
+        id: string;
+        name: string;
+        state: string;
+        type: string;
+        hours_policy: string;
+      };
+      cash: {
+        currency: string;
+        cash_balance: number;
+        reserved_cash: number;
+      };
+      positions: Array<{
+        asset: string;
+        qty: number;
+        anchor: number | null;
+        avg_cost: number | null;
+      }>;
+      config_effective: {
+        trigger_up_pct: number;
+        trigger_down_pct: number;
+        min_stock_pct: number;
+        max_stock_pct: number;
+        max_trade_pct_of_position: number | null;
+        commission_rate_pct: number;
+      };
+      kpis: {
+        total_value: number;
+        stock_pct: number;
+        cash_pct: number;
+        pnl_pct: number;
+      };
+    }>(`/v1/tenants/${tenantId}/portfolios/${portfolioId}/overview`),
+
+  getSummary: (tenantId: string, portfolioId: string) =>
+    request<{
+      portfolio_id: string;
+      portfolio_name: string;
+      description: string | null;
+      total_positions: number;
+      total_cash: number;
+      total_value: number;
+      positions_by_ticker: Record<string, any>;
+      created_at: string;
+      updated_at: string;
+    }>(`/v1/tenants/${tenantId}/portfolios/${portfolioId}/summary`),
+
+  getPositions: (tenantId: string, portfolioId: string) =>
+    request<
+      Array<{
+        id: string;
+        asset: string;
+        qty: number;
+        anchor_price: number | null;
+        avg_cost: number | null;
+      }>
+    >(`/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions`),
+
+  createPosition: (
+    tenantId: string,
+    portfolioId: string,
+    data: {
+      asset: string;
+      qty: number;
+      avg_cost?: number;
+      anchor_price?: number;
+    },
+  ) =>
+    request<{
+      message: string;
+      portfolio_id: string;
+      position_id: string;
+    }>(`/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  addPosition: (tenantId: string, portfolioId: string, positionId: string) =>
+    request<{
+      message: string;
+      portfolio_id: string;
+      position_id: string;
+    }>(`/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}`, {
+      method: 'POST',
+    }),
+
+  removePosition: (tenantId: string, portfolioId: string, positionId: string) =>
+    request<void>(`/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}`, {
+      method: 'DELETE',
+    }),
 };
 
 // Portfolio State API

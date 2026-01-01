@@ -77,14 +77,22 @@ class ProcessDividendUC:
 
         return created_dividend
 
-    def process_ex_dividend_date(self, position_id: str) -> Optional[Dict[str, Any]]:
+    def process_ex_dividend_date(
+        self, tenant_id: str, portfolio_id: str, position_id: str
+    ) -> Optional[Dict[str, Any]]:
         """Process ex-dividend date for a position."""
-        position = self.positions_repo.get(position_id)
+        position = self.positions_repo.get(
+            tenant_id=tenant_id, portfolio_id=portfolio_id, position_id=position_id
+        )
         if not position:
             return None
 
+        # Cash lives in position (cash lives in PositionCell per target state model)
+
         # Check if today is ex-dividend date
-        dividend = self.dividend_market_data_repo.check_ex_dividend_today(position.ticker)
+        dividend = self.dividend_market_data_repo.check_ex_dividend_today(
+            position.asset_symbol
+        )  # Use asset_symbol instead of ticker
 
         if not dividend:
             return None
@@ -110,18 +118,20 @@ class ProcessDividendUC:
 
         created_receivable = self.dividend_receivable_repo.create_receivable(receivable)
 
-        # Add receivable to position
+        # Add receivable to position (dividend_receivable is still on position entity)
         position.add_dividend_receivable(float(net_amount))
 
         # Update position
         self.positions_repo.save(position)
+
+        # Note: Cash is not updated here - it will be updated when dividend is paid via process_payment
 
         # Create events
         self._create_event(
             position_id=position_id,
             event_type="ex_div_effective",
             inputs={
-                "ticker": position.ticker,
+                "ticker": position.asset_symbol,  # Use asset_symbol instead of ticker
                 "ex_date": dividend.ex_date.isoformat(),
                 "dps": float(dividend.dps),
                 "shares_at_record": position.qty,
@@ -133,7 +143,7 @@ class ProcessDividendUC:
                 "withholding_tax": float(withholding_tax),
                 "receivable_id": created_receivable.id,
             },
-            message=f"Ex-dividend effective: {position.ticker} ${dividend.dps:.4f} per share, receivable ${float(net_amount):.2f}",
+            message=f"Ex-dividend effective: {position.asset_symbol} ${dividend.dps:.4f} per share, receivable ${float(net_amount):.2f}",
         )
 
         self._create_event(
@@ -159,23 +169,34 @@ class ProcessDividendUC:
         }
 
     def process_dividend_payment(
-        self, position_id: str, receivable_id: str
+        self, tenant_id: str, portfolio_id: str, position_id: str, receivable_id: str
     ) -> Optional[Dict[str, Any]]:
         """Process dividend payment for a receivable."""
         receivable = self.dividend_receivable_repo.get_receivable(receivable_id)
         if not receivable or receivable.position_id != position_id:
             return None
 
-        position = self.positions_repo.get(position_id)
+        position = self.positions_repo.get(
+            tenant_id=tenant_id, portfolio_id=portfolio_id, position_id=position_id
+        )
         if not position:
             return None
+
+        # Cash lives in position (cash lives in PositionCell per target state model)
 
         # Mark receivable as paid
         receivable.mark_paid()
         self.dividend_receivable_repo.mark_receivable_paid(receivable_id)
 
-        # Clear receivable and add to cash
-        position.clear_dividend_receivable(float(receivable.net_amount))
+        # Clear receivable (dividend_receivable is still on position entity)
+        # Note: clear_dividend_receivable already adds cash to position.cash
+        net_amount_float = float(receivable.net_amount)
+        position.clear_dividend_receivable(net_amount_float)
+
+        # Update dividend aggregate (per spec)
+        position.total_dividends_received += net_amount_float
+
+        # Note: Cash is already added by clear_dividend_receivable, no need to add again
 
         # Update position
         self.positions_repo.save(position)
@@ -193,7 +214,7 @@ class ProcessDividendUC:
             outputs={
                 "amount_net": float(receivable.net_amount),
                 "receivable_cleared": True,
-                "new_cash_balance": position.cash,
+                "new_cash_balance": position.cash,  # Cash lives in PositionCell
             },
             message=f"Dividend received: ${float(receivable.net_amount):.2f} added to cash",
         )
@@ -201,12 +222,16 @@ class ProcessDividendUC:
         return {
             "receivable": receivable,
             "amount_received": float(receivable.net_amount),
-            "new_cash_balance": position.cash,
+            "new_cash_balance": position.cash,  # Cash lives in PositionCell
         }
 
-    def get_dividend_status(self, position_id: str) -> Dict[str, Any]:
+    def get_dividend_status(
+        self, tenant_id: str, portfolio_id: str, position_id: str
+    ) -> Dict[str, Any]:
         """Get dividend status for a position."""
-        position = self.positions_repo.get(position_id)
+        position = self.positions_repo.get(
+            tenant_id=tenant_id, portfolio_id=portfolio_id, position_id=position_id
+        )
         if not position:
             return {}
 
@@ -214,13 +239,18 @@ class ProcessDividendUC:
         pending_receivables = self.dividend_receivable_repo.get_pending_receivables(position_id)
 
         # Get upcoming dividends
-        upcoming_dividends = self.dividend_market_data_repo.get_upcoming_dividends(position.ticker)
+        upcoming_dividends = self.dividend_market_data_repo.get_upcoming_dividends(
+            position.asset_symbol
+        )  # Use asset_symbol instead of ticker
+
+        # Cash lives in position (cash lives in PositionCell)
+        cash_balance = position.cash
 
         return {
             "position_id": position_id,
-            "ticker": position.ticker,
+            "ticker": position.asset_symbol,  # Use asset_symbol instead of ticker
             "dividend_receivable": position.dividend_receivable,
-            "effective_cash": position.get_effective_cash(),
+            "effective_cash": position.get_effective_cash(),  # Cash lives in PositionCell
             "pending_receivables": [
                 {
                     "id": rec.id,
@@ -232,12 +262,12 @@ class ProcessDividendUC:
             ],
             "upcoming_dividends": [
                 {
-                    "ex_date": div.ex_date.isoformat(),
-                    "pay_date": div.pay_date.isoformat(),
+                    "ex_date": div.ex_date.isoformat() if div.ex_date else None,
+                    "pay_date": div.pay_date.isoformat() if div.pay_date else None,
                     "dps": float(div.dps),
                     "currency": div.currency,
                 }
-                for div in upcoming_dividends
+                for div in (upcoming_dividends or [])
             ],
         }
 

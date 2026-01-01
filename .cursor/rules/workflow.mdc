@@ -1,0 +1,13 @@
+---
+description: Critical workflow rules to prevent looping and hallucinations
+globs: ['**/*']
+alwaysApply: true
+---
+
+# Anti-Looping Protocol
+
+1. **Think Before Coding:** Before writing any code, state in 1-2 sentences what you are about to do and which file you are targeting.
+2. **Requirements First:** Always check `@spec.md` (or your requirements file) before every task. If the request contradicts the spec, ask for clarification instead of guessing.
+3. **The Two-Strike Rule:** If a fix fails twice, STOP. Do not try a third time. Explain the technical blocker and ask the user for a new direction or more context.
+4. **No Ghost Changes:** Do not delete existing logic or "refactor" unrelated code unless explicitly asked. Focus only on the requested change.
+5. **Incremental Progress:** If a task is large, break it into 3 steps. Complete Step 1 and ask for a "Proceed?" before moving to Step 2.

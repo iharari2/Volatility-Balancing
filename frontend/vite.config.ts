@@ -9,9 +9,24 @@ export default defineConfig({
     host: '0.0.0.0', // Allow external connections
     proxy: {
       '/api': {
-        target: 'http://localhost:8001', // Local backend
+        target: 'http://localhost:8000', // Local backend
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '/v1'),
+        rewrite: (path) => {
+          // Keep /api/tenants/... as-is (portfolios route)
+          if (path.startsWith('/api/tenants/')) {
+            return path;
+          }
+          // Rewrite /api/market/... to /v1/market/...
+          if (path.startsWith('/api/market/')) {
+            return path.replace(/^\/api/, '/v1');
+          }
+          // Rewrite /api/v1/... to /v1/... (audit routes)
+          if (path.startsWith('/api/v1/')) {
+            return path.replace(/^\/api/, '');
+          }
+          // Default: rewrite /api to /v1 for other routes
+          return path.replace(/^\/api/, '/v1');
+        },
       },
     },
   },

@@ -17,9 +17,13 @@ def _submit(context, position_id: str, side: str, qty: float, idemp: str | None 
         orders=container.orders,
         idempotency=container.idempotency,
         events=container.events,
+        config_repo=container.config,
         clock=container.clock,
+        guardrail_config_provider=container.guardrail_config_provider,
     )
     resp = uc.execute(
+        tenant_id="default",
+        portfolio_id="test_portfolio",
         position_id=position_id,
         idempotency_key=idemp,
         request=CreateOrderRequest(side=side, qty=qty),
@@ -30,13 +34,26 @@ def _submit(context, position_id: str, side: str, qty: float, idemp: str | None 
 
 def test_daily_cap_at_submit_is_enforced():
     # Arrange: position with a daily cap (e.g., 2 orders/day)
-    pos = container.positions.create(ticker="CAP", qty=0.0, cash=10_000.0)
+    tenant_id = "default"
+    portfolio_id = "test_portfolio"
+    from domain.entities.portfolio import Portfolio
+
+    portfolio = Portfolio(id=portfolio_id, tenant_id=tenant_id, name="Test")
+    container.portfolio_repo.save(portfolio)
+    container.portfolio_cash_repo.create(
+        tenant_id=tenant_id, portfolio_id=portfolio_id, currency="USD", cash_balance=10_000.0
+    )
+    pos = container.positions.create(
+        tenant_id=tenant_id, portfolio_id=portfolio_id, asset_symbol="CAP", qty=0.0
+    )
     # If your Position/GuardrailPolicy doesn't default this, set and save:
     pos.guardrails.max_orders_per_day = 2
     container.positions.save(pos)
 
     # Verify the position was saved correctly
-    pos_after = container.positions.get(pos.id)
+    pos_after = container.positions.get(
+        tenant_id=tenant_id, portfolio_id=portfolio_id, position_id=pos.id
+    )
     assert (
         pos_after.guardrails.max_orders_per_day == 2
     ), f"Expected 2, got {pos_after.guardrails.max_orders_per_day}"
@@ -57,12 +74,25 @@ def test_daily_cap_reset_or_clock_behavior_smoke():
 
 
 def test_daily_cap_at_fill_is_enforced():
-    pos = container.positions.create(ticker="CAPF", qty=0.0, cash=10_000.0)
+    tenant_id = "default"
+    portfolio_id = "test_portfolio"
+    from domain.entities.portfolio import Portfolio
+
+    portfolio = Portfolio(id=portfolio_id, tenant_id=tenant_id, name="Test")
+    container.portfolio_repo.save(portfolio)
+    # Cash is now stored in Position entity, not PortfolioCash
+    pos = container.positions.create(
+        tenant_id=tenant_id, portfolio_id=portfolio_id, asset_symbol="CAPF", qty=0.0
+    )
+    # Set initial cash on position (cash lives in Position entity)
+    pos.cash = 10_000.0
     pos.guardrails.max_orders_per_day = 1
     container.positions.save(pos)
 
     # Verify the position was saved correctly
-    pos_after = container.positions.get(pos.id)
+    pos_after = container.positions.get(
+        tenant_id=tenant_id, portfolio_id=portfolio_id, position_id=pos.id
+    )
     assert (
         pos_after.guardrails.max_orders_per_day == 1
     ), f"Expected 1, got {pos_after.guardrails.max_orders_per_day}"
@@ -76,7 +106,13 @@ def test_daily_cap_at_fill_is_enforced():
 
     # Fill the first order (should work)
     exec_uc = ExecuteOrderUC(
-        container.positions, container.orders, container.trades, container.events, container.clock
+        container.positions,
+        container.orders,
+        container.trades,
+        container.events,
+        container.clock,
+        guardrail_config_provider=container.guardrail_config_provider,
+        order_policy_config_provider=container.order_policy_config_provider,
     )
     r1 = exec_uc.execute(
         order_id=first,

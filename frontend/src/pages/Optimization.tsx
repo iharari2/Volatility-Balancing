@@ -46,8 +46,42 @@ export const Optimization: React.FC = () => {
 
   // Handle result click
   const handleResultClick = (result: OptimizationResult) => {
-    console.log('Result clicked:', result);
-    // TODO: Navigate to detailed result view
+    // Open detailed result view in a new tab or modal
+    const resultWindow = window.open('', '_blank');
+    if (resultWindow) {
+      resultWindow.document.write(`
+        <html>
+          <head><title>Optimization Result - ${result.id}</title></head>
+          <body style="font-family: Arial, sans-serif; padding: 20px;">
+            <h1>Optimization Result Details</h1>
+            <h2>Result ID: ${result.id}</h2>
+            <div style="margin: 20px 0;">
+              <h3>Parameters:</h3>
+              <pre style="background: #f5f5f5; padding: 10px; border-radius: 4px;">
+${JSON.stringify(result.parameters, null, 2)}
+              </pre>
+            </div>
+            <div style="margin: 20px 0;">
+              <h3>Performance Metrics:</h3>
+              <ul>
+                <li>Return: ${result.return}%</li>
+                <li>Sharpe Ratio: ${result.sharpe_ratio}</li>
+                <li>Max Drawdown: ${result.max_drawdown}%</li>
+                <li>Volatility: ${result.volatility}%</li>
+                <li>Total Trades: ${result.total_trades}</li>
+              </ul>
+            </div>
+            <div style="margin: 20px 0;">
+              <h3>Configuration:</h3>
+              <pre style="background: #f5f5f5; padding: 10px; border-radius: 4px;">
+${JSON.stringify(result.config, null, 2)}
+              </pre>
+            </div>
+          </body>
+        </html>
+      `);
+      resultWindow.document.close();
+    }
   };
 
   // Get active optimizations
@@ -199,20 +233,21 @@ export const Optimization: React.FC = () => {
                     {currentSelectedConfig.end_date}
                   </div>
                   {/* Start Optimization Action */}
-                  {currentSelectedConfig.status !== 'running' && currentSelectedConfig.status !== 'completed' && (
-                    <div className="mt-4">
-                      <button
-                        onClick={async () => {
-                          await startOptimization(currentSelectedConfig.id);
-                          // Results will be polled via context; fetch once as well
-                          getResults(currentSelectedConfig.id).then(setSelectedResults);
-                        }}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        Start Optimization
-                      </button>
-                    </div>
-                  )}
+                  {currentSelectedConfig.status !== 'running' &&
+                    currentSelectedConfig.status !== 'completed' && (
+                      <div className="mt-4">
+                        <button
+                          onClick={async () => {
+                            await startOptimization(currentSelectedConfig.id);
+                            // Results will be polled via context; fetch once as well
+                            getResults(currentSelectedConfig.id).then(setSelectedResults);
+                          }}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          Start Optimization
+                        </button>
+                      </div>
+                    )}
                 </div>
 
                 <OptimizationResults

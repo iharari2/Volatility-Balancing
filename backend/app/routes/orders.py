@@ -15,13 +15,23 @@ from application.dto.orders import (
 )
 from application.use_cases.submit_order_uc import SubmitOrderUC
 from application.use_cases.execute_order_uc import ExecuteOrderUC
-from application.use_cases.evaluate_position_uc import EvaluatePositionUC
+from domain.errors import GuardrailBreach
 
 router = APIRouter(tags=["orders"])
 
 
-@router.post("/positions/{position_id}/orders", response_model=CreateOrderResponse)
+# REMOVED: Legacy order endpoints - Use portfolio-scoped endpoints instead:
+# POST /api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders
+# GET /api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders
+
+
+@router.post(
+    "/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders",
+    response_model=CreateOrderResponse,
+)
 def submit_order(
+    tenant_id: str,
+    portfolio_id: str,
     position_id: str,
     payload: CreateOrderRequest,
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
@@ -31,10 +41,14 @@ def submit_order(
         orders=container.orders,
         events=container.events,
         idempotency=container.idempotency,
+        config_repo=container.config,
         clock=container.clock,
+        guardrail_config_provider=container.guardrail_config_provider,
     )
     try:
         return uc.execute(
+            tenant_id=tenant_id,
+            portfolio_id=portfolio_id,
             position_id=position_id,
             request=payload,
             idempotency_key=(idempotency_key or ""),
@@ -62,16 +76,31 @@ def fill_order(order_id: str, payload: FillOrderRequest) -> FillOrderResponse:
         trades=container.trades,
         events=container.events,
         clock=container.clock,
+        guardrail_config_provider=container.guardrail_config_provider,
+        order_policy_config_provider=container.order_policy_config_provider,
     )
     try:
         return uc.execute(order_id=order_id, request=payload)
     except KeyError:
         # Normalize to HTTP 404 for missing order
         raise HTTPException(404, detail="order_not_found")
+    except GuardrailBreach as e:
+        # Guardrail violation - return 400 Bad Request
+        raise HTTPException(400, detail=f"guardrail_breach: {str(e)}")
+    except Exception as e:
+        # Log the full error for debugging
+        import traceback
+
+        traceback.print_exc()
+        raise HTTPException(500, detail=f"Error filling order: {str(e)}")
 
 
-@router.post("/positions/{position_id}/orders/auto-size")
+@router.post(
+    "/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders/auto-size"
+)
 def submit_auto_sized_order(
+    tenant_id: str,
+    portfolio_id: str,
     position_id: str,
     current_price: float,
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
@@ -79,15 +108,15 @@ def submit_auto_sized_order(
     """Submit an order with automatic sizing based on volatility triggers and guardrails."""
 
     # First, evaluate the position to get the order proposal
-    eval_uc = EvaluatePositionUC(
-        positions=container.positions,
-        events=container.events,
-        market_data=container.market_data,
-        clock=container.clock,
-    )
+    eval_uc = container.evaluate_position_uc
 
     try:
-        evaluation = eval_uc.evaluate(position_id, current_price)
+        evaluation = eval_uc.evaluate(
+            tenant_id=tenant_id,
+            portfolio_id=portfolio_id,
+            position_id=position_id,
+            current_price=current_price,
+        )
     except KeyError:
         raise HTTPException(404, detail="position_not_found")
 
@@ -126,11 +155,15 @@ def submit_auto_sized_order(
         orders=container.orders,
         events=container.events,
         idempotency=container.idempotency,
+        config_repo=container.config,
         clock=container.clock,
+        guardrail_config_provider=container.guardrail_config_provider,
     )
 
     try:
         order_response = submit_uc.execute(
+            tenant_id=tenant_id,
+            portfolio_id=portfolio_id,
             position_id=position_id,
             request=order_request,
             idempotency_key=(idempotency_key or ""),
@@ -163,23 +196,24 @@ def submit_auto_sized_order(
         }
 
 
-@router.post("/positions/{position_id}/orders/auto-size/market")
+@router.post(
+    "/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders/auto-size/market"
+)
 def submit_auto_sized_order_with_market_data(
+    tenant_id: str,
+    portfolio_id: str,
     position_id: str,
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ) -> Dict[str, Any]:
     """Submit an order with automatic sizing using real-time market data and after-hours support."""
 
     # First, evaluate the position with market data to get the order proposal
-    eval_uc = EvaluatePositionUC(
-        positions=container.positions,
-        events=container.events,
-        market_data=container.market_data,
-        clock=container.clock,
-    )
+    eval_uc = container.get_evaluate_position_uc()
 
     try:
-        evaluation = eval_uc.evaluate_with_market_data(position_id)
+        evaluation = eval_uc.evaluate_with_market_data(
+            tenant_id=tenant_id, portfolio_id=portfolio_id, position_id=position_id
+        )
     except KeyError:
         raise HTTPException(404, detail="position_not_found")
 
@@ -218,11 +252,15 @@ def submit_auto_sized_order_with_market_data(
         orders=container.orders,
         events=container.events,
         idempotency=container.idempotency,
+        config_repo=container.config,
         clock=container.clock,
+        guardrail_config_provider=container.guardrail_config_provider,
     )
 
     try:
         order_response = submit_uc.execute(
+            tenant_id=tenant_id,
+            portfolio_id=portfolio_id,
             position_id=position_id,
             request=order_request,
             idempotency_key=(idempotency_key or ""),
@@ -256,18 +294,26 @@ def submit_auto_sized_order_with_market_data(
         }
 
 
-@router.get("/positions/{position_id}/orders")
-def list_orders(position_id: str, limit: int = 100) -> Dict[str, Any]:
-    if not container.positions.get(position_id):
+@router.get("/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders")
+def list_orders(
+    tenant_id: str, portfolio_id: str, position_id: str, limit: int = 100
+) -> Dict[str, Any]:
+    if not container.positions.get(
+        tenant_id=tenant_id, portfolio_id=portfolio_id, position_id=position_id
+    ):
         raise HTTPException(404, detail="position_not_found")
     orders = container.orders.list_for_position(position_id, limit=limit)
     return {"position_id": position_id, "orders": [asdict(o) for o in orders]}
 
 
-@router.get("/positions/{position_id}/trades")
-def list_trades(position_id: str, limit: int = 100) -> Dict[str, Any]:
+@router.get("/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/trades")
+def list_trades(
+    tenant_id: str, portfolio_id: str, position_id: str, limit: int = 100
+) -> Dict[str, Any]:
     """List trades for a position, ordered by execution time (newest first)."""
-    if not container.positions.get(position_id):
+    if not container.positions.get(
+        tenant_id=tenant_id, portfolio_id=portfolio_id, position_id=position_id
+    ):
         raise HTTPException(404, detail="position_not_found")
     trades = container.trades.list_for_position(position_id, limit=limit)
     return {"position_id": position_id, "trades": [asdict(t) for t in trades]}

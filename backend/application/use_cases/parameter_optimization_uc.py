@@ -176,7 +176,11 @@ class ParameterOptimizationUC:
             completed_combinations=completed,
             failed_combinations=failed,
             status=config.status.value,
-            started_at=config.created_at if config.status in [OptimizationStatus.RUNNING, OptimizationStatus.COMPLETED] else None,
+            started_at=(
+                config.created_at
+                if config.status in [OptimizationStatus.RUNNING, OptimizationStatus.COMPLETED]
+                else None
+            ),
         )
 
     def get_optimization_results(self, config_id: UUID) -> List[OptimizationResult]:
@@ -220,7 +224,6 @@ class ParameterOptimizationUC:
                 x_parameter in result.parameter_combination.parameters
                 and y_parameter in result.parameter_combination.parameters
             ):
-
                 x_val = result.parameter_combination.parameters[x_parameter]
                 y_val = result.parameter_combination.parameters[y_parameter]
                 metric_val = result.get_metric_value(OptimizationMetric(metric))
@@ -269,8 +272,9 @@ class ParameterOptimizationUC:
             if not isinstance(param_range, ParameterRange):
                 raise ValueError(f"Invalid parameter range for {name}")
 
-            if param_range.get_value_count() < 2:
-                raise ValueError(f"Parameter {name} must have at least 2 values")
+            # Allow single-value parameters (min_value == max_value)
+            if param_range.get_value_count() < 1:
+                raise ValueError(f"Parameter {name} must have at least 1 value")
 
     def _generate_parameter_combinations(
         self, config: OptimizationConfig
@@ -294,64 +298,81 @@ class ParameterOptimizationUC:
 
             # Create combination
             combination_obj = ParameterCombination(
-                parameters=params, combination_id=f"{config.id}_{i}", created_at=datetime.now(timezone.utc)
+                parameters=params,
+                combination_id=f"{config.id}_{i}",
+                created_at=datetime.now(timezone.utc),
             )
             combinations.append(combination_obj)
 
         return combinations
 
-    def _process_parameter_combinations(self, config: OptimizationConfig, combinations: List[ParameterCombination]) -> None:
+    def _process_parameter_combinations(
+        self, config: OptimizationConfig, combinations: List[ParameterCombination]
+    ) -> None:
         """Process parameter combinations with mock simulation results."""
         import random
         import time
-        
+
         for i, combination in enumerate(combinations):
             # Simulate processing time
             time.sleep(0.1)  # Small delay to simulate processing
-            
+
             # Generate mock metrics based on parameters
             # This creates realistic-looking results that vary with parameters
             base_return = 0.10 + random.uniform(-0.05, 0.05)
             base_sharpe = 1.0 + random.uniform(-0.3, 0.3)
             base_drawdown = -0.05 + random.uniform(-0.02, 0.02)
-            
+
             # Add some parameter-based variation
-            if 'trigger_threshold_pct' in combination.parameters:
-                threshold = combination.parameters['trigger_threshold_pct']
+            if "trigger_threshold_pct" in combination.parameters:
+                threshold = combination.parameters["trigger_threshold_pct"]
                 # Higher thresholds might lead to better risk-adjusted returns
                 base_sharpe += (threshold - 0.03) * 10  # Scale factor
                 base_return += (threshold - 0.03) * 2
-            
-            if 'rebalance_ratio' in combination.parameters:
-                ratio = combination.parameters['rebalance_ratio']
+
+            if "rebalance_ratio" in combination.parameters:
+                ratio = combination.parameters["rebalance_ratio"]
                 # Higher ratios might lead to more trades but potentially better returns
                 base_return += (ratio - 1.75) * 0.5
                 base_sharpe += (ratio - 1.75) * 0.2
-            
+
             # Generate mock metrics
             metrics = {
-                OptimizationMetric.TOTAL_RETURN: max(0.0, base_return + random.uniform(-0.02, 0.02)),
+                OptimizationMetric.TOTAL_RETURN: max(
+                    0.0, base_return + random.uniform(-0.02, 0.02)
+                ),
                 OptimizationMetric.SHARPE_RATIO: max(0.0, base_sharpe + random.uniform(-0.1, 0.1)),
-                OptimizationMetric.MAX_DRAWDOWN: min(0.0, base_drawdown + random.uniform(-0.01, 0.01)),
+                OptimizationMetric.MAX_DRAWDOWN: min(
+                    0.0, base_drawdown + random.uniform(-0.01, 0.01)
+                ),
                 OptimizationMetric.VOLATILITY: max(0.05, 0.12 + random.uniform(-0.03, 0.03)),
-                OptimizationMetric.CALMAR_RATIO: max(0.0, base_return / abs(base_drawdown) + random.uniform(-0.5, 0.5)),
+                OptimizationMetric.CALMAR_RATIO: max(
+                    0.0, base_return / abs(base_drawdown) + random.uniform(-0.5, 0.5)
+                ),
                 OptimizationMetric.SORTINO_RATIO: max(0.0, base_sharpe + random.uniform(-0.2, 0.2)),
                 OptimizationMetric.WIN_RATE: max(0.0, min(1.0, 0.6 + random.uniform(-0.1, 0.1))),
                 OptimizationMetric.PROFIT_FACTOR: max(0.0, 1.5 + random.uniform(-0.3, 0.3)),
                 OptimizationMetric.TRADE_COUNT: max(1, int(20 + random.uniform(-5, 10))),
                 OptimizationMetric.AVG_TRADE_DURATION: max(1.0, 5.0 + random.uniform(-2, 3)),
             }
-            
+
             # Get the result and update it
             results = self.result_repo.get_by_config(config.id)
-            result = next((r for r in results if r.parameter_combination.combination_id == combination.combination_id), None)
-            
+            result = next(
+                (
+                    r
+                    for r in results
+                    if r.parameter_combination.combination_id == combination.combination_id
+                ),
+                None,
+            )
+
             if result:
                 result.metrics = metrics
                 result.status = OptimizationResultStatus.COMPLETED
                 result.completed_at = datetime.now(timezone.utc)
                 self.result_repo.save_result(result)
-        
+
         # Update config status to completed
         config.update_status(OptimizationStatus.COMPLETED)
         self.config_repo.update_status(config.id, config.status.value)

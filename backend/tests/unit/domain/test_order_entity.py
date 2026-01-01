@@ -1,10 +1,8 @@
 # =========================
 # backend/tests/unit/domain/test_order_entity.py
 # =========================
-import pytest
 from datetime import datetime, timezone
 from domain.entities.order import Order
-from domain.value_objects.types import OrderSide
 
 
 class TestOrder:
@@ -12,7 +10,14 @@ class TestOrder:
 
     def test_order_creation(self):
         """Test basic order creation."""
-        order = Order(id="ord_123", position_id="pos_456", side="BUY", qty=100.0)
+        order = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+        )
 
         assert order.id == "ord_123"
         assert order.position_id == "pos_456"
@@ -28,6 +33,8 @@ class TestOrder:
         """Test order creation with all fields."""
         order = Order(
             id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
             position_id="pos_456",
             side="SELL",
             qty=50.0,
@@ -50,6 +57,8 @@ class TestOrder:
 
         order = Order(
             id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
             position_id="pos_456",
             side="BUY",
             qty=100.0,
@@ -63,15 +72,36 @@ class TestOrder:
     def test_order_side_validation(self):
         """Test order side validation."""
         # Valid sides
-        buy_order = Order(id="ord_1", position_id="pos_1", side="BUY", qty=100.0)
+        buy_order = Order(
+            id="ord_1",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_1",
+            side="BUY",
+            qty=100.0,
+        )
         assert buy_order.side == "BUY"
 
-        sell_order = Order(id="ord_2", position_id="pos_2", side="SELL", qty=100.0)
+        sell_order = Order(
+            id="ord_2",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_2",
+            side="SELL",
+            qty=100.0,
+        )
         assert sell_order.side == "SELL"
 
     def test_order_status_defaults(self):
         """Test order status defaults."""
-        order = Order(id="ord_123", position_id="pos_456", side="BUY", qty=100.0)
+        order = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+        )
 
         assert order.status == "submitted"
 
@@ -82,7 +112,13 @@ class TestOrder:
 
         for status in statuses:
             order = Order(
-                id=f"ord_{status}", position_id="pos_456", side="BUY", qty=100.0, status=status
+                id=f"ord_{status}",
+                tenant_id="default",
+                portfolio_id="test_portfolio",
+                position_id="pos_456",
+                side="BUY",
+                qty=100.0,
+                status=status,
             )
             assert order.status == status
 
@@ -90,11 +126,25 @@ class TestOrder:
         """Test order equality comparison."""
         fixed_time = datetime.now(timezone.utc)
 
-        order1 = Order(id="ord_123", position_id="pos_456", side="BUY", qty=100.0)
+        order1 = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+        )
         order1.created_at = fixed_time
         order1.updated_at = fixed_time
 
-        order2 = Order(id="ord_123", position_id="pos_456", side="BUY", qty=100.0)
+        order2 = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+        )
         order2.created_at = fixed_time
         order2.updated_at = fixed_time
 
@@ -103,16 +153,38 @@ class TestOrder:
 
     def test_order_inequality(self):
         """Test order inequality comparison."""
-        order1 = Order(id="ord_123", position_id="pos_456", side="BUY", qty=100.0)
+        order1 = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+        )
 
-        order2 = Order(id="ord_789", position_id="pos_456", side="BUY", qty=100.0)
+        order2 = Order(
+            id="ord_789",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+        )
 
         # Orders with different IDs should not be equal
         assert order1 != order2
 
     def test_order_string_representation(self):
         """Test order string representation."""
-        order = Order(id="ord_123", position_id="pos_456", side="BUY", qty=100.0, status="filled")
+        order = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+            status="filled",
+        )
 
         str_repr = str(order)
         assert "ord_123" in str_repr
@@ -125,6 +197,8 @@ class TestOrder:
         """Test order with idempotency key."""
         order = Order(
             id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
             position_id="pos_456",
             side="BUY",
             qty=100.0,
@@ -138,7 +212,13 @@ class TestOrder:
         signature = {"position_id": "pos_456", "side": "BUY", "qty": 100.0, "price": 150.0}
 
         order = Order(
-            id="ord_123", position_id="pos_456", side="BUY", qty=100.0, request_signature=signature
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+            request_signature=signature,
         )
 
         assert order.request_signature == signature
@@ -146,18 +226,39 @@ class TestOrder:
     def test_order_quantity_validation(self):
         """Test order quantity validation."""
         # Test positive quantity
-        order = Order(id="ord_123", position_id="pos_456", side="BUY", qty=100.0)
+        order = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+        )
         assert order.qty == 100.0
 
         # Test fractional quantity
-        order = Order(id="ord_124", position_id="pos_456", side="BUY", qty=100.5)
+        order = Order(
+            id="ord_124",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.5,
+        )
         assert order.qty == 100.5
 
     def test_order_creation_timestamps(self):
         """Test that order creation sets timestamps."""
         before_creation = datetime.now(timezone.utc)
 
-        order = Order(id="ord_123", position_id="pos_456", side="BUY", qty=100.0)
+        order = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+        )
 
         after_creation = datetime.now(timezone.utc)
 
@@ -170,13 +271,26 @@ class TestOrder:
     def test_order_side_type_validation(self):
         """Test order side type validation."""
         # Test with string values that match OrderSide literal
-        order = Order(id="ord_123", position_id="pos_456", side="BUY", qty=100.0)
+        order = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+        )
         assert order.side == "BUY"
 
     def test_order_immutability(self):
         """Test that order fields are immutable after creation."""
         order = Order(
-            id="ord_123", position_id="pos_456", side="BUY", qty=100.0, status="submitted"
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+            status="submitted",
         )
 
         # These should not be modifiable after creation
@@ -194,14 +308,28 @@ class TestOrder:
 
     def test_order_with_zero_quantity(self):
         """Test order with zero quantity."""
-        order = Order(id="ord_123", position_id="pos_456", side="BUY", qty=0.0)
+        order = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=0.0,
+        )
 
         assert order.qty == 0.0
 
     def test_order_with_negative_quantity(self):
         """Test order with negative quantity."""
         # This should be allowed at entity level (validation happens at use case level)
-        order = Order(id="ord_123", position_id="pos_456", side="BUY", qty=-100.0)
+        order = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=-100.0,
+        )
 
         assert order.qty == -100.0
 
@@ -209,11 +337,25 @@ class TestOrder:
         """Test order hash for use in sets and dictionaries."""
         fixed_time = datetime.now(timezone.utc)
 
-        order1 = Order(id="ord_123", position_id="pos_456", side="BUY", qty=100.0)
+        order1 = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+        )
         order1.created_at = fixed_time
         order1.updated_at = fixed_time
 
-        order2 = Order(id="ord_123", position_id="pos_456", side="BUY", qty=100.0)
+        order2 = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+        )
         order2.created_at = fixed_time
         order2.updated_at = fixed_time
 
@@ -226,10 +368,175 @@ class TestOrder:
 
     def test_order_comparison(self):
         """Test order comparison operations."""
-        order1 = Order(id="ord_123", position_id="pos_456", side="BUY", qty=100.0)
+        order1 = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+        )
 
-        order2 = Order(id="ord_456", position_id="pos_456", side="BUY", qty=100.0)
+        order2 = Order(
+            id="ord_456",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+        )
 
         # Orders should be comparable
         assert order1 != order2
         assert not (order1 == order2)
+
+    def test_order_commission_rate_snapshot_default(self):
+        """Test that commission_rate_snapshot defaults to None."""
+        order = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+        )
+
+        assert order.commission_rate_snapshot is None
+
+    def test_order_commission_rate_snapshot_initialization(self):
+        """Test order creation with commission_rate_snapshot."""
+        order = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+            commission_rate_snapshot=0.0001,
+        )
+
+        assert order.commission_rate_snapshot == 0.0001
+
+    def test_order_commission_rate_snapshot_nullable(self):
+        """Test that commission_rate_snapshot can be None."""
+        order = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+            commission_rate_snapshot=None,
+        )
+
+        assert order.commission_rate_snapshot is None
+
+    def test_order_commission_estimated_default(self):
+        """Test that commission_estimated defaults to None."""
+        order = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+        )
+
+        assert order.commission_estimated is None
+
+    def test_order_commission_estimated_initialization(self):
+        """Test order creation with commission_estimated."""
+        order = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+            commission_estimated=1.5,
+        )
+
+        assert order.commission_estimated == 1.5
+
+    def test_order_commission_estimated_nullable(self):
+        """Test that commission_estimated can be None."""
+        order = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+            commission_estimated=None,
+        )
+
+        assert order.commission_estimated is None
+
+    def test_order_commission_fields_independence(self):
+        """Test that commission_rate_snapshot and commission_estimated are independent."""
+        order = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+            commission_rate_snapshot=0.0001,
+            commission_estimated=1.5,
+        )
+
+        assert order.commission_rate_snapshot == 0.0001
+        assert order.commission_estimated == 1.5
+
+    def test_order_commission_rate_snapshot_different_values(self):
+        """Test order with different commission rate snapshots."""
+        # Test with different commission rates
+        rates = [0.0001, 0.0002, 0.001, 0.01]
+        for rate in rates:
+            order = Order(
+                id=f"ord_{rate}",
+                tenant_id="default",
+                portfolio_id="test_portfolio",
+                position_id="pos_456",
+                side="BUY",
+                qty=100.0,
+                commission_rate_snapshot=rate,
+            )
+            assert order.commission_rate_snapshot == rate
+
+    def test_order_commission_estimated_calculation_example(self):
+        """Test commission_estimated with example calculation."""
+        # Example: 100 shares at $150 = $15,000 notional
+        # Commission rate: 0.0001 = 0.01%
+        # Estimated commission: $15,000 * 0.0001 = $1.50
+        order = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+            commission_rate_snapshot=0.0001,
+            commission_estimated=1.5,
+        )
+
+        assert order.commission_rate_snapshot == 0.0001
+        assert order.commission_estimated == 1.5
+
+    def test_order_creation_with_all_commission_fields(self):
+        """Test order creation with all commission fields."""
+        order = Order(
+            id="ord_123",
+            tenant_id="default",
+            portfolio_id="test_portfolio",
+            position_id="pos_456",
+            side="BUY",
+            qty=100.0,
+            status="submitted",
+            commission_rate_snapshot=0.0001,
+            commission_estimated=1.5,
+        )
+
+        assert order.commission_rate_snapshot == 0.0001
+        assert order.commission_estimated == 1.5
+        assert order.status == "submitted"
