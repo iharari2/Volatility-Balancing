@@ -13,6 +13,8 @@ from infrastructure.persistence.sql.models import TradeModel
 
 def _to_entity(row: TradeModel) -> Trade:
     """Convert SQLAlchemy row to domain entity."""
+    from domain.value_objects.types import OrderSide
+    from typing import cast
 
     return Trade(
         id=row.id,
@@ -20,7 +22,7 @@ def _to_entity(row: TradeModel) -> Trade:
         portfolio_id=row.portfolio_id,
         order_id=row.order_id,
         position_id=row.position_id,
-        side=row.side,  # type: OrderSide
+        side=cast(OrderSide, row.side),
         qty=row.qty,
         price=row.price,
         commission=row.commission,
