@@ -12,6 +12,10 @@ export default defineConfig({
         target: 'http://localhost:8000', // Local backend
         changeOrigin: true,
         rewrite: (path) => {
+          // Keep /api/portfolios/... as-is (new cockpit contract)
+          if (path.startsWith('/api/portfolios')) {
+            return path;
+          }
           // Keep /api/tenants/... as-is (portfolios route)
           if (path.startsWith('/api/tenants/')) {
             return path;

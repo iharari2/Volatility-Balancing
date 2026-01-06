@@ -16,10 +16,15 @@ import threading
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 import logging
+import json
+from pathlib import Path
 
 from app.di import container
 
 logger = logging.getLogger(__name__)
+
+# Persist worker state in local logs directory
+WORKER_STATE_FILE = Path("logs/trading_worker_state.json")
 
 
 class TradingWorker:
@@ -201,7 +206,10 @@ def get_trading_worker() -> TradingWorker:
             os.getenv("TRADING_WORKER_INTERVAL_SECONDS", "60")
         )
         enabled = persisted_state.get("enabled")
-        if enabled is None:
+        enabled_env = os.getenv("TRADING_WORKER_ENABLED")
+        if enabled_env is not None:
+            enabled = enabled_env.lower() == "true"
+        elif enabled is None:
             enabled = os.getenv("TRADING_WORKER_ENABLED", "true").lower() == "true"
 
         _trading_worker = TradingWorker(interval_seconds=interval, enabled=enabled)

@@ -203,7 +203,16 @@ class ComprehensiveExcelExportService:
         from datetime import datetime, timedelta
 
         market_data = []
-        base_price = position.currentPrice
+        base_price = (
+            getattr(position, "current_price", None)
+            or getattr(position, "currentPrice", None)
+            or getattr(position, "anchor_price", None)
+            or getattr(position, "anchorPrice", None)
+            or getattr(position, "avg_cost", None)
+            or getattr(position, "avgCost", None)
+        )
+        if not base_price or base_price <= 0:
+            base_price = 100.0
         volatility = 0.02 if position.ticker != "ZIM" else 0.05
 
         # Generate 30 days of data

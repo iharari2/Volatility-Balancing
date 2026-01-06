@@ -10,6 +10,8 @@ os.environ.setdefault("APP_EVENTS", "memory")
 os.environ.setdefault("APP_IDEMPOTENCY", "memory")
 os.environ.setdefault("SQL_URL", "sqlite:///./vb_test.sqlite")
 os.environ.setdefault("APP_AUTO_CREATE", "1")  # Create tables for portfolio repo
+os.environ.setdefault("TRADING_WORKER_ENABLED", "false")
+os.environ.setdefault("TRADING_WORKER_INTERVAL_SECONDS", "3600")
 
 from starlette.testclient import TestClient
 from app.main import app
