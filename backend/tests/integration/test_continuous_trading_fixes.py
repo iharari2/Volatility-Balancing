@@ -17,7 +17,10 @@ from unittest.mock import Mock, patch
 from decimal import Decimal
 
 from app.di import container
-from application.services.continuous_trading_service import ContinuousTradingService
+from application.services.continuous_trading_service import (
+    ContinuousTradingService,
+    TradingStatus,
+)
 from domain.entities.position import Position
 from domain.entities.portfolio import Portfolio
 from domain.value_objects.guardrails import GuardrailPolicy
@@ -59,14 +62,15 @@ def mock_position():
         cash=1000.0,
         anchor_price=100.0,
         guardrails=GuardrailPolicy(
-            min_stock_pct=Decimal("0.0"),
-            max_stock_pct=Decimal("1.0"),
-            max_trade_pct_of_position=Decimal("0.5"),
+            min_stock_alloc_pct=Decimal("0.0"),
+            max_stock_alloc_pct=Decimal("1.0"),
+            max_sell_pct_per_trade=Decimal("0.5"),
+            max_buy_pct_per_trade=Decimal("0.5"),
         ),
         order_policy=OrderPolicy(
             min_qty=Decimal("1.0"),
             min_notional=Decimal("10.0"),
-            round_lot_size=Decimal("1.0"),
+            lot_size=Decimal("1.0"),
             allow_after_hours=True,
         ),
     )
@@ -90,12 +94,14 @@ def test_evaluate_called_with_correct_parameters(mock_position, mock_portfolio):
     """Test that evaluate() is called with tenant_id, portfolio_id, position_id, and price."""
     # Setup mocks
     mock_eval_uc = Mock()
-    mock_eval_uc.evaluate = Mock(
-        return_value={
-            "trigger_detected": False,
-            "order_proposal": None,
-        }
-    )
+    stop_event = None
+
+    def _evaluate_side_effect(*args, **kwargs):
+        if stop_event:
+            stop_event.set()
+        return {"trigger_detected": False, "order_proposal": None}
+
+    mock_eval_uc.evaluate = Mock(side_effect=_evaluate_side_effect)
 
     # Patch container
     with (
@@ -128,10 +134,13 @@ def test_evaluate_called_with_correct_parameters(mock_position, mock_portfolio):
             import threading
 
             stop_event = threading.Event()
-            stop_event.set()  # Set immediately to stop after one iteration
+            service._active_positions["test_pos_001"] = TradingStatus(
+                position_id="test_pos_001",
+                is_running=True,
+            )
 
             # Call _monitor_position directly
-            service._monitor_position("test_pos_001", 300, stop_event, None)
+            service._monitor_position("test_pos_001", 0, stop_event, None)
 
         # Verify evaluate was called with correct parameters
         assert mock_eval_uc.evaluate.called, "evaluate() should have been called"
@@ -177,7 +186,14 @@ def test_error_event_logged_on_evaluation_failure(mock_position, mock_portfolio)
     """Test that error events are logged when evaluation fails."""
     # Setup mocks
     mock_eval_uc = Mock()
-    mock_eval_uc.evaluate = Mock(side_effect=Exception("Evaluation failed"))
+    stop_event = None
+
+    def _evaluate_error(*args, **kwargs):
+        if stop_event:
+            stop_event.set()
+        raise Exception("Evaluation failed")
+
+    mock_eval_uc.evaluate = Mock(side_effect=_evaluate_error)
 
     # Patch container
     with (
@@ -210,10 +226,13 @@ def test_error_event_logged_on_evaluation_failure(mock_position, mock_portfolio)
             import threading
 
             stop_event = threading.Event()
-            stop_event.set()
+            service._active_positions["test_pos_001"] = TradingStatus(
+                position_id="test_pos_001",
+                is_running=True,
+            )
 
             # Call _monitor_position
-            service._monitor_position("test_pos_001", 300, stop_event, None)
+            service._monitor_position("test_pos_001", 0, stop_event, None)
 
         # Verify error event was logged
         error_events = [e for e in mock_event_logger.events if "error" in e.get("payload", {})]

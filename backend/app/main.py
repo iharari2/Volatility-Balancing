@@ -38,10 +38,13 @@ API_PREFIX = "/v1"
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events."""
     # Startup
-    start_trading_worker()
+    worker_enabled = os.getenv("TRADING_WORKER_ENABLED", "true").lower() == "true"
+    if worker_enabled:
+        start_trading_worker()
     yield
     # Shutdown
-    stop_trading_worker()
+    if worker_enabled:
+        stop_trading_worker()
 
 
 app = FastAPI(title="Volatility Balancing API", version="v1", lifespan=lifespan)

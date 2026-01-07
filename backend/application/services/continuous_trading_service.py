@@ -190,6 +190,7 @@ class ContinuousTradingService:
             orders=container.orders,
             events=container.events,
             idempotency=container.idempotency,
+            config_repo=container.config,
             clock=container.clock,
         )
 
