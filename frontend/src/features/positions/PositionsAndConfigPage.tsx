@@ -309,7 +309,10 @@ export default function PositionsAndConfigPage() {
         // Anchor/avg cost are derived from current price on the backend.
         anchor_price: positionData.currentPrice,
         avg_cost: positionData.currentPrice,
-        cash: positionData.cash,
+        starting_cash: {
+          currency: 'USD',
+          amount: positionData.cash,
+        },
       };
 
       console.log('Creating position with data:', {
@@ -815,7 +818,6 @@ export default function PositionsAndConfigPage() {
     </div>
   );
 }
-
 
 
 

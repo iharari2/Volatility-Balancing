@@ -618,13 +618,6 @@ export const portfolioApi = {
       name: string;
       description?: string;
       type?: string;
-      starting_cash: { currency: string; amount: number };
-      holdings?: Array<{
-        asset: string;
-        qty: number;
-        avg_cost?: number;
-        anchor_price?: number;
-      }>;
       template?: string;
       hours_policy?: string;
     },
@@ -720,6 +713,7 @@ export const portfolioApi = {
     data: {
       asset: string;
       qty: number;
+      starting_cash: { currency: string; amount: number };
       avg_cost?: number;
       anchor_price?: number;
     },
