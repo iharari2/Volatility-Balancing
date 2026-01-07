@@ -589,6 +589,14 @@ export const auditTrailApi = {
 };
 
 // Portfolio API - All methods require tenantId and portfolioId
+export interface CreatePortfolioRequest {
+  name: string;
+  description?: string;
+  type?: string;
+  template?: string;
+  hours_policy?: string;
+}
+
 export const portfolioApi = {
   list: (tenantId: string, userId?: string) =>
     request<
@@ -612,16 +620,7 @@ export const portfolioApi = {
       updated_at: string;
     }>(`/v1/tenants/${tenantId}/portfolios/${portfolioId}`),
 
-  create: (
-    tenantId: string,
-    data: {
-      name: string;
-      description?: string;
-      type?: string;
-      template?: string;
-      hours_policy?: string;
-    },
-  ) =>
+  create: (tenantId: string, data: CreatePortfolioRequest) =>
     request<{
       portfolio_id: string;
     }>(`/v1/tenants/${tenantId}/portfolios`, {

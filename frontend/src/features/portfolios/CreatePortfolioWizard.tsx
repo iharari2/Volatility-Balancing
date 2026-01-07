@@ -421,7 +421,7 @@ export default function CreatePortfolioWizard({
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Starting Cash <span className="text-red-500">*</span>
+                            Position Starting Cash <span className="text-red-500">*</span>
                           </label>
                           <div className="flex gap-2">
                             <select
@@ -650,7 +650,7 @@ export default function CreatePortfolioWizard({
                             {formData.position.asset ? formData.position.asset : '—'}
                           </div>
                           <div>
-                            Starting Cash: {formData.position.startingCash.currency}{' '}
+                            Position Starting Cash: {formData.position.startingCash.currency}{' '}
                             {formData.position.startingCash.amount.toLocaleString(undefined, {
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 2,
