@@ -308,7 +308,7 @@ export const marketApi = {
         warnings: string[];
         rejections: string[];
       };
-    }>(`/market/price/${ticker}?force_refresh=true&_t=${Date.now()}`), // Add cache-busting timestamp
+    }>(`/market/price/${ticker}`),
 
   getStatus: () =>
     request<{
@@ -589,6 +589,14 @@ export const auditTrailApi = {
 };
 
 // Portfolio API - All methods require tenantId and portfolioId
+export interface CreatePortfolioRequest {
+  name: string;
+  description?: string;
+  type?: string;
+  template?: string;
+  hours_policy?: string;
+}
+
 export const portfolioApi = {
   list: (tenantId: string, userId?: string) =>
     request<
@@ -612,23 +620,7 @@ export const portfolioApi = {
       updated_at: string;
     }>(`/v1/tenants/${tenantId}/portfolios/${portfolioId}`),
 
-  create: (
-    tenantId: string,
-    data: {
-      name: string;
-      description?: string;
-      type?: string;
-      starting_cash: { currency: string; amount: number };
-      holdings?: Array<{
-        asset: string;
-        qty: number;
-        avg_cost?: number;
-        anchor_price?: number;
-      }>;
-      template?: string;
-      hours_policy?: string;
-    },
-  ) =>
+  create: (tenantId: string, data: CreatePortfolioRequest) =>
     request<{
       portfolio_id: string;
     }>(`/v1/tenants/${tenantId}/portfolios`, {
@@ -720,6 +712,7 @@ export const portfolioApi = {
     data: {
       asset: string;
       qty: number;
+      starting_cash: { currency: string; amount: number };
       avg_cost?: number;
       anchor_price?: number;
     },

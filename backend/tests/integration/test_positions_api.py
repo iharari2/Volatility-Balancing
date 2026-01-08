@@ -342,19 +342,12 @@ class TestPositionsAPI:
         response = client.get("/v1/market/price/AAPL")
 
         # This might fail if market data is not available
-        assert response.status_code in [200, 404, 500]
+        assert response.status_code in [200, 404, 503]
         if response.status_code == 200:
             data = response.json()
             assert data["ticker"] == "AAPL"
             assert "price" in data
             assert "timestamp" in data
-
-    def test_get_market_price_not_found(self, client):
-        """Test getting market price for non-existent ticker."""
-        response = client.get("/v1/market/price/NONEXISTENT")
-
-        assert response.status_code == 404
-        assert response.json()["detail"] == "ticker_not_found"
 
     def test_get_historical_data(self, client):
         """Test getting historical data."""

@@ -16,9 +16,8 @@ import PositionsAndConfigPage from './features/positions/PositionsAndConfigPage'
 import PositionDetailPage from './features/positions/PositionDetailPage';
 // TradeScreenPage has been removed - use PositionCockpitPage instead
 // TradingConsolePage has been removed - use TradeSelectionPage instead
-import PositionCockpitPage from './features/trading/PositionCockpitPage';
 import TradingConsolePage from './features/trading/TradingConsolePage';
-import TradeSelectionPage from './features/trading/TradeSelectionPage';
+import TradeCockpitPage from './features/trading/TradeCockpitPage';
 import SimulationLabPage from './features/simulation/SimulationLabPage';
 import AnalyticsPage from './features/analytics/AnalyticsPage';
 import AuditTrailPage from './features/audit/AuditTrailPage';
@@ -57,10 +56,10 @@ function App() {
                 <Route path="/positions-legacy" element={<PositionsPage />} />
                 {/* Trading Console routes */}
                 <Route path="/trading" element={<TradingConsolePage />} />
-                <Route path="/trade" element={<TradeSelectionPage />} />
+                <Route path="/trade" element={<TradeCockpitPage />} />
                 <Route
                   path="/trade/:portfolioId/position/:positionId"
-                  element={<PositionCockpitPage />}
+                  element={<TradeCockpitPage />}
                 />
                 {/* Legacy trade screen routes - QUARANTINED
                     Old TradeScreenPage has been replaced by PositionCockpitPage

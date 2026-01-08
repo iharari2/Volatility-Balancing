@@ -3,7 +3,7 @@
 # =========================
 
 import pytest
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 from domain.entities.optimization_config import OptimizationConfig, OptimizationStatus
 from domain.entities.optimization_result import (
@@ -276,7 +276,7 @@ class TestOptimizationConfig:
             name="Test Config",
             ticker="AAPL",
             start_date=now,
-            end_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            end_date=now + timedelta(days=1),
             parameter_ranges=param_ranges,
             optimization_criteria=criteria,
             status=OptimizationStatus.DRAFT,

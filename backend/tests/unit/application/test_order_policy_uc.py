@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 from application.use_cases.execute_order_uc import ExecuteOrderUC
 from application.dto.orders import FillOrderRequest
 from domain.value_objects.order_policy import OrderPolicy
@@ -20,16 +22,16 @@ def make_pos(policy: OrderPolicy) -> Position:
     )
 
 
-def test_fill_below_min_qty_hold(mocker):
+def test_fill_below_min_qty_hold():
     policy = OrderPolicy(min_qty=5.0, action_below_min="hold")
     pos = make_pos(policy)
-    orders = mocker.Mock()
-    positions = mocker.Mock()
+    orders = Mock()
+    positions = Mock()
     positions.get.return_value = pos
 
-    events = mocker.Mock()
-    clock = mocker.Mock()
-    trades = mocker.Mock()
+    events = Mock()
+    clock = Mock()
+    trades = Mock()
 
     uc = ExecuteOrderUC(
         positions=positions,
@@ -54,8 +56,6 @@ def test_fill_below_min_qty_hold(mocker):
     orders.get.return_value = order
 
     # Mock portfolio_cash_repo
-    from unittest.mock import Mock
-
     portfolio_cash_repo = Mock()
     portfolio_cash_repo.get.return_value = Mock(cash_balance=1000.0)
     uc.portfolio_cash_repo = portfolio_cash_repo
@@ -66,13 +66,13 @@ def test_fill_below_min_qty_hold(mocker):
     events.append.assert_called()  # skipped event
 
 
-def test_fill_below_min_qty_reject(mocker):
+def test_fill_below_min_qty_reject():
     policy = OrderPolicy(min_qty=5.0, action_below_min="reject")
     pos = make_pos(policy)
-    positions = mocker.Mock(
+    positions = Mock(
         get=lambda tenant_id=None, portfolio_id=None, position_id=None, **kwargs: pos
     )
-    orders = mocker.Mock(
+    orders = Mock(
         get=lambda *_: Order(
             id="o1",
             tenant_id="default",
@@ -83,9 +83,9 @@ def test_fill_below_min_qty_reject(mocker):
             status="submitted",
         )
     )
-    events = mocker.Mock()
-    clock = mocker.Mock()
-    trades = mocker.Mock()
+    events = Mock()
+    clock = Mock()
+    trades = Mock()
 
     uc = ExecuteOrderUC(
         positions=positions,

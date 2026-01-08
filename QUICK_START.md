@@ -25,6 +25,13 @@ This will:
 ### **Terminal 1: Backend**
 
 ```bash
+# From repo root
+make dev
+#
+# Or from repo root without Make:
+PYTHONPATH=backend python -m uvicorn --app-dir backend app.main:app --reload --host 0.0.0.0 --port 8000
+#
+# Or from backend/
 cd backend
 source .venv/bin/activate
 python3 -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
@@ -96,7 +103,6 @@ See **[PLAY_GUIDE.md](PLAY_GUIDE.md)** for detailed instructions and scenarios.
 ---
 
 **Have fun exploring!** 🎉
-
 
 
 

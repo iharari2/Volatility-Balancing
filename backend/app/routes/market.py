@@ -2,6 +2,8 @@
 # backend/app/routes/market.py
 # =========================
 
+import logging
+import os
 from typing import Dict, Any
 from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime, timezone
@@ -9,6 +11,7 @@ from datetime import datetime, timezone
 from app.di import container
 
 router = APIRouter(prefix="/v1/market", tags=["market"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/status")
@@ -112,19 +115,51 @@ def clear_market_cache(
 
 @router.get("/price/{ticker}")
 def get_market_price(
-    ticker: str, force_refresh: bool = Query(True, description="Force refresh, bypass cache")
+    ticker: str, force_refresh: bool = Query(False, description="Force refresh, bypass cache")
 ) -> Dict[str, Any]:
     """Get current market price for a ticker. Always fetches fresh data to avoid stale prices."""
     try:
+        if os.getenv("MARKET_DATA_FORCE_ERROR", "false").lower() == "true":
+            raise HTTPException(
+                status_code=503, detail="Market data provider unavailable. Try again."
+            )
         market_data = container.market_data
-        # Clear cache first to ensure fresh data
-        if hasattr(market_data, "clear_cache"):
+        if force_refresh and hasattr(market_data, "clear_cache"):
             market_data.clear_cache(ticker)
-        # Always force refresh for current price requests to avoid stale data
-        price_data = market_data.get_price(ticker, force_refresh=True)
+        price_data = market_data.get_price(ticker, force_refresh=force_refresh)
 
         if not price_data:
-            raise HTTPException(status_code=404, detail="ticker_not_found")
+            error_kind = getattr(market_data, "last_error_kind", None)
+            if os.getenv("MARKET_DATA_FALLBACK_MOCK", "false").lower() == "true":
+                mock_price = 123.45
+                now = datetime.now(timezone.utc)
+                return {
+                    "ticker": ticker,
+                    "price": mock_price,
+                    "source": "mock",
+                    "timestamp": now.isoformat(),
+                    "last_trade_time": None,
+                    "is_market_hours": True,
+                    "is_fresh": False,
+                    "is_inline": True,
+                    "validation": {
+                        "valid": False,
+                        "warnings": ["mock_price"],
+                        "rejections": [],
+                    },
+                    "data_age_seconds": 0.0,
+                    "open": mock_price,
+                    "high": mock_price,
+                    "low": mock_price,
+                    "close": mock_price,
+                }
+            if error_kind == "provider_unavailable":
+                logger.warning("Market data provider unavailable for %s", ticker)
+                raise HTTPException(
+                    status_code=503, detail="Market data provider unavailable. Try again."
+                )
+            logger.info("No market data found for %s", ticker)
+            raise HTTPException(status_code=404, detail=f"No market data found for {ticker}")
 
         # Validate the price data
         validation = market_data.validate_price(price_data, allow_after_hours=True)
@@ -175,8 +210,11 @@ def get_market_price(
         return response_data
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error getting market price: {str(e)}")
+    except Exception:
+        logger.exception("Unexpected error getting market price for %s", ticker)
+        raise HTTPException(
+            status_code=503, detail="Market data provider unavailable. Try again."
+        )
 
 
 @router.get("/historical/{ticker}")

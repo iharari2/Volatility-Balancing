@@ -32,6 +32,11 @@ class PriceData:
     is_market_hours: bool = True
     is_fresh: bool = True  # Within 3 seconds
     is_inline: bool = True  # Within ±1% of mid-quote
+    # Optional OHLC fields for daily bars
+    open: Optional[float] = None
+    high: Optional[float] = None
+    low: Optional[float] = None
+    close: Optional[float] = None
 
 
 @dataclass
@@ -57,7 +62,9 @@ class MarketDataRepo(ABC):
         pass
     
     @abstractmethod
-    def validate_price(self, price_data: PriceData) -> Dict[str, Any]:
+    def validate_price(
+        self, price_data: PriceData, allow_after_hours: bool = False
+    ) -> Dict[str, Any]:
         """Validate price data for trading decisions."""
         pass
     
@@ -65,5 +72,3 @@ class MarketDataRepo(ABC):
     def get_reference_price(self, ticker: str) -> Optional[PriceData]:
         """Get reference price following the specification policy."""
         pass
-
-

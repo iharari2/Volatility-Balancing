@@ -28,6 +28,7 @@ from app.routes.trading import router as trading_router
 from app.routes.excel_export import router as excel_export_router
 from app.routes.simulations import router as simulations_router
 from app.routes.positions_cockpit import router as positions_cockpit_router
+from app.routes.portfolio_cockpit_api import router as portfolio_cockpit_router
 from application.services.trading_worker import start_trading_worker, stop_trading_worker
 
 API_PREFIX = "/v1"
@@ -37,10 +38,13 @@ API_PREFIX = "/v1"
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events."""
     # Startup
-    start_trading_worker()
+    worker_enabled = os.getenv("TRADING_WORKER_ENABLED", "true").lower() == "true"
+    if worker_enabled:
+        start_trading_worker()
     yield
     # Shutdown
-    stop_trading_worker()
+    if worker_enabled:
+        stop_trading_worker()
 
 
 app = FastAPI(title="Volatility Balancing API", version="v1", lifespan=lifespan)
@@ -66,3 +70,4 @@ app.include_router(simulations_router)  # simulations_router already has /v1 pre
 app.include_router(
     positions_cockpit_router
 )  # positions_cockpit_router already has /v1/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id} prefix
+app.include_router(portfolio_cockpit_router)

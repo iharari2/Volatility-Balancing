@@ -31,9 +31,15 @@ class EvaluatePositionUC:
         events: EventsRepo,
         market_data: MarketDataRepo,
         clock: Clock,
-        trigger_config_provider: Optional[Callable[[str], TriggerConfig]] = None,
-        guardrail_config_provider: Optional[Callable[[str], GuardrailConfig]] = None,
-        order_policy_config_provider: Optional[Callable[[str], OrderPolicyConfig]] = None,
+        trigger_config_provider: Optional[
+            Callable[[str, str, str], TriggerConfig]
+        ] = None,
+        guardrail_config_provider: Optional[
+            Callable[[str, str, str], GuardrailConfig]
+        ] = None,
+        order_policy_config_provider: Optional[
+            Callable[[str, str, str], OrderPolicyConfig]
+        ] = None,
         config_repo: Optional[ConfigRepo] = None,
         portfolio_repo: Optional[PortfolioRepo] = None,
         evaluation_timeline_repo: Optional[EvaluationTimelineRepo] = None,
@@ -217,7 +223,9 @@ class EvaluatePositionUC:
 
         # Apply config store override if available
         if self.order_policy_config_provider:
-            order_policy_config = self.order_policy_config_provider(position_id)
+            order_policy_config = self.order_policy_config_provider(
+                tenant_id, portfolio_id, position_id
+            )
             if order_policy_config is not None:
                 allow_after_hours = order_policy_config.allow_after_hours
 
@@ -1203,9 +1211,14 @@ class EvaluatePositionUC:
                     tenant_id, portfolio_id, position.id
                 )
                 if order_policy_config:
+                    commission_rate = (
+                        float(order_policy_config.commission_rate)
+                        if order_policy_config.commission_rate is not None
+                        else float(position.order_policy.commission_rate or 0.0)
+                    )
                     order_policy_dict = {
                         "rebalance_ratio": float(order_policy_config.rebalance_ratio),
-                        "commission_rate": float(order_policy_config.commission_rate),
+                        "commission_rate": commission_rate,
                         "min_qty": (
                             float(order_policy_config.min_qty)
                             if order_policy_config.min_qty
