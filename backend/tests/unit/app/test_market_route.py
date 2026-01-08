@@ -22,6 +22,14 @@ class StubMarketData:
         return {"valid": True, "warnings": [], "rejections": []}
 
 
+class DummyResponse:
+    def __init__(self, detail):
+        self._detail = detail
+
+    def json(self):
+        return {"detail": self._detail}
+
+
 def test_market_price_invalid_ticker_returns_404():
     original = container.market_data
     container.market_data = StubMarketData(None, error_kind="not_found")
@@ -30,6 +38,23 @@ def test_market_price_invalid_ticker_returns_404():
             get_market_price("THISISNOTATICKER", force_refresh=True)
         assert exc.value.status_code == 404
         assert exc.value.detail == "No market data found for THISISNOTATICKER"
+    finally:
+        container.market_data = original
+
+
+def test_market_price_invalid_ticker_force_refresh_returns_404():
+    original = container.market_data
+    container.market_data = StubMarketData(None, error_kind="not_found")
+    try:
+        try:
+            get_market_price("THISISNOTATICKER", force_refresh=True)
+            pytest.fail("Expected HTTPException for invalid ticker")
+        except HTTPException as exc:
+            response = DummyResponse(exc.detail)
+            assert exc.status_code == 404
+            assert response.json() == {
+                "detail": "No market data found for THISISNOTATICKER",
+            }
     finally:
         container.market_data = original
 
