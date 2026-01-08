@@ -14,13 +14,6 @@ interface PortfolioData {
   name: string;
   description: string;
   portfolioType: 'live' | 'simulation' | 'sandbox';
-  position: {
-    asset: string;
-    startingCash: {
-      currency: string;
-      amount: number;
-    };
-  };
   strategyTemplate: 'default' | 'conservative' | 'aggressive' | 'custom';
   marketHoursPolicy: 'market-open-only' | 'allow-after-hours';
 }
@@ -91,13 +84,6 @@ export default function CreatePortfolioWizard({
     name: '',
     description: '',
     portfolioType: 'live',
-    position: {
-      asset: '',
-      startingCash: {
-        currency: 'USD',
-        amount: 100000,
-      },
-    },
     strategyTemplate: 'default',
     marketHoursPolicy: 'market-open-only',
   });
@@ -117,12 +103,8 @@ export default function CreatePortfolioWizard({
     }
   }, [formData.strategyTemplate]);
 
-  const totalValue = useMemo(() => {
-    return formData.position.startingCash.amount;
-  }, [formData.position.startingCash.amount]);
-
   const handleNext = () => {
-    if (step < 4) {
+    if (step < 3) {
       setStep(step + 1);
       setError(null);
     }
@@ -158,18 +140,6 @@ export default function CreatePortfolioWizard({
         return;
       }
 
-      if (!formData.position.asset.trim()) {
-        setError('Position asset is required');
-        setLoading(false);
-        return;
-      }
-
-      if (formData.position.startingCash.amount <= 0) {
-        setError('Starting cash must be greater than 0');
-        setLoading(false);
-        return;
-      }
-
       if (!selectedTenantId) {
         setError('No tenant selected. Please select a tenant first.');
         setLoading(false);
@@ -188,27 +158,11 @@ export default function CreatePortfolioWizard({
 
       const portfolioId = result.portfolio_id;
 
-      await portfolioApi.createPosition(selectedTenantId, portfolioId, {
-        asset: formData.position.asset.trim().toUpperCase(),
-        starting_cash: {
-          currency: formData.position.startingCash.currency,
-          amount: formData.position.startingCash.amount,
-        },
-        qty: 0,
-      });
-
       // Reset form
       setFormData({
         name: '',
         description: '',
         portfolioType: 'live',
-        position: {
-          asset: '',
-          startingCash: {
-            currency: 'USD',
-            amount: 100000,
-          },
-        },
         strategyTemplate: 'default',
         marketHoursPolicy: 'market-open-only',
       });
@@ -237,18 +191,14 @@ export default function CreatePortfolioWizard({
   };
 
   const canProceed = () => {
-    const asset = formData.position.asset.trim();
-    const startingCashAmount = formData.position.startingCash.amount;
     switch (step) {
       case 1:
         return formData.name.trim().length >= 3;
       case 2:
-        return asset.length > 0 && startingCashAmount > 0;
-      case 3:
         // Optional step, always can proceed
         return true;
-      case 4:
-        return formData.name.trim().length >= 3 && asset.length > 0 && startingCashAmount > 0;
+      case 3:
+        return formData.name.trim().length >= 3;
       default:
         return false;
     }
@@ -268,7 +218,7 @@ export default function CreatePortfolioWizard({
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-lg leading-6 font-medium text-gray-900">Create Portfolio</h3>
-                <p className="text-sm text-gray-500 mt-1">Step {step} of 4</p>
+                <p className="text-sm text-gray-500 mt-1">Step {step} of 3</p>
               </div>
               <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
                 <X className="h-6 w-6" />
@@ -392,90 +342,8 @@ export default function CreatePortfolioWizard({
                   </div>
                 )}
 
-                {/* Step 2: Position */}
+                {/* Step 2: Strategy Configuration */}
                 {step === 2 && (
-                  <div className="space-y-4">
-                    <div>
-                      <h4 className="text-md font-semibold text-gray-900 mb-4">Position</h4>
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Asset <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            value={formData.position.asset}
-                            onChange={(e) =>
-                              setFormData({
-                                ...formData,
-                                position: {
-                                  ...formData.position,
-                                  asset: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''),
-                                },
-                              })
-                            }
-                            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="e.g., AAPL"
-                            maxLength={10}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Position Starting Cash <span className="text-red-500">*</span>
-                          </label>
-                          <div className="flex gap-2">
-                            <select
-                              value={formData.position.startingCash.currency}
-                              onChange={(e) =>
-                                setFormData({
-                                  ...formData,
-                                  position: {
-                                    ...formData.position,
-                                    startingCash: {
-                                      ...formData.position.startingCash,
-                                      currency: e.target.value,
-                                    },
-                                  },
-                                })
-                              }
-                              className="border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            >
-                              <option value="USD">USD</option>
-                              <option value="EUR">EUR</option>
-                              <option value="GBP">GBP</option>
-                            </select>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={formData.position.startingCash.amount}
-                              onChange={(e) =>
-                                setFormData({
-                                  ...formData,
-                                  position: {
-                                    ...formData.position,
-                                    startingCash: {
-                                      ...formData.position.startingCash,
-                                      amount: Number(e.target.value),
-                                    },
-                                  },
-                                })
-                              }
-                              className="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              placeholder="100000.00"
-                            />
-                          </div>
-                          <p className="text-xs text-gray-500 mt-1">
-                            This is the initial liquid balance for this position. You can
-                            deposit/withdraw later from Positions & Config.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Step 3: Strategy Configuration */}
-                {step === 3 && (
                   <div className="space-y-4">
                     <div>
                       <h4 className="text-md font-semibold text-gray-900 mb-4">
@@ -624,8 +492,8 @@ export default function CreatePortfolioWizard({
                   </div>
                 )}
 
-                {/* Step 4: Review */}
-                {step === 4 && (
+                {/* Step 3: Review */}
+                {step === 3 && (
                   <div className="space-y-4">
                     <div>
                       <h4 className="text-md font-semibold text-gray-900 mb-4">Review & Create</h4>
@@ -640,22 +508,6 @@ export default function CreatePortfolioWizard({
                             {formData.portfolioType.slice(1)}
                           </div>
                           <div>Description: {formData.description || '—'}</div>
-                        </div>
-                        <div className="border border-gray-200 rounded-md p-3">
-                          <h5 className="text-sm font-semibold text-gray-900 mb-2">
-                            Initial Position
-                          </h5>
-                          <div>
-                            Asset:{' '}
-                            {formData.position.asset ? formData.position.asset : '—'}
-                          </div>
-                          <div>
-                            Position Starting Cash: {formData.position.startingCash.currency}{' '}
-                            {formData.position.startingCash.amount.toLocaleString(undefined, {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </div>
                         </div>
                         <div className="border border-gray-200 rounded-md p-3">
                           <h5 className="text-sm font-semibold text-gray-900 mb-2">
@@ -710,41 +562,7 @@ export default function CreatePortfolioWizard({
                     </div>
                   )}
 
-                  {step === 2 && (
-                    <div className="space-y-3">
-                      <h5 className="text-sm font-semibold text-gray-900">Initial State Preview</h5>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Position Asset:</span>
-                          <span className="font-medium text-gray-900">
-                            {formData.position.asset || '—'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Position Starting Cash:</span>
-                          <span className="font-medium text-gray-900">
-                            {formData.position.startingCash.currency}{' '}
-                            {formData.position.startingCash.amount.toLocaleString(undefined, {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </span>
-                        </div>
-                        <div className="flex justify-between border-t pt-2">
-                          <span className="text-gray-600 font-medium">Total Value:</span>
-                          <span className="font-bold text-gray-900">
-                            {formData.position.startingCash.currency}{' '}
-                            {totalValue.toLocaleString(undefined, {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {step === 3 && currentTemplate && (
+                  {step === 2 && currentTemplate && (
                     <div className="space-y-3">
                       <h5 className="text-sm font-semibold text-gray-900">
                         Effective Config Preview
@@ -791,13 +609,13 @@ export default function CreatePortfolioWizard({
                     </div>
                   )}
 
-                  {step === 4 && (
+                  {step === 3 && (
                     <div className="space-y-3">
                       <h5 className="text-sm font-semibold text-gray-900">Ready to Create</h5>
                       <ul className="text-xs text-gray-600 space-y-2">
                         <li>• Portfolio metadata will be saved first.</li>
-                        <li>• A position is created with the starting cash you chose.</li>
-                        <li>• You can edit positions and config after creation.</li>
+                        <li>• You can add positions after creation.</li>
+                        <li>• You can edit positions and config anytime.</li>
                       </ul>
                     </div>
                   )}
@@ -826,7 +644,7 @@ export default function CreatePortfolioWizard({
                 >
                   Cancel
                 </button>
-                {step < 4 ? (
+                {step < 3 ? (
                   <button
                     onClick={handleNext}
                     disabled={!canProceed() || loading}

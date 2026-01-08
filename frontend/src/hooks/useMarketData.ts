@@ -27,11 +27,11 @@ export const useMarketPrice = (ticker: string) => {
       return data;
     },
     enabled: !!ticker,
-    refetchInterval: 5000, // Refetch every 5 seconds for real-time updates
-    staleTime: 0, // Always consider data stale, force fresh fetch
-    gcTime: 0, // Don't cache (cacheTime renamed to gcTime in v5)
-    refetchOnMount: 'always', // Always refetch when component mounts
-    refetchOnWindowFocus: true, // Refetch when window regains focus
+    refetchInterval: 30000, // Refetch every 30 seconds to reduce rate limits
+    staleTime: 15000, // Allow brief caching between polls
+    gcTime: 300000, // Cache for 5 minutes
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 };
 

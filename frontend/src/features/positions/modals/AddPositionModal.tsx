@@ -11,7 +11,10 @@ interface AddPositionModalProps {
     dollarValue: number;
     inputMode: 'qty' | 'dollar';
     currentPrice: number;
-    cash: number;
+    startingCash: {
+      currency: string;
+      amount: number;
+    };
   }) => Promise<void>;
 }
 
@@ -31,6 +34,7 @@ export default function AddPositionModal({ onClose, onSave }: AddPositionModalPr
   const [dollarValue, setDollarValue] = useState(0);
   const [currentPrice, setCurrentPrice] = useState(0);
   const [cash, setCash] = useState(0);
+  const [cashCurrency, setCashCurrency] = useState('USD');
   const [loading, setLoading] = useState(false);
   // Store ticker in ref to avoid React re-renders during typing
   const tickerRef = useRef('');
@@ -80,8 +84,9 @@ export default function AddPositionModal({ onClose, onSave }: AddPositionModalPr
       `${callId} fetchPrice called from: ${source} - this should ONLY happen on button click`,
     );
 
-    const tickerValue = tickerRef.current.trim();
+    const tickerValue = (tickerRef.current || tickerInputRef.current?.value || '').trim();
     if (!tickerValue) {
+      toast.error('Please enter a ticker symbol first');
       setCurrentPrice(0);
       return;
     }
@@ -100,11 +105,19 @@ export default function AddPositionModal({ onClose, onSave }: AddPositionModalPr
         console.log(`${callId} Price fetched successfully:`, data.price);
         setCurrentPrice(data.price);
       } catch (err: any) {
+        const errorMessage = err?.message || 'Failed to fetch price';
+        const status = err?.status;
         console.error(`${callId} Price fetch failed:`, err);
-        if (err.message && !err.message.includes('ticker_not_found')) {
-          console.warn(`Failed to fetch price:`, err.message);
+        if (status === 404) {
+          toast.error(`No market data found for ${sanitizedTicker}`);
+        } else if (status === 503) {
+          toast.error('Market data provider unavailable. Try again.');
+        } else if (err instanceof TypeError || errorMessage.includes('Failed to fetch')) {
+          toast.error('Backend not reachable (check server/proxy).');
+        } else {
+          toast.error(errorMessage);
         }
-        setCurrentPrice(0);
+      setCurrentPrice(0);
       } finally {
         setLoading(false);
       }
@@ -142,6 +155,16 @@ export default function AddPositionModal({ onClose, onSave }: AddPositionModalPr
       }
     }
 
+    if (!cashCurrency) {
+      toast.error('Please select a currency for starting cash');
+      return;
+    }
+
+    if (!cash || cash <= 0 || !isFinite(cash)) {
+      toast.error('Starting cash must be greater than 0');
+      return;
+    }
+
     setLoading(true);
     try {
       await onSave({
@@ -150,7 +173,10 @@ export default function AddPositionModal({ onClose, onSave }: AddPositionModalPr
         dollarValue: dollarValue || 0,
         inputMode,
         currentPrice,
-        cash,
+        startingCash: {
+          currency: cashCurrency,
+          amount: cash,
+        },
       });
     } catch (error) {
       // Error is already handled in parent component
@@ -190,6 +216,9 @@ export default function AddPositionModal({ onClose, onSave }: AddPositionModalPr
                     <input
                       ref={tickerInputRef}
                       type="text"
+                      onChange={(e) => {
+                        tickerRef.current = e.target.value;
+                      }}
                       className="mt-1 flex-1 block rounded-md border border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-3 py-2"
                       placeholder="Enter ticker symbol"
                       autoComplete="off"
@@ -260,7 +289,7 @@ export default function AddPositionModal({ onClose, onSave }: AddPositionModalPr
                         required
                       />
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 mt-1">
-                        $
+                        {cashCurrency}
                       </span>
                     </div>
                     {currentPrice > 0 && dollarValue > 0 && (
@@ -296,27 +325,42 @@ export default function AddPositionModal({ onClose, onSave }: AddPositionModalPr
                     )}
                   </div>
                 )}
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Cash</label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={cash || ''}
-                      onChange={(e) => setCash(e.target.value ? Number(e.target.value) : 0)}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm pl-8 px-3 py-2"
-                      placeholder="0.00"
-                      min={0}
-                    />
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 mt-1">
-                      $
-                    </span>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Starting Cash <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      value={cashCurrency}
+                      onChange={(e) => setCashCurrency(e.target.value)}
+                      className="mt-1 block rounded-md border border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-3 py-2"
+                      required
+                    >
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                    </select>
+                    <div className="relative flex-1">
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={cash || ''}
+                        onChange={(e) => setCash(e.target.value ? Number(e.target.value) : 0)}
+                        className="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm pl-8 px-3 py-2"
+                        placeholder="0.00"
+                        min={0}
+                        required
+                      />
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 mt-1">
+                        {cashCurrency}
+                      </span>
+                    </div>
                   </div>
                   <p className="mt-1 text-xs text-gray-500">
-                    Starting cash allocated to this position (can be zero).
+                    Required cash allocation for this position.
                   </p>
                 </div>
+
               </div>
             </div>
 
@@ -342,10 +386,4 @@ export default function AddPositionModal({ onClose, onSave }: AddPositionModalPr
     </div>
   );
 }
-
-
-
-
-
-
 

@@ -17,7 +17,7 @@ import {
   PortfolioPosition,
   EffectiveConfig,
 } from '../../../services/portfolioScopedApi';
-import { marketApi } from '../../../lib/api';
+import { marketApi, portfolioApi } from '../../../lib/api';
 import AddPositionModal from '../modals/AddPositionModal';
 import AdjustPositionModal from '../modals/AdjustPositionModal';
 import SetAnchorModal from '../modals/SetAnchorModal';
@@ -158,7 +158,10 @@ export default function PositionsTab({
     dollarValue: number;
     inputMode: 'qty' | 'dollar';
     currentPrice: number;
-    cash: number;
+    startingCash: {
+      currency: string;
+      amount: number;
+    };
   }) => {
     try {
       // Determine final qty
@@ -174,12 +177,16 @@ export default function PositionsTab({
         qty: finalQty,
         anchor_price: data.currentPrice,
         avg_cost: data.currentPrice,
-        cash: data.cash,
+        starting_cash: {
+          currency: data.startingCash.currency,
+          amount: data.startingCash.amount,
+        },
       };
 
-      const result = await portfolioScopedApi.addPosition(tenantId, portfolioId, positionPayload);
-      if (result.trace_id) {
-        onCopyTraceId(result.trace_id);
+      const result = await portfolioApi.createPosition(tenantId, portfolioId, positionPayload);
+      const traceId = (result as { trace_id?: string }).trace_id;
+      if (traceId) {
+        onCopyTraceId(traceId);
       }
       setShowAddModal(false);
       onRefresh();
@@ -656,8 +663,6 @@ export default function PositionsTab({
     </div>
   );
 }
-
-
 
 
 

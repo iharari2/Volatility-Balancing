@@ -2,12 +2,18 @@
 # backend/infrastructure/market/yfinance_adapter.py
 # =========================
 from __future__ import annotations
-import yfinance as yf
-import pandas as pd
+import io
+import logging
+import os
 import time
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, List
+
+import pandas as pd
 import pytz
+import yfinance as yf
+from yfinance.exceptions import YFRateLimitError
 
 from domain.ports.market_data import MarketDataRepo, MarketStatus
 from domain.entities.market_data import PriceData, PriceSource, SimulationData
@@ -18,18 +24,150 @@ from infrastructure.market.data_validator import DataValidator
 class YFinanceAdapter(MarketDataRepo):
     """yfinance implementation of market data repository with comprehensive storage."""
 
+    _print_once_patched = False
+
     def __init__(self):
         self.tz_eastern = pytz.timezone("US/Eastern")
         self.tz_utc = timezone.utc
         self.storage = MarketDataStorage()
         self.cache_ttl = 30  # 30 seconds cache TTL (reduced from 5 to allow more frequent updates)
+        self.last_error_kind: Optional[str] = None
+        self.last_error: Optional[Exception] = None
+        self._logger = logging.getLogger(__name__)
+        self._patch_print_once()
+
+    def _patch_print_once(self) -> None:
+        if YFinanceAdapter._print_once_patched:
+            return
+        if os.getenv("YFINANCE_SILENCE_PRINT_ONCE", "true").lower() != "true":
+            return
+        try:
+            from yfinance import utils as yf_utils
+
+            def _quiet_print_once(message: str) -> None:
+                if os.getenv("YFINANCE_LOG_OUTPUT", "false").lower() == "true":
+                    self._logger.debug("Suppressed yfinance print_once: %s", message)
+
+            yf_utils.print_once = _quiet_print_once
+            YFinanceAdapter._print_once_patched = True
+        except Exception:
+            self._logger.debug("Unable to patch yfinance print_once", exc_info=True)
+
+    @contextmanager
+    def _suppress_yfinance_output(self):
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            yield
+        if os.getenv("YFINANCE_LOG_OUTPUT", "false").lower() == "true":
+            output = (stdout.getvalue() + stderr.getvalue()).strip()
+            if output:
+                self._logger.debug("Suppressed yfinance output: %s", output)
 
     def clear_cache(self, ticker: str = None):
         """Clear cached price data for a ticker or all tickers."""
         self.storage.clear_price_cache(ticker)
 
+    def _get_cached_price(self, ticker: str, allow_stale: bool = False) -> Optional[PriceData]:
+        """Return cached price data if present (optionally allow stale)."""
+        cached = self.storage.price_cache.get(ticker)
+        if not cached:
+            return None
+        age_seconds = (datetime.now(self.tz_utc) - cached.timestamp).total_seconds()
+        if age_seconds <= self.cache_ttl:
+            return cached
+        if allow_stale:
+            return self._mark_price_stale(cached)
+        return None
+
+    def _mark_price_stale(self, price_data: PriceData) -> PriceData:
+        """Return a copy of price data marked as stale."""
+        return PriceData(
+            ticker=price_data.ticker,
+            price=price_data.price,
+            source=price_data.source,
+            timestamp=price_data.timestamp,
+            bid=price_data.bid,
+            ask=price_data.ask,
+            volume=price_data.volume,
+            last_trade_price=price_data.last_trade_price,
+            last_trade_time=price_data.last_trade_time,
+            is_market_hours=price_data.is_market_hours,
+            is_fresh=False,
+            is_inline=price_data.is_inline,
+            open=price_data.open,
+            high=price_data.high,
+            low=price_data.low,
+            close=price_data.close,
+        )
+
     def get_price(self, ticker: str, force_refresh: bool = False) -> Optional[PriceData]:
-        """Get current price data for a ticker.
+        """Get current price data for a ticker with cache + retry backoff."""
+        self.last_error_kind = None
+        self.last_error = None
+        cached = self._get_cached_price(ticker, allow_stale=False)
+        if cached and not force_refresh:
+            print(f"✅ Using cached price for {ticker} (age within TTL)")
+            return cached
+        if cached and force_refresh:
+            print(f"⚠️ Using cached price for {ticker} to avoid frequent refresh")
+            return cached
+
+        stale_cached = self._get_cached_price(ticker, allow_stale=True)
+        retry_delays = [1, 2, 4]
+        last_error: Optional[Exception] = None
+
+        for attempt, delay in enumerate([0] + retry_delays):
+            if delay:
+                time.sleep(delay)
+            try:
+                result = self._fetch_price_uncached(ticker, force_refresh=force_refresh)
+                if result is None:
+                    self.last_error_kind = "not_found"
+                    self._logger.info("No market data found for %s", ticker)
+                    return None
+                return result
+            except YFRateLimitError as e:
+                last_error = e
+                self.last_error_kind = "provider_unavailable"
+                print(f"⚠️ Rate limited fetching {ticker} (attempt {attempt + 1})")
+                if stale_cached:
+                    print(f"⚠️ Returning cached price for {ticker} due to rate limit")
+                    return stale_cached
+                if attempt == len(retry_delays):
+                    break
+            except Exception as e:
+                last_error = e
+                self._set_error_kind(e)
+                break
+
+        if stale_cached:
+            print(f"⚠️ Returning cached price for {ticker} after error: {last_error}")
+            return stale_cached
+        if last_error:
+            if self.last_error_kind == "not_found":
+                self._logger.info("No market data found for %s", ticker)
+            elif self.last_error_kind == "provider_unavailable":
+                self._logger.warning("Market data provider unavailable for %s", ticker)
+            else:
+                self._logger.exception("Unexpected market data error for %s", ticker)
+        return None
+
+    def _set_error_kind(self, error: Exception) -> None:
+        message = str(error)
+        if isinstance(error, ValueError) and "Invalid ticker" in message:
+            self.last_error_kind = "not_found"
+            return
+        if isinstance(error, AttributeError) and "update" in message:
+            self.last_error_kind = "not_found"
+            return
+        if isinstance(error, YFRateLimitError):
+            self.last_error_kind = "provider_unavailable"
+            return
+        self.last_error_kind = "provider_unavailable"
+
+    def _fetch_price_uncached(self, ticker: str, force_refresh: bool = False) -> Optional[PriceData]:
+        """Get current price data for a ticker (uncached).
 
         Args:
             ticker: Stock ticker symbol
@@ -49,7 +187,8 @@ class YFinanceAdapter(MarketDataRepo):
             # ALWAYS try fast_info first (most current data)
             try:
                 # Access fast_info - this should be fresh
-                fast_info = stock.fast_info
+                with self._suppress_yfinance_output():
+                    fast_info = stock.fast_info
                 # fast_info has the most current data
                 current_price = (
                     fast_info.get("lastPrice")
@@ -80,7 +219,8 @@ class YFinanceAdapter(MarketDataRepo):
                         # Get fresh info object - this has the most current intraday OHLC values
                         # Create a NEW ticker instance to ensure fresh data (yfinance may cache)
                         fresh_stock = yf.Ticker(ticker)
-                        info = fresh_stock.info
+                        with self._suppress_yfinance_output():
+                            info = fresh_stock.info
 
                         # Debug: log what we're getting from info
                         print(
@@ -126,7 +266,8 @@ class YFinanceAdapter(MarketDataRepo):
                     if not today_ohlc:
                         try:
                             # Try to get today's intraday data (more accurate than daily bars)
-                            intraday_hist = stock.history(period="1d", interval="1m")
+                            with self._suppress_yfinance_output():
+                                intraday_hist = stock.history(period="1d", interval="1m")
                             if not intraday_hist.empty:
                                 # Get today's data (most recent day)
                                 today_ohlc = {
@@ -148,7 +289,8 @@ class YFinanceAdapter(MarketDataRepo):
                     # Final fallback: daily history (may be stale)
                     if not today_ohlc:
                         try:
-                            daily_hist = stock.history(period="2d", interval="1d")
+                            with self._suppress_yfinance_output():
+                                daily_hist = stock.history(period="2d", interval="1d")
                             if not daily_hist.empty:
                                 latest_day = daily_hist.iloc[-1]
                                 today_ohlc = {
@@ -199,11 +341,13 @@ class YFinanceAdapter(MarketDataRepo):
             # Fallback to info (currentPrice/regularMarketPrice) - more current than history
             # Force fresh info - create new ticker instance to avoid yfinance caching
             try:
-                info = stock.info
+                with self._suppress_yfinance_output():
+                    info = stock.info
             except Exception:
                 # If info access fails, create fresh ticker
                 stock = yf.Ticker(ticker)
-                info = stock.info
+                with self._suppress_yfinance_output():
+                    info = stock.info
             current_price = (
                 info.get("currentPrice")
                 or info.get("regularMarketPrice")
@@ -262,7 +406,8 @@ class YFinanceAdapter(MarketDataRepo):
                     if not today_ohlc:
                         try:
                             # Try to get today's intraday data (more accurate than daily bars)
-                            intraday_hist = stock.history(period="1d", interval="1m")
+                            with self._suppress_yfinance_output():
+                                intraday_hist = stock.history(period="1d", interval="1m")
                             if not intraday_hist.empty:
                                 # Get today's data
                                 today_ohlc = {
@@ -284,7 +429,8 @@ class YFinanceAdapter(MarketDataRepo):
                     # Final fallback: daily history (may be stale)
                     if not today_ohlc:
                         try:
-                            daily_hist = stock.history(period="2d", interval="1d")
+                            with self._suppress_yfinance_output():
+                                daily_hist = stock.history(period="2d", interval="1d")
                             if not daily_hist.empty:
                                 latest_day = daily_hist.iloc[-1]
                                 today_ohlc = {
@@ -332,7 +478,8 @@ class YFinanceAdapter(MarketDataRepo):
 
             # Last resort: try history (but this might be stale)
             print(f"⚠️ WARNING: Using history for {ticker} - this may be stale!")
-            hist = stock.history(period="1d", interval="1m")
+            with self._suppress_yfinance_output():
+                hist = stock.history(period="1d", interval="1m")
 
             if hist.empty:
                 # Try getting just the latest quote
@@ -446,11 +593,9 @@ class YFinanceAdapter(MarketDataRepo):
             return price_data
 
         except Exception as e:
-            print(f"Error fetching price for {ticker}: {e}")
-            import traceback
-
-            traceback.print_exc()
-            return None
+            if isinstance(e, YFRateLimitError):
+                raise
+            raise
 
     def get_market_status(self) -> MarketStatus:
         """Get current market status."""
@@ -574,12 +719,10 @@ class YFinanceAdapter(MarketDataRepo):
     def _is_cache_valid(self, price_data: PriceData) -> bool:
         """Check if cached price data is still valid."""
         age_seconds = (datetime.now(self.tz_utc) - price_data.timestamp).total_seconds()
-        # NEVER use cache older than 5 minutes - always fetch fresh
-        if age_seconds > 300:  # 5 minutes
-            print(f"⚠️ Cache invalid: data is {age_seconds/60:.1f} minutes old")
+        if age_seconds > self.cache_ttl:
+            print(f"⚠️ Cache invalid: data is {age_seconds:.1f} seconds old")
             return False
-        # Even if within TTL, don't trust cache for current prices
-        return False  # Always return False to force fresh fetch
+        return True
 
     def get_current_quote(self, ticker: str) -> Optional[PriceData]:
         """Get the most current quote available, bypassing cache for fresh data."""
@@ -589,7 +732,8 @@ class YFinanceAdapter(MarketDataRepo):
 
             # Try fast_info first (most current)
             try:
-                fast_info = stock.fast_info
+                with self._suppress_yfinance_output():
+                    fast_info = stock.fast_info
                 current_price = fast_info.get("lastPrice") or fast_info.get("regularMarketPrice")
                 if current_price:
                     bid = fast_info.get("bid", current_price * 0.999)
@@ -615,7 +759,8 @@ class YFinanceAdapter(MarketDataRepo):
                 pass
 
             # Fallback to info
-            info = stock.info
+            with self._suppress_yfinance_output():
+                info = stock.info
             current_price = (
                 info.get("currentPrice")
                 or info.get("regularMarketPrice")
@@ -717,7 +862,8 @@ class YFinanceAdapter(MarketDataRepo):
             for attempt in range(max_retries):
                 try:
                     stock = yf.Ticker(ticker)
-                    hist = stock.history(start=start_str, end=end_str, interval=interval)
+                    with self._suppress_yfinance_output():
+                        hist = stock.history(start=start_str, end=end_str, interval=interval)
                     break
                 except Exception as e:
                     if attempt == max_retries - 1:

@@ -24,7 +24,6 @@ import PositionsTab from './tabs/PositionsTab';
 import CashTab from './tabs/CashTab';
 import StrategyConfigTab from './tabs/StrategyConfigTab';
 import { portfolioScopedApi, PortfolioConfig } from '../../services/portfolioScopedApi';
-import AddPositionModal from './modals/AddPositionModal';
 import AnalyticsKPIs from '../analytics/AnalyticsKPIs';
 import AnalyticsCharts from '../analytics/AnalyticsCharts';
 import { Filter } from 'lucide-react';
@@ -278,7 +277,10 @@ export default function PositionsAndConfigPage() {
     dollarValue: number;
     inputMode: 'qty' | 'dollar';
     currentPrice: number;
-    cash: number;
+    startingCash: {
+      currency: string;
+      amount: number;
+    };
   }) => {
     if (!currentPortfolioId) {
       toast.error('No portfolio selected');
@@ -310,8 +312,8 @@ export default function PositionsAndConfigPage() {
         anchor_price: positionData.currentPrice,
         avg_cost: positionData.currentPrice,
         starting_cash: {
-          currency: 'USD',
-          amount: positionData.cash,
+          currency: positionData.startingCash.currency,
+          amount: positionData.startingCash.amount,
         },
       };
 
@@ -818,8 +820,6 @@ export default function PositionsAndConfigPage() {
     </div>
   );
 }
-
-
 
 
 

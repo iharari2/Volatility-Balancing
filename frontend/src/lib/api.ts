@@ -308,7 +308,7 @@ export const marketApi = {
         warnings: string[];
         rejections: string[];
       };
-    }>(`/market/price/${ticker}?force_refresh=true&_t=${Date.now()}`), // Add cache-busting timestamp
+    }>(`/market/price/${ticker}`),
 
   getStatus: () =>
     request<{
