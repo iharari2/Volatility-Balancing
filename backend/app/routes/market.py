@@ -210,8 +210,6 @@ def get_market_price(
         return response_data
     except HTTPException:
         raise
-    except HTTPException:
-        raise
     except Exception:
         logger.exception("Unexpected error getting market price for %s", ticker)
         raise HTTPException(

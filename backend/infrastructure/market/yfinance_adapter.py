@@ -155,10 +155,19 @@ class YFinanceAdapter(MarketDataRepo):
 
     def _set_error_kind(self, error: Exception) -> None:
         message = str(error)
+        normalized = message.lower()
         if isinstance(error, ValueError) and "Invalid ticker" in message:
             self.last_error_kind = "not_found"
             return
         if isinstance(error, AttributeError) and "update" in message:
+            self.last_error_kind = "not_found"
+            return
+        if (
+            "no data found" in normalized
+            or "possibly delisted" in normalized
+            or ("quotesummary" in normalized and "404" in normalized)
+            or "404 client error" in normalized
+        ):
             self.last_error_kind = "not_found"
             return
         if isinstance(error, YFRateLimitError):
