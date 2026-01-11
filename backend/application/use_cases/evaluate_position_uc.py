@@ -3,7 +3,9 @@
 # =========================
 from __future__ import annotations
 from typing import Dict, Any, Optional, Tuple, Callable
+import logging
 from decimal import Decimal
+from datetime import datetime
 
 from domain.ports.positions_repo import PositionsRepo
 from domain.ports.portfolio_repo import PortfolioRepo
@@ -24,6 +26,7 @@ from uuid import uuid4
 
 class EvaluatePositionUC:
     """Advanced volatility trading evaluation with order sizing and guardrails."""
+    _logger = logging.getLogger(__name__)
 
     def __init__(
         self,
@@ -56,8 +59,32 @@ class EvaluatePositionUC:
         self.portfolio_repo = portfolio_repo
         self.evaluation_timeline_repo = evaluation_timeline_repo
 
+    @staticmethod
+    def _derive_action_for_timeline(
+        trigger_result: Dict[str, Any],
+        order_proposal: Optional[Dict[str, Any]],
+    ) -> str:
+        if not trigger_result.get("triggered"):
+            return "HOLD"
+        if not order_proposal:
+            return "SKIP"
+        validation = order_proposal.get("validation")
+        if validation is not None and not validation.get("valid", True):
+            return "SKIP"
+        side = trigger_result.get("side")
+        if side == "BUY":
+            return "BUY"
+        if side == "SELL":
+            return "SELL"
+        return "SKIP"
+
     def evaluate(
-        self, tenant_id: str, portfolio_id: str, position_id: str, current_price: float
+        self,
+        tenant_id: str,
+        portfolio_id: str,
+        position_id: str,
+        current_price: float,
+        write_timeline: bool = True,
     ) -> Dict[str, Any]:
         """Evaluate position for volatility triggers with complete order sizing."""
 
@@ -111,6 +138,7 @@ class EvaluatePositionUC:
                 position,
                 current_price,
                 trigger_result["side"],
+                price_timestamp=self.clock.now(),
             )
             trigger_result["order_proposal"] = order_proposal
 
@@ -131,48 +159,53 @@ class EvaluatePositionUC:
         if anchor_reset_info:
             result["anchor_reset"] = anchor_reset_info
 
-        # Write to canonical PositionEvaluationTimeline table (ONE ROW PER EVALUATION)
-        # Create minimal price_data for timeline (evaluate method doesn't have full market data)
-        from domain.entities.market_data import PriceData, PriceSource
+        timeline_record_id = None
+        if write_timeline:
+            # Write to canonical PositionEvaluationTimeline table (ONE ROW PER EVALUATION)
+            # Create minimal price_data for timeline (evaluate method doesn't have full market data)
+            from domain.entities.market_data import PriceData, PriceSource
 
-        minimal_price_data = PriceData(
-            ticker=position.asset_symbol,
-            price=current_price,
-            source=PriceSource.LAST_TRADE,  # Use LAST_TRADE as default for manual evaluation
-            timestamp=self.clock.now(),
-            is_market_hours=True,  # Assume market hours for manual evaluation
-            is_fresh=True,
-            is_inline=True,
-        )
+            minimal_price_data = PriceData(
+                ticker=position.asset_symbol,
+                price=current_price,
+                source=PriceSource.LAST_TRADE,  # Use LAST_TRADE as default for manual evaluation
+                timestamp=self.clock.now(),
+                is_market_hours=True,  # Assume market hours for manual evaluation
+                is_fresh=True,
+                is_inline=True,
+            )
 
-        # Create minimal validation result
-        validation = {"valid": True, "rejections": [], "warnings": []}
+            # Create minimal validation result
+            validation = {"valid": True, "rejections": [], "warnings": []}
 
-        # Get portfolio for trading_hours_policy
-        portfolio = None
-        if self.portfolio_repo:
-            portfolio = self.portfolio_repo.get(tenant_id=tenant_id, portfolio_id=portfolio_id)
+            # Get portfolio for trading_hours_policy
+            portfolio = None
+            if self.portfolio_repo:
+                portfolio = self.portfolio_repo.get(
+                    tenant_id=tenant_id, portfolio_id=portfolio_id
+                )
 
-        self._write_timeline_row(
-            tenant_id=tenant_id,
-            portfolio_id=portfolio_id,
-            position=position,
-            price_data=minimal_price_data,
-            validation=validation,
-            allow_after_hours=(
-                position.order_policy.allow_after_hours if position.order_policy else False
-            ),
-            trading_hours_policy=portfolio.trading_hours_policy if portfolio else None,
-            anchor_reset_info=anchor_reset_info,
-            trigger_result=trigger_result,
-            order_proposal=order_proposal or rebalance_proposal,
-            action=(
-                "HOLD"
-                if not trigger_result["triggered"]
-                else ("BUY" if trigger_result.get("side") == "BUY" else "SELL")
-            ),
-            source="api/manual",  # Manual evaluation
-        )
+            timeline_record_id = self._write_timeline_row(
+                tenant_id=tenant_id,
+                portfolio_id=portfolio_id,
+                position=position,
+                price_data=minimal_price_data,
+                validation=validation,
+                allow_after_hours=(
+                    position.order_policy.allow_after_hours if position.order_policy else False
+                ),
+                trading_hours_policy=portfolio.trading_hours_policy if portfolio else None,
+                anchor_reset_info=anchor_reset_info,
+                trigger_result=trigger_result,
+                order_proposal=order_proposal or rebalance_proposal,
+                action=self._derive_action_for_timeline(
+                    trigger_result, order_proposal or rebalance_proposal
+                ),
+                source="api/manual",  # Manual evaluation
+            )
+
+        if timeline_record_id:
+            result["timeline_record_id"] = timeline_record_id
 
         return result
 
@@ -291,6 +324,7 @@ class EvaluatePositionUC:
                 position,
                 price_data.price,
                 trigger_result["side"],
+                price_timestamp=price_data.timestamp,
             )
             trigger_result["order_proposal"] = order_proposal
 
@@ -337,10 +371,8 @@ class EvaluatePositionUC:
             anchor_reset_info=anchor_reset_info,
             trigger_result=trigger_result,
             order_proposal=order_proposal or rebalance_proposal,
-            action=(
-                "HOLD"
-                if not trigger_result["triggered"]
-                else ("BUY" if trigger_result.get("side") == "BUY" else "SELL")
+            action=self._derive_action_for_timeline(
+                trigger_result, order_proposal or rebalance_proposal
             ),
             source="api/manual",  # TODO: Pass source from caller
         )
@@ -397,9 +429,12 @@ class EvaluatePositionUC:
             )
             self.events.append(event)
 
-            print(
-                f"⚠️  Anchor price anomaly detected for {position.asset_symbol}: "
-                f"${old_anchor:.2f} → ${new_anchor:.2f} ({price_diff_pct:.1f}% difference). Auto-reset to market price."
+            self._logger.warning(
+                "Anchor price anomaly detected for %s: $%.2f -> $%.2f (%.1f%% difference). Auto-reset to market price.",
+                position.asset_symbol,
+                old_anchor,
+                new_anchor,
+                price_diff_pct,
             )
 
             return {
@@ -456,6 +491,7 @@ class EvaluatePositionUC:
         position,
         current_price: float,
         side: str,
+        price_timestamp: Optional[datetime] = None,
     ) -> Dict[str, Any]:
         """Calculate order size using the specification formula with guardrail trimming."""
 
@@ -525,8 +561,10 @@ class EvaluatePositionUC:
             # 1. Never sell more than available shares
             max_sellable = position.qty
             if abs(raw_qty) > max_sellable:
-                print(
-                    f"   ⚠️  Order sizing formula produced sell qty {abs(raw_qty):.2f} but only {max_sellable:.2f} shares available. Capping to available."
+                self._logger.debug(
+                    "Order sizing capped sell qty=%.2f to available=%.2f shares.",
+                    abs(raw_qty),
+                    max_sellable,
                 )
                 raw_qty = -max_sellable
             # 2. Never sell more than max_trade_pct_of_position if configured
@@ -535,10 +573,16 @@ class EvaluatePositionUC:
                 if guardrail_config.max_trade_pct_of_position
                 else 1.0
             )
-            max_pct_sellable = position.qty * max_pct
+            max_trade_notional = total_value * max_pct
+            max_trade_qty = max_trade_notional / current_price_float
+            max_pct_sellable = min(position.qty, max_trade_qty)
             if abs(raw_qty) > max_pct_sellable:
-                print(
-                    f"   ⚠️  Order sizing formula produced sell qty {abs(raw_qty):.2f} but max per-trade limit is {max_pct_sellable:.2f} ({max_pct:.1%} of {position.qty:.2f} shares). Capping to limit."
+                self._logger.debug(
+                    "Order sizing capped sell qty=%.2f to max_per_trade=%.2f (%.1f%% of %.2f shares).",
+                    abs(raw_qty),
+                    max_pct_sellable,
+                    max_pct * 100,
+                    position.qty,
                 )
                 raw_qty = -max_pct_sellable
         else:  # BUY
@@ -551,11 +595,16 @@ class EvaluatePositionUC:
                 if guardrail_config.max_trade_pct_of_position
                 else 1.0
             )
-            max_buy_notional = position.cash * max_pct  # Cash lives in PositionCell
+            max_trade_notional = total_value * max_pct
+            max_buy_notional = min(position.cash, max_trade_notional)
             max_buy_qty = max_buy_notional / current_price
             if raw_qty > max_buy_qty:
-                print(
-                    f"   ⚠️  Order sizing formula produced buy qty {raw_qty:.2f} but max per-trade limit is {max_buy_qty:.2f} ({max_pct:.1%} of ${position.cash:.2f} cash). Capping to limit."
+                self._logger.debug(
+                    "Order sizing capped buy qty=%.2f to max_per_trade=%.2f (%.1f%% of $%.2f cash).",
+                    raw_qty,
+                    max_buy_qty,
+                    max_pct * 100,
+                    position.cash,
                 )
                 raw_qty = max_buy_qty
 
@@ -587,6 +636,7 @@ class EvaluatePositionUC:
             side,
             notional,
             commission,
+            price_timestamp=price_timestamp,
         )
 
         return {
@@ -618,8 +668,10 @@ class EvaluatePositionUC:
         if side == "SELL" and raw_qty < 0:
             max_sellable = position.qty
             if abs(raw_qty) > max_sellable:
-                print(
-                    f"   ⚠️  Raw sell qty {abs(raw_qty):.2f} exceeds available {max_sellable:.2f}, capping to available"
+                self._logger.debug(
+                    "Raw sell qty %.2f exceeds available %.2f; capping to available.",
+                    abs(raw_qty),
+                    max_sellable,
                 )
                 raw_qty = -max_sellable  # Cap to maximum sellable (negative for sell)
 
@@ -673,13 +725,19 @@ class EvaluatePositionUC:
                     if guardrail_config.max_trade_pct_of_position
                     else 1.0
                 )
-                max_pct_sellable = position.qty * max_pct
+                total_value = (position.qty * current_price_float) + position.cash
+                max_trade_notional = total_value * max_pct
+                max_pct_sellable = min(max_sellable, max_trade_notional / current_price_float)
                 # Apply both limits - take the minimum (most restrictive)
                 max_allowed = min(max_sellable, max_pct_sellable)
 
                 if abs(trimmed_qty) > max_allowed:
-                    print(
-                        f"   ⚠️  Trimmed sell qty {abs(trimmed_qty):.2f} exceeds limit {max_allowed:.2f} (available: {max_sellable:.2f}, max_pct: {max_pct_sellable:.2f}), capping to limit"
+                    self._logger.debug(
+                        "Trimmed sell qty %.2f exceeds limit %.2f (available %.2f, max_pct %.2f); capping.",
+                        abs(trimmed_qty),
+                        max_allowed,
+                        max_sellable,
+                        max_pct_sellable,
                     )
                     trimmed_qty = -max_allowed
                     reason = (
@@ -700,24 +758,32 @@ class EvaluatePositionUC:
             )
             if side == "SELL" and trimmed_qty < 0:
                 max_sellable = position.qty
-                max_pct_sellable = position.qty * max_pct
+                total_value = (position.qty * current_price_float) + position.cash
+                max_trade_notional = total_value * max_pct
+                max_pct_sellable = min(max_sellable, max_trade_notional / current_price_float)
                 max_allowed = min(max_sellable, max_pct_sellable)
 
                 if abs(trimmed_qty) > max_allowed:
-                    print(
-                        f"   ⚠️  Raw sell qty {abs(trimmed_qty):.2f} exceeds limit {max_allowed:.2f}, capping to limit"
+                    self._logger.debug(
+                        "Raw sell qty %.2f exceeds limit %.2f; capping to limit.",
+                        abs(trimmed_qty),
+                        max_allowed,
                     )
                     trimmed_qty = -max_allowed
                     reason = f"Capped to {max_allowed:.2f} shares (max {max_pct:.1%} per trade, raw was {abs(raw_qty):.2f})"
                 else:
                     reason = "No trimming needed - within guardrail bounds"
             elif side == "BUY" and trimmed_qty > 0:
-                max_buy_notional = position.cash * max_pct  # Cash lives in PositionCell
+                total_value = (position.qty * current_price_float) + position.cash
+                max_trade_notional = total_value * max_pct
+                max_buy_notional = min(position.cash, max_trade_notional)
                 max_buy_qty = max_buy_notional / current_price
 
                 if trimmed_qty > max_buy_qty:
-                    print(
-                        f"   ⚠️  Raw buy qty {trimmed_qty:.2f} exceeds limit {max_buy_qty:.2f}, capping to limit"
+                    self._logger.debug(
+                        "Raw buy qty %.2f exceeds limit %.2f; capping to limit.",
+                        trimmed_qty,
+                        max_buy_qty,
                     )
                     trimmed_qty = max_buy_qty
                     reason = f"Capped to {max_buy_qty:.2f} shares (max {max_pct:.1%} of cash per trade, raw was {raw_qty:.2f})"
@@ -839,6 +905,7 @@ class EvaluatePositionUC:
         side: str,
         notional: float,
         commission: float,
+        price_timestamp: Optional[datetime] = None,
     ) -> Dict[str, Any]:
         """Validate order against business rules including market hours and duplicates."""
 
@@ -912,7 +979,7 @@ class EvaluatePositionUC:
                     allow_after_hours = True
 
         # Check market hours (respect after-hours setting)
-        if not self._is_market_hours():
+        if not self._is_market_hours(price_timestamp):
             if not allow_after_hours:
                 validation_result["valid"] = False
                 validation_result["rejections"].append(
@@ -937,9 +1004,9 @@ class EvaluatePositionUC:
 
         return validation_result
 
-    def _is_market_hours(self) -> bool:
+    def _is_market_hours(self, timestamp: Optional[datetime] = None) -> bool:
         """Check if current time is during market hours (simplified implementation)."""
-        now = self.clock.now()
+        now = timestamp or self.clock.now()
 
         # Convert to ET (simplified - assume UTC-5 for ET)
         et_hour = (now.hour - 5) % 24
@@ -1049,7 +1116,7 @@ class EvaluatePositionUC:
                     "is_fresh": price_data.is_fresh,
                 }
         except Exception as e:
-            print(f"Warning: Could not get market data snapshot: {e}")
+            self._logger.warning("Could not get market data snapshot: %s", e)
 
         # Prepare inputs
         inputs = {
@@ -1150,14 +1217,19 @@ class EvaluatePositionUC:
         order_proposal: Optional[Dict[str, Any]],
         action: str,
         source: str = "api/manual",
-    ) -> None:
+        order_id: Optional[str] = None,
+        trade_id: Optional[str] = None,
+        execution_info: Optional[Dict[str, Any]] = None,
+        position_qty_after: Optional[float] = None,
+        position_cash_after: Optional[float] = None,
+    ) -> Optional[str]:
         """
         Write a row to PositionEvaluationTimeline for this evaluation.
 
         This is called for EVERY evaluation, not just when trades occur.
         """
         if not self.evaluation_timeline_repo:
-            return  # Timeline repo not available
+            return None  # Timeline repo not available
 
         try:
             from application.helpers.timeline_builder import build_timeline_row_from_evaluation
@@ -1319,23 +1391,26 @@ class EvaluatePositionUC:
                 order_proposal=order_proposal,
                 action=action,
                 action_reason=action_reason,
+                order_id=order_id,
+                trade_id=trade_id,
+                execution_info=execution_info,
+                position_qty_after=position_qty_after,
+                position_cash_after=position_cash_after,
             )
 
             # Save to timeline (may fail if schema is incomplete, but we continue)
-            timeline_saved = False
             try:
-                print(f"📝 Attempting to save timeline row for position {position.id}...")
+                self._logger.debug(
+                    "Attempting to save timeline row for position %s.", position.id
+                )
                 record_id = self.evaluation_timeline_repo.save(timeline_row)
-                timeline_saved = True
-                print(f"✅✅✅ Timeline row saved successfully! Record ID: {record_id}")
+                self._logger.debug("Timeline row saved successfully (record_id=%s).", record_id)
+                return record_id
             except Exception as timeline_error:
                 # Don't fail evaluation if timeline write fails (e.g., missing columns)
-                import traceback
-
-                print(f"⚠️  Failed to write timeline row: {timeline_error}")
-                print(f"⚠️  Error type: {type(timeline_error).__name__}")
-                print(f"⚠️  Error details: {repr(timeline_error)}")
-                print(f"⚠️  Traceback: {traceback.format_exc()}")
+                self._logger.warning(
+                    "Failed to write timeline row: %s", timeline_error, exc_info=True
+                )
 
             # Also write to PositionEvent (simplified immutable log)
             # This provides a compact audit trail for quick queries
@@ -1351,11 +1426,11 @@ class EvaluatePositionUC:
                     container.position_event.save(event_data)
             except Exception as event_error:
                 # Don't fail if PositionEvent write fails
-                print(f"⚠️  Failed to write position event: {event_error}")
+                self._logger.warning(
+                    "Failed to write position event: %s", event_error, exc_info=True
+                )
 
         except Exception as e:
             # Don't fail evaluation if timeline write fails
-            print(f"⚠️  Failed to write timeline row: {e}")
-            import traceback
-
-            traceback.print_exc()
+            self._logger.warning("Failed to write timeline row: %s", e, exc_info=True)
+        return None

@@ -122,6 +122,81 @@ pre-commit install
 
 ---
 
+## How to Verify Gate 1
+
+**Gate 1 Verification: Deterministic Tick + Timeline (Offline-Friendly)**
+
+Goal: Prove the trading tick loop works end-to-end locally without network flakiness, and that each tick writes exactly one timeline/audit row.
+
+**Prereqs**
+
+- From repo root
+- Python env active
+- No server needs to be running for tests
+
+**Step A: Run tests (offline)**
+
+```bash
+pytest -q
+```
+
+Expected:
+- All default tests pass without requiring a running server.
+- Any true end-to-end tests are excluded by default (e.g., marked e2e).
+
+**Step B: Start backend in deterministic tick mode**
+
+```bash
+TICK_DETERMINISTIC=true PYTHONPATH=backend \
+python -m uvicorn --app-dir backend app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Sanity checks:
+
+```bash
+curl -s http://localhost:8000/v1/healthz | jq
+curl -s http://localhost:8000/v1/market/state | jq
+```
+
+Expected:
+- `/v1/healthz` returns `{"status":"ok"}`
+- `/v1/market/state` returns a valid market state JSON
+
+**Step C: Run the Gate 1 smoke script (no network required)**
+
+In another terminal:
+
+```bash
+python backend/scripts/gate1_tick_smoke.py
+```
+
+Expected output characteristics:
+- Runs ~10 ticks
+- Prints one line per tick (tick#, price, action, trigger direction, order/trade info if any)
+- Summary shows at least one BUY and one SELL within 10 ticks
+- Fetches timeline via API and prints counts of BUY/SELL/HOLD + last 5 events
+
+**Step D: Verify timeline endpoint directly**
+
+The smoke script prints the position_id. You can also query manually:
+
+```bash
+curl -s "http://localhost:8000/v1/positions/<POSITION_ID>/timeline?limit=200" | jq
+```
+
+Expected:
+- Timeline contains exactly one new row per tick (including HOLD).
+- Timeline rows include at minimum:
+  - `timestamp`
+  - `action` (BUY/SELL/HOLD)
+  - `trigger_direction`
+  - `current_price`
+  - guardrail limits
+  - allocation after
+  - any order/trade ids if present
+
+---
+
 ## Test Execution Checklist
 
 - [ ] Run full test suite
@@ -154,7 +229,6 @@ pre-commit install
 - See `QA_TEST_STATUS.md` for current status
 - See `TEST_DEVELOPMENT_STATUS.md` for detailed test status
 - See `TEST_FIXES_NEEDED.md` for known issues
-
 
 
 

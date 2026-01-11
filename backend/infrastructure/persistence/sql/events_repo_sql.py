@@ -99,6 +99,7 @@ class SQLEventsRepo(EventsRepo):
                 "id": event.id,
                 "position_id": event.position_id,
                 "type": event.type,
+                "event_type": event.type,
                 "inputs": _make_json_serializable(event.inputs),
                 "outputs": _make_json_serializable(event.outputs),
                 "message": event.message,
@@ -124,6 +125,7 @@ class SQLEventsRepo(EventsRepo):
                 s.commit()
             except Exception as e:
                 # Do not let event logging break trading/tick flows
+                s.rollback()
                 print(f"⚠️  SQLEventsRepo.append: failed to write event: {e}")
 
     def list_for_position(self, position_id: str, limit: int = 100) -> Iterable[Event]:

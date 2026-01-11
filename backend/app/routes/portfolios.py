@@ -22,12 +22,23 @@ class StartingCash(BaseModel):
     amount: float
 
 
+class HoldingRequest(BaseModel):
+    asset: str
+    qty: float = 0.0
+    anchor_price: Optional[float] = None
+    avg_cost: Optional[float] = None
+    cash: Optional[float] = None
+    model_config = ConfigDict(extra="forbid")
+
+
 class CreatePortfolioRequest(BaseModel):
     name: str
     description: Optional[str] = None
     type: str = "LIVE"  # LIVE/SIM/SANDBOX
     template: str = "DEFAULT"
     hours_policy: str = "OPEN_ONLY"  # OPEN_ONLY/OPEN_PLUS_AFTER_HOURS
+    starting_cash: Optional[StartingCash] = None
+    holdings: Optional[List[HoldingRequest]] = None
     model_config = ConfigDict(extra="forbid")
 
 
@@ -104,6 +115,10 @@ def create_portfolio(
             user_id="default",
             portfolio_type=request.type,
             trading_hours_policy=request.hours_policy,
+            starting_cash=request.starting_cash.model_dump() if request.starting_cash else None,
+            holdings=[holding.model_dump() for holding in request.holdings]
+            if request.holdings
+            else None,
             template=request.template,
         )
         return {"portfolio_id": portfolio.id}

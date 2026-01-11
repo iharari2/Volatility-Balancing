@@ -4,14 +4,23 @@
 # backend/app/routes/positions.py  (only the relevant bits)
 
 from typing import Optional
-from typing import Any, Dict
+from typing import Any, Dict, List
+import logging
+import os
+import time
 from fastapi import APIRouter, HTTPException, Query, Header
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from app.di import container
 from datetime import datetime, timezone
 from uuid import uuid4
 
 router = APIRouter(prefix="/v1")
+logger = logging.getLogger(__name__)
+
+
+def _timing_enabled() -> bool:
+    return os.getenv("VB_TIMING", "").lower() in {"1", "true", "yes", "on"}
 
 
 # REMOVED: Legacy helper functions - All endpoints now require tenant_id and portfolio_id
@@ -25,6 +34,8 @@ def _find_position_legacy(position_id: str):
     """
     # Query positions table directly by ID for better performance and reliability
     # This avoids session/transaction issues when iterating through portfolios
+    timing_enabled = _timing_enabled()
+    start_time = time.perf_counter() if timing_enabled else None
     try:
         from infrastructure.persistence.sql.models import PositionModel
         from infrastructure.persistence.sql.positions_repo_sql import SQLPositionsRepo
@@ -47,6 +58,11 @@ def _find_position_legacy(position_id: str):
                             position_id=position_id,
                         )
                         if pos:
+                            if timing_enabled and start_time is not None:
+                                logger.info(
+                                    "tick_timing step=_find_position_legacy_sql_hit elapsed=%.4fs",
+                                    time.perf_counter() - start_time,
+                                )
                             return pos, row.tenant_id, row.portfolio_id
                 except Exception:
                     # If status column doesn't exist, use raw SQL
@@ -68,6 +84,11 @@ def _find_position_legacy(position_id: str):
                                 position_id=position_id,
                             )
                             if pos:
+                                if timing_enabled and start_time is not None:
+                                    logger.info(
+                                        "tick_timing step=_find_position_legacy_raw_hit elapsed=%.4fs",
+                                        time.perf_counter() - start_time,
+                                    )
                                 return pos, tenant_id, portfolio_id
                     except Exception:
                         pass
@@ -85,6 +106,11 @@ def _find_position_legacy(position_id: str):
             tenant_id=tenant_id, portfolio_id=portfolio.id, position_id=position_id
         )
         if pos:
+            if timing_enabled and start_time is not None:
+                logger.info(
+                    "tick_timing step=_find_position_legacy_fallback_hit elapsed=%.4fs",
+                    time.perf_counter() - start_time,
+                )
             return pos, tenant_id, portfolio.id
 
     # If not found in default tenant, try to find it by querying all positions
@@ -116,11 +142,23 @@ def _find_position_legacy(position_id: str):
                             tenant_id=tenant_id, portfolio_id=portfolio_id, position_id=position_id
                         )
                         if pos:
+                            if timing_enabled and start_time is not None:
+                                logger.info(
+                                    "tick_timing step=_find_position_legacy_scan_hit elapsed=%.4fs",
+                                    time.perf_counter() - start_time,
+                                )
                             return pos, tenant_id, portfolio_id
                 except Exception:
                     pass
+
     except (ImportError, AttributeError):
         pass
+
+    if timing_enabled and start_time is not None:
+        logger.info(
+            "tick_timing step=_find_position_legacy_miss elapsed=%.4fs",
+            time.perf_counter() - start_time,
+        )
 
     return None, None, None
 
@@ -138,8 +176,7 @@ class OrderPolicyIn(BaseModel):
 # ... existing code continues ...
 
 
-@router.post("/positions/{position_id}/tick")
-def tick_position(position_id: str) -> Dict[str, Any]:
+def _tick_position_sync(position_id: str) -> Dict[str, Any]:
     """
     Execute one deterministic trading evaluation cycle for a position.
 
@@ -152,11 +189,21 @@ def tick_position(position_id: str) -> Dict[str, Any]:
     - Writes exactly one PositionEvent row per tick (even if HOLD)
     - Returns CycleResult JSON including position snapshot, baseline deltas, allocation% vs guardrails, last event summary
     """
+    timing_enabled = _timing_enabled()
+    total_start = time.perf_counter() if timing_enabled else None
+    last_step = total_start
+    timings: List[tuple[str, float]] = []
     try:
+        if timing_enabled:
+            logger.info("tick_timing step=start position_id=%s", position_id)
         # Find position across portfolios
         position, tenant_id, portfolio_id = _find_position_legacy(position_id)
         if not position:
             raise HTTPException(status_code=404, detail=f"Position {position_id} not found")
+        if timing_enabled and last_step is not None:
+            now = time.perf_counter()
+            timings.append(("find_position", now - last_step))
+            last_step = now
 
         # Get latest live quote
         price_data = container.market_data.get_reference_price(position.asset_symbol)
@@ -164,6 +211,10 @@ def tick_position(position_id: str) -> Dict[str, Any]:
             raise HTTPException(
                 status_code=404, detail=f"No market data available for {position.asset_symbol}"
             )
+        if timing_enabled and last_step is not None:
+            now = time.perf_counter()
+            timings.append(("get_price", now - last_step))
+            last_step = now
 
         # Evaluate position using EvaluatePositionUC
         eval_uc = container.evaluate_position_uc
@@ -172,15 +223,39 @@ def tick_position(position_id: str) -> Dict[str, Any]:
             portfolio_id=portfolio_id,
             position_id=position_id,
             current_price=price_data.price,
+            write_timeline=False,
         )
+        if timing_enabled and last_step is not None:
+            now = time.perf_counter()
+            timings.append(("evaluate", now - last_step))
+            last_step = now
 
-        action = evaluation_result.get("action", "HOLD")
-        action_reason = evaluation_result.get("action_reason", "No trigger detected")
+        trigger_detected = evaluation_result.get("trigger_detected", False)
+        trigger_type = evaluation_result.get("trigger_type")
         order_proposal = evaluation_result.get("order_proposal")
+
+        action = "HOLD"
+        if trigger_detected and trigger_type in ("BUY", "SELL"):
+            action = trigger_type
+
+        action_reason = evaluation_result.get("reasoning", "No trigger detected")
+        if order_proposal and "validation" in order_proposal:
+            validation_result = order_proposal["validation"]
+            if not validation_result.get("valid"):
+                rejections = validation_result.get("rejections", [])
+                action_reason = f"Trade blocked: {', '.join(rejections)}"
+                action = "SKIP"
+        elif trigger_detected and action in ("BUY", "SELL") and not order_proposal:
+            action = "SKIP"
 
         # If BUY/SELL, create and execute order
         order_id = None
         trade_id = None
+        mid_price = price_data.price
+        if action in ("BUY", "SELL") and order_proposal:
+            validation_result = order_proposal.get("validation", {})
+            if not validation_result.get("valid"):
+                order_proposal = None
         if action in ("BUY", "SELL") and order_proposal:
             # Calculate MID price (default policy)
             mid_price = price_data.price  # Fallback to effective price
@@ -195,8 +270,27 @@ def tick_position(position_id: str) -> Dict[str, Any]:
             from application.use_cases.submit_order_uc import CreateOrderRequest
             from application.use_cases.execute_order_uc import FillOrderRequest
 
-            submit_uc = container.submit_order_uc
-            execute_uc = container.execute_order_uc
+            from application.use_cases.submit_order_uc import SubmitOrderUC
+            from application.use_cases.execute_order_uc import ExecuteOrderUC
+
+            submit_uc = SubmitOrderUC(
+                positions=container.positions,
+                orders=container.orders,
+                events=container.events,
+                idempotency=container.idempotency,
+                config_repo=container.config,
+                clock=container.clock,
+                guardrail_config_provider=container.guardrail_config_provider,
+            )
+            execute_uc = ExecuteOrderUC(
+                positions=container.positions,
+                orders=container.orders,
+                trades=container.trades,
+                events=container.events,
+                clock=container.clock,
+                guardrail_config_provider=container.guardrail_config_provider,
+                order_policy_config_provider=container.order_policy_config_provider,
+            )
 
             order_request = CreateOrderRequest(
                 side=action,
@@ -214,6 +308,10 @@ def tick_position(position_id: str) -> Dict[str, Any]:
                 request=order_request,
                 idempotency_key=idempotency_key,
             )
+            if timing_enabled and last_step is not None:
+                now = time.perf_counter()
+                timings.append(("submit_order", now - last_step))
+                last_step = now
 
             if submit_response.accepted:
                 order_id = submit_response.order_id
@@ -228,6 +326,10 @@ def tick_position(position_id: str) -> Dict[str, Any]:
                 fill_response = execute_uc.execute(order_id, fill_request)
                 if fill_response.status == "filled":
                     trade_id = fill_response.trade_id
+            if timing_enabled and last_step is not None:
+                now = time.perf_counter()
+                timings.append(("execute_order", now - last_step))
+                last_step = now
 
         # Reload position to get updated state
         updated_position = container.positions.get(
@@ -235,11 +337,86 @@ def tick_position(position_id: str) -> Dict[str, Any]:
             portfolio_id=portfolio_id,
             position_id=position_id,
         )
+        if timing_enabled and last_step is not None:
+            now = time.perf_counter()
+            timings.append(("reload_position", now - last_step))
+            last_step = now
+
+        # Resolve allow_after_hours and trading_hours_policy for timeline
+        portfolio = None
+        if hasattr(container, "portfolio_repo"):
+            portfolio = container.portfolio_repo.get(
+                tenant_id=tenant_id, portfolio_id=portfolio_id
+            )
+        if timing_enabled and last_step is not None:
+            now = time.perf_counter()
+            timings.append(("load_portfolio", now - last_step))
+            last_step = now
+
+        allow_after_hours = position.order_policy.allow_after_hours if position.order_policy else False
+        if hasattr(container, "order_policy_config_provider"):
+            order_policy_config = container.order_policy_config_provider(
+                tenant_id, portfolio_id, position_id
+            )
+            if order_policy_config is not None:
+                allow_after_hours = order_policy_config.allow_after_hours
+
+        if portfolio is not None:
+            if portfolio.trading_hours_policy == "OPEN_ONLY":
+                allow_after_hours = False
+            elif portfolio.trading_hours_policy == "OPEN_PLUS_AFTER_HOURS":
+                allow_after_hours = True
+
+        validation = container.market_data.validate_price(price_data, allow_after_hours)
+        trigger_result = {
+            "triggered": trigger_detected,
+            "side": trigger_type,
+            "reasoning": evaluation_result.get("reasoning", "No trigger detected"),
+        }
+        anchor_reset_info = evaluation_result.get("anchor_reset")
+        execution_info = None
+        if trade_id and order_proposal:
+            execution_info = {
+                "price": mid_price,
+                "qty": abs(order_proposal.get("trimmed_qty", 0.0)),
+                "commission": order_proposal.get("commission", 0.0),
+                "timestamp": datetime.now(timezone.utc),
+                "status": "filled",
+            }
+
+        # Write exactly one timeline row for this tick
+        eval_uc._write_timeline_row(
+            tenant_id=tenant_id,
+            portfolio_id=portfolio_id,
+            position=position,
+            price_data=price_data,
+            validation=validation,
+            allow_after_hours=allow_after_hours,
+            trading_hours_policy=portfolio.trading_hours_policy if portfolio else None,
+            anchor_reset_info=anchor_reset_info,
+            trigger_result=trigger_result,
+            order_proposal=order_proposal,
+            action=action,
+            source="api/manual",
+            order_id=order_id,
+            trade_id=trade_id,
+            execution_info=execution_info,
+            position_qty_after=updated_position.qty if updated_position else None,
+            position_cash_after=updated_position.cash if updated_position else None,
+        )
+        if timing_enabled and last_step is not None:
+            now = time.perf_counter()
+            timings.append(("write_timeline", now - last_step))
+            last_step = now
 
         # Get baseline for delta calculations
         baseline = None
         if hasattr(container, "position_baseline"):
             baseline = container.position_baseline.get_latest(position_id)
+        if timing_enabled and last_step is not None:
+            now = time.perf_counter()
+            timings.append(("load_baseline", now - last_step))
+            last_step = now
 
         # Calculate position snapshot
         current_price = price_data.price
@@ -269,6 +446,10 @@ def tick_position(position_id: str) -> Dict[str, Any]:
             guardrail_config = container.guardrail_config_provider(
                 tenant_id, portfolio_id, position_id
             )
+        if timing_enabled and last_step is not None:
+            now = time.perf_counter()
+            timings.append(("load_guardrails", now - last_step))
+            last_step = now
 
         allocation_vs_guardrails = {
             "current_allocation_pct": allocation_pct,
@@ -291,9 +472,24 @@ def tick_position(position_id: str) -> Dict[str, Any]:
             )
             if events:
                 last_event = events[0]
+        if timing_enabled and last_step is not None:
+            now = time.perf_counter()
+            timings.append(("load_last_event", now - last_step))
+            last_step = now
+
+        if timing_enabled and total_start is not None:
+            total_elapsed = time.perf_counter() - total_start
+            timing_summary = " ".join(f"{label}={duration:.4f}s" for label, duration in timings)
+            logger.info("tick_timing total=%.4fs %s", total_elapsed, timing_summary)
 
         # Build response
-        return {
+        trigger_direction = "NONE"
+        if action == "BUY":
+            trigger_direction = "DOWN"
+        elif action == "SELL":
+            trigger_direction = "UP"
+
+        response_payload = {
             "position_snapshot": {
                 "position_id": position_id,
                 "symbol": updated_position.asset_symbol,
@@ -324,11 +520,26 @@ def tick_position(position_id: str) -> Dict[str, Any]:
             "cycle_result": {
                 "action": action,
                 "action_reason": action_reason,
+                "trigger_direction": trigger_direction,
                 "order_id": order_id,
                 "trade_id": trade_id,
                 "evaluation_timestamp": datetime.now(timezone.utc).isoformat(),
             },
         }
+        if timing_enabled:
+            logger.info("tick_timing step=response_ready position_id=%s", position_id)
+            from fastapi.encoders import jsonable_encoder
+
+            encode_start = time.perf_counter()
+            response_payload = jsonable_encoder(response_payload)
+            logger.info(
+                "tick_timing step=response_encoded elapsed=%.4fs position_id=%s",
+                time.perf_counter() - encode_start,
+                position_id,
+            )
+        if timing_enabled:
+            return JSONResponse(content=response_payload)
+        return response_payload
 
     except HTTPException:
         raise
@@ -337,6 +548,14 @@ def tick_position(position_id: str) -> Dict[str, Any]:
 
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error executing tick: {str(e)}")
+    finally:
+        if timing_enabled:
+            logger.info("tick_timing step=exit position_id=%s", position_id)
+
+
+@router.post("/positions/{position_id}/tick")
+async def tick_position(position_id: str) -> Dict[str, Any]:
+    return _tick_position_sync(position_id)
 
 
 class SimulationRequest(BaseModel):
@@ -542,6 +761,27 @@ def run_standalone_simulation(
             "max_drawdown": result.algorithm_max_drawdown,
             "volatility": result.algorithm_volatility,
             "total_trading_days": result.total_trading_days,
+            "algorithm": {
+                "return_pct": result.algorithm_return_pct,
+                "pnl": result.algorithm_pnl,
+                "trades": result.algorithm_trades,
+                "volatility": result.algorithm_volatility,
+                "sharpe_ratio": result.algorithm_sharpe_ratio,
+                "max_drawdown": result.algorithm_max_drawdown,
+            },
+            "buy_hold": {
+                "return_pct": result.buy_hold_return_pct,
+                "pnl": result.buy_hold_pnl,
+                "volatility": result.buy_hold_volatility,
+                "sharpe_ratio": result.buy_hold_sharpe_ratio,
+                "max_drawdown": result.buy_hold_max_drawdown,
+            },
+            "comparison": {
+                "excess_return": result.excess_return,
+                "alpha": result.alpha,
+                "beta": result.beta,
+                "information_ratio": result.information_ratio,
+            },
         }
 
     except HTTPException:
@@ -617,6 +857,41 @@ def evaluate_position_with_market_data_legacy(position_id: str) -> Dict[str, Any
     return evaluation_result
 
 
+@router.get("/positions/{position_id}/timeline")
+async def list_position_timeline_legacy(
+    position_id: str, limit: int = Query(200, description="Maximum number of timeline rows")
+) -> List[Dict[str, Any]]:
+    """Legacy endpoint to list evaluation timeline rows for a position."""
+    position, tenant_id, portfolio_id = _find_position_legacy(position_id)
+    if not position:
+        raise HTTPException(status_code=404, detail=f"Position {position_id} not found")
+
+    if not hasattr(container, "evaluation_timeline"):
+        raise HTTPException(status_code=501, detail="Timeline repository not available")
+
+    timeline = container.evaluation_timeline.list_by_position(
+        tenant_id=tenant_id,
+        portfolio_id=portfolio_id,
+        position_id=position_id,
+        mode="LIVE",
+        limit=limit,
+    )
+
+    # Normalize a few convenience fields for consumers
+    normalized = []
+    for row in timeline:
+        row_copy = dict(row)
+        if "current_price" not in row_copy:
+            row_copy["current_price"] = row_copy.get("effective_price")
+        if "allocation_after" not in row_copy:
+            row_copy["allocation_after"] = row_copy.get("position_stock_pct_after")
+            if row_copy["allocation_after"] is None:
+                row_copy["allocation_after"] = row_copy.get("post_trade_stock_pct")
+        normalized.append(row_copy)
+
+    return normalized
+
+
 @router.get("/positions/{position_id}/events")
 def list_position_events_legacy(position_id: str, limit: int = Query(100)) -> Dict[str, Any]:
     """Legacy endpoint to list events for a position."""
@@ -667,9 +942,17 @@ def auto_size_order_legacy(
         "order_proposal"
     ):
         # Submit order
-        from application.use_cases.submit_order_uc import CreateOrderRequest
+        from application.use_cases.submit_order_uc import CreateOrderRequest, SubmitOrderUC
 
-        submit_uc = container.submit_order_uc
+        submit_uc = SubmitOrderUC(
+            positions=container.positions,
+            orders=container.orders,
+            events=container.events,
+            idempotency=container.idempotency,
+            config_repo=container.config,
+            clock=container.clock,
+            guardrail_config_provider=container.guardrail_config_provider,
+        )
         order_proposal = evaluation_result["order_proposal"]
 
         order_request = CreateOrderRequest(

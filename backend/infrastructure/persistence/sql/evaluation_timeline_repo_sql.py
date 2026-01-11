@@ -9,6 +9,9 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import uuid4
 import json
+import logging
+import os
+import time
 
 from sqlalchemy import select, and_, text, MetaData, Table
 
@@ -23,11 +26,14 @@ class EvaluationTimelineRepoSQL(EvaluationTimelineRepo):
 
     def __init__(self, session_factory):
         self.session_factory = session_factory
+        self._logger = logging.getLogger(__name__)
+        self._timing_enabled = os.getenv("VB_TIMING", "").lower() in {"1", "true", "yes", "on"}
 
     def save(self, evaluation_data: Dict[str, Any]) -> str:
         """Save an evaluation timeline record - simplified and robust."""
         with self.session_factory() as session:
             try:
+                reflection_start = time.perf_counter() if self._timing_enabled else None
                 # Generate ID if not provided
                 evaluation_id = evaluation_data.get("id") or f"eval_{uuid4().hex[:16]}"
 
@@ -38,6 +44,11 @@ class EvaluationTimelineRepoSQL(EvaluationTimelineRepo):
                     "position_evaluation_timeline", metadata, autoload_with=bind
                 )
                 actual_db_columns = {col.name for col in reflected_table.columns}
+                if self._timing_enabled and reflection_start is not None:
+                    self._logger.info(
+                        "timeline_timing step=reflect_schema elapsed=%.4fs",
+                        time.perf_counter() - reflection_start,
+                    )
 
                 # Filter data to only include columns that exist in database
                 filtered_data = {}
@@ -49,7 +60,7 @@ class EvaluationTimelineRepoSQL(EvaluationTimelineRepo):
 
                     # Convert types appropriately
                     if isinstance(v, (list, dict)):
-                        filtered_data[k] = json.dumps(v) if v else None
+                        filtered_data[k] = json.dumps(v, default=str) if v else None
                     elif isinstance(v, Decimal):
                         filtered_data[k] = float(v)
                     elif isinstance(v, bool):
@@ -283,8 +294,24 @@ class EvaluationTimelineRepoSQL(EvaluationTimelineRepo):
                 sql = f"INSERT INTO position_evaluation_timeline ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
                 print(f"📝 Executing INSERT with {len(columns)} columns, action='{action_value}'")
                 try:
+                    insert_start = time.perf_counter() if self._timing_enabled else None
+                    if self._timing_enabled:
+                        self._logger.info(
+                            "timeline_timing step=insert_execute_start id=%s",
+                            evaluation_id,
+                        )
                     session.execute(text(sql), params)
+                    if self._timing_enabled:
+                        self._logger.info(
+                            "timeline_timing step=insert_execute_done id=%s",
+                            evaluation_id,
+                        )
                     session.commit()
+                    if self._timing_enabled and insert_start is not None:
+                        self._logger.info(
+                            "timeline_timing step=insert_commit elapsed=%.4fs",
+                            time.perf_counter() - insert_start,
+                        )
                     print(f"✅✅✅ Timeline record saved successfully! ID: {evaluation_id}")
                     return evaluation_id
                 except Exception as insert_error:
@@ -438,6 +465,7 @@ class EvaluationTimelineRepoSQL(EvaluationTimelineRepo):
         """List evaluation records for a position."""
         try:
             with self.session_factory() as session:
+                reflection_start = time.perf_counter() if self._timing_enabled else None
                 # Use raw SQL to avoid ORM model column mismatches
                 metadata = MetaData()
                 bind = session.get_bind()
@@ -445,6 +473,11 @@ class EvaluationTimelineRepoSQL(EvaluationTimelineRepo):
                     "position_evaluation_timeline", metadata, autoload_with=bind
                 )
                 actual_db_columns = {col.name for col in reflected_table.columns}
+                if self._timing_enabled and reflection_start is not None:
+                    self._logger.info(
+                        "timeline_timing step=list_reflect_schema elapsed=%.4fs",
+                        time.perf_counter() - reflection_start,
+                    )
 
                 # Build WHERE clause
                 where_clauses = [
@@ -490,8 +523,20 @@ class EvaluationTimelineRepoSQL(EvaluationTimelineRepo):
                     sql += " LIMIT :limit"
                     params["limit"] = limit
 
+                query_start = time.perf_counter() if self._timing_enabled else None
+                if self._timing_enabled:
+                    self._logger.info(
+                        "timeline_timing step=list_query_start position_id=%s",
+                        position_id,
+                    )
                 result = session.execute(text(sql), params)
                 rows = result.fetchall()
+                if self._timing_enabled and query_start is not None:
+                    self._logger.info(
+                        "timeline_timing step=list_query elapsed=%.4fs rows=%d",
+                        time.perf_counter() - query_start,
+                        len(rows),
+                    )
 
                 # Convert rows to dicts
                 records = []

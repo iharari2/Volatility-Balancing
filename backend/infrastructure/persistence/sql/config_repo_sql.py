@@ -13,7 +13,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from domain.ports.config_repo import ConfigRepo, ConfigScope
-from domain.value_objects.configs import TriggerConfig, GuardrailConfig, OrderPolicyConfig
+from domain.value_objects.configs import (
+    TriggerConfig,
+    GuardrailConfig,
+    OrderPolicyConfig,
+    normalize_guardrail_config,
+)
 from .models import (
     CommissionRateModel,
     TriggerConfigModel,
@@ -184,20 +189,22 @@ class SQLConfigRepo(ConfigRepo):
             )
             if not row:
                 return None
-            return GuardrailConfig(
-                min_stock_pct=Decimal(str(row.min_stock_pct)),
-                max_stock_pct=Decimal(str(row.max_stock_pct)),
-                max_trade_pct_of_position=(
-                    Decimal(str(row.max_trade_pct_of_position))
-                    if row.max_trade_pct_of_position is not None
-                    else None
-                ),
-                max_daily_notional=(
-                    Decimal(str(row.max_daily_notional))
-                    if row.max_daily_notional is not None
-                    else None
-                ),
-                max_orders_per_day=row.max_orders_per_day,
+            return normalize_guardrail_config(
+                GuardrailConfig(
+                    min_stock_pct=Decimal(str(row.min_stock_pct)),
+                    max_stock_pct=Decimal(str(row.max_stock_pct)),
+                    max_trade_pct_of_position=(
+                        Decimal(str(row.max_trade_pct_of_position))
+                        if row.max_trade_pct_of_position is not None
+                        else None
+                    ),
+                    max_daily_notional=(
+                        Decimal(str(row.max_daily_notional))
+                        if row.max_daily_notional is not None
+                        else None
+                    ),
+                    max_orders_per_day=row.max_orders_per_day,
+                )
             )
 
     def set_guardrail_config(
@@ -206,6 +213,7 @@ class SQLConfigRepo(ConfigRepo):
         config: GuardrailConfig,
     ) -> None:
         """Set guardrail configuration for a position."""
+        config = normalize_guardrail_config(config)
         with self._sf() as s:
             existing = s.scalar(
                 select(GuardrailConfigModel).where(GuardrailConfigModel.position_id == position_id)

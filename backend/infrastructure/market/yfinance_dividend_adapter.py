@@ -2,6 +2,8 @@
 # backend/infrastructure/market/yfinance_dividend_adapter.py
 # =========================
 from __future__ import annotations
+import logging
+import os
 import yfinance as yf
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
@@ -16,9 +18,21 @@ class YFinanceDividendAdapter(DividendMarketDataRepo):
 
     def __init__(self):
         self.tz_utc = timezone.utc
+        self._logger = logging.getLogger(__name__)
+
+    def _deterministic_guard(self, ticker: str) -> bool:
+        if os.getenv("TICK_DETERMINISTIC", "").lower() in {"1", "true", "yes", "on"}:
+            self._logger.warning(
+                "Deterministic mode enabled; skipping real dividend fetch for %s",
+                ticker,
+            )
+            return True
+        return False
 
     def get_dividend_info(self, ticker: str) -> Optional[Dividend]:
         """Get current dividend information for a ticker."""
+        if self._deterministic_guard(ticker):
+            return None
         try:
             stock = yf.Ticker(ticker)
             info = stock.info
@@ -57,6 +71,8 @@ class YFinanceDividendAdapter(DividendMarketDataRepo):
         self, ticker: str, start_date: datetime, end_date: datetime
     ) -> List[Dividend]:
         """Get dividend history for a ticker."""
+        if self._deterministic_guard(ticker):
+            return []
         try:
             stock = yf.Ticker(ticker)
 
@@ -107,6 +123,8 @@ class YFinanceDividendAdapter(DividendMarketDataRepo):
 
     def get_upcoming_dividends(self, ticker: str) -> List[Dividend]:
         """Get upcoming dividends for a ticker."""
+        if self._deterministic_guard(ticker):
+            return []
         try:
             stock = yf.Ticker(ticker)
             info = stock.info

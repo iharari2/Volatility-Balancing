@@ -1,10 +1,24 @@
 # =========================
 # backend/tests/integration/test_dividend_api.py
 # =========================
+import os
 import pytest
 from datetime import datetime, timezone, timedelta
 
 from app.di import container
+
+
+pytestmark = pytest.mark.e2e
+
+
+def _e2e_enabled() -> bool:
+    return os.getenv("E2E_SERVER", "").lower() in ("1", "true", "yes")
+
+
+@pytest.fixture(autouse=True)
+def _require_e2e():
+    if not _e2e_enabled():
+        pytest.skip("E2E_SERVER not enabled")
 
 
 @pytest.fixture

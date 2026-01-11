@@ -38,6 +38,7 @@ from infrastructure.persistence.memory.dividend_repo import (
 from infrastructure.persistence.memory.config_repo_mem import InMemoryConfigRepo
 from infrastructure.persistence.sql.config_repo_sql import SQLConfigRepo
 from infrastructure.market.yfinance_adapter import YFinanceAdapter
+from infrastructure.market.deterministic_market_data import DeterministicMarketDataAdapter
 from infrastructure.market.yfinance_dividend_adapter import YFinanceDividendAdapter
 
 # SQL bits (imported unconditionally; OK since deps are installed)
@@ -108,6 +109,7 @@ class _Container:
     config: ConfigRepo
     portfolio_state: SQLPortfolioStateRepo
     evaluation_timeline: EvaluationTimelineRepo
+    evaluation_timeline_repo: EvaluationTimelineRepo
     clock: Clock
 
     # Optimization repositories (placeholder implementations)
@@ -134,9 +136,27 @@ class _Container:
     guardrail_config_provider: Callable[[str], GuardrailConfig]
     order_policy_config_provider: Callable[[str], OrderPolicyConfig]
 
+    _evaluation_timeline: EvaluationTimelineRepo | None = None
+
+    @property
+    def evaluation_timeline(self) -> EvaluationTimelineRepo:
+        return self._evaluation_timeline
+
+    @evaluation_timeline.setter
+    def evaluation_timeline(self, repo: EvaluationTimelineRepo) -> None:
+        self._evaluation_timeline = repo
+        self.evaluation_timeline_repo = repo
+        if hasattr(self, "evaluate_position_uc"):
+            self.evaluate_position_uc.evaluation_timeline_repo = repo
+        if hasattr(self, "simulation_uc"):
+            self.simulation_uc.evaluation_timeline_repo = repo
+
     def __init__(self) -> None:
         self.clock = Clock()
-        self.market_data = YFinanceAdapter()
+        if _truthy(os.getenv("TICK_DETERMINISTIC")):
+            self.market_data = DeterministicMarketDataAdapter()
+        else:
+            self.market_data = YFinanceAdapter()
         self.dividend_market_data = YFinanceDividendAdapter()
         self.dividend = InMemoryDividendRepo()
         self.dividend_receivable = InMemoryDividendReceivableRepo()
@@ -236,7 +256,9 @@ class _Container:
         TimelineSession = sessionmaker(
             bind=timeline_engine, expire_on_commit=False, autoflush=False
         )
+        self._timeline_session_factory = TimelineSession
         self.evaluation_timeline = EvaluationTimelineRepoSQL(TimelineSession)
+        self.evaluation_timeline_repo = self.evaluation_timeline
 
         # --- Position Baseline (always SQL - canonical table) ---
         baseline_engine = main_engine or get_engine(sql_url)
@@ -463,6 +485,8 @@ class _Container:
         self.events.clear()
         self.idempotency.clear()
         self.portfolio_state.clear()
+        if hasattr(self, "_timeline_session_factory"):
+            self.evaluation_timeline = EvaluationTimelineRepoSQL(self._timeline_session_factory)
         # Note: dividend repos don't have clear() methods yet, but they're in-memory so they reset on restart
 
 

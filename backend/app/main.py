@@ -34,40 +34,82 @@ from application.services.trading_worker import start_trading_worker, stop_tradi
 API_PREFIX = "/v1"
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Lifespan context manager for startup and shutdown events."""
-    # Startup
-    worker_enabled = os.getenv("TRADING_WORKER_ENABLED", "true").lower() == "true"
-    if worker_enabled:
-        start_trading_worker()
-    yield
-    # Shutdown
-    if worker_enabled:
-        stop_trading_worker()
+def _resolve_worker_enabled(override: bool | None) -> bool:
+    if override is not None:
+        return override
+    return os.getenv("TRADING_WORKER_ENABLED", "true").lower() == "true"
 
 
-app = FastAPI(title="Volatility Balancing API", version="v1", lifespan=lifespan)
+def create_app(enable_trading_worker: bool | None = None) -> FastAPI:
+    """Create the FastAPI app with optional worker toggle for tests."""
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
-    allow_credentials=False,  # Set to False when using allow_origins=["*"]
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-app.include_router(health_router, prefix=API_PREFIX)
-app.include_router(positions_router)  # positions_router already has /v1 prefix
-app.include_router(portfolios_router)  # portfolios_router already has /v1/portfolios prefix
-app.include_router(orders_router, prefix=API_PREFIX)
-app.include_router(dividends_router)  # dividends_router already has /v1 prefix
-app.include_router(optimization_router)  # optimization_router already has /v1 prefix
-app.include_router(market_router)
-app.include_router(trading_router)  # trading_router already has /v1 prefix
-app.include_router(excel_export_router)  # excel_export_router already has /v1 prefix
-app.include_router(simulations_router)  # simulations_router already has /v1 prefix
-app.include_router(
-    positions_cockpit_router
-)  # positions_cockpit_router already has /v1/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id} prefix
-app.include_router(portfolio_cockpit_router)
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        """Lifespan context manager for startup and shutdown events."""
+        worker_enabled = _resolve_worker_enabled(enable_trading_worker)
+        if worker_enabled:
+            start_trading_worker()
+        yield
+        if worker_enabled:
+            stop_trading_worker()
+
+    app = FastAPI(title="Volatility Balancing API", version="v1", lifespan=lifespan)
+    if os.getenv("VB_TIMING", "").lower() in {"1", "true", "yes", "on"}:
+        # Minimal ASGI middleware to trace response send completion.
+        class TimingMiddleware:
+            def __init__(self, app, **kwargs):
+                self.inner_app = app
+
+            async def __call__(self, scope, receive, send):
+                if scope["type"] != "http":
+                    await self.inner_app(scope, receive, send)
+                    return
+                print(f"asgi_timing request_start path={scope.get('path')}")
+
+                async def send_wrapper(message):
+                    if message["type"] == "http.response.start":
+                        print(
+                            f"asgi_timing response_start path={scope.get('path')} status={message.get('status')}"
+                        )
+                    if message["type"] == "http.response.body" and not message.get("more_body"):
+                        print(f"asgi_timing response_end path={scope.get('path')}")
+                    await send(message)
+
+                await self.inner_app(scope, receive, send_wrapper)
+                print(f"asgi_timing request_end path={scope.get('path')}")
+
+        app.add_middleware(TimingMiddleware)
+
+    # Add CORS middleware unless explicitly disabled for debugging.
+    if os.getenv("VB_TIMING_NO_CORS", "").lower() not in {"1", "true", "yes", "on"}:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],  # Allow all origins for development
+            allow_credentials=False,  # Set to False when using allow_origins=["*"]
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+    app.include_router(health_router, prefix=API_PREFIX)
+    app.include_router(positions_router)  # positions_router already has /v1 prefix
+    app.include_router(portfolios_router)  # portfolios_router already has /v1/portfolios prefix
+    app.include_router(orders_router, prefix=API_PREFIX)
+    app.include_router(dividends_router)  # dividends_router already has /v1 prefix
+    app.include_router(optimization_router)  # optimization_router already has /v1 prefix
+    app.include_router(market_router)
+    app.include_router(trading_router)  # trading_router already has /v1 prefix
+    app.include_router(excel_export_router)  # excel_export_router already has /v1 prefix
+    app.include_router(simulations_router)  # simulations_router already has /v1 prefix
+    app.include_router(
+        positions_cockpit_router
+    )  # positions_cockpit_router already has /v1/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id} prefix
+    app.include_router(portfolio_cockpit_router)
+
+    def __sync_ping() -> dict[str, bool]:
+        return {"ok": True}
+
+    app.add_api_route("/__sync_ping", __sync_ping, methods=["GET"])
+
+    return app
+
+
+app = create_app()

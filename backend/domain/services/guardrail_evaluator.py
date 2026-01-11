@@ -70,7 +70,8 @@ class GuardrailEvaluator:
 
             # Apply max_trade_pct_of_position limit if provided
             if config.max_trade_pct_of_position is not None:
-                max_qty = position_state.qty * config.max_trade_pct_of_position
+                max_trade_notional = total_equity * config.max_trade_pct_of_position
+                max_qty = max_trade_notional / price
                 if qty_to_buy > max_qty:
                     qty_to_buy = max_qty
 
@@ -128,7 +129,8 @@ class GuardrailEvaluator:
 
             # Apply max_trade_pct_of_position limit if provided
             if config.max_trade_pct_of_position is not None:
-                max_qty = position_state.qty * config.max_trade_pct_of_position
+                max_trade_notional = total_equity * config.max_trade_pct_of_position
+                max_qty = max_trade_notional / price
                 if qty_to_sell > max_qty:
                     qty_to_sell = max_qty
 

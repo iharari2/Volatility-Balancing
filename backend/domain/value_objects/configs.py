@@ -26,6 +26,23 @@ class GuardrailConfig:
     max_orders_per_day: Optional[int] = None  # Daily order limit
 
 
+def _normalize_guardrail_pct(value: Optional[Decimal]) -> Optional[Decimal]:
+    if value is None:
+        return None
+    return value / Decimal("100") if value > Decimal("1") else value
+
+
+def normalize_guardrail_config(config: GuardrailConfig) -> GuardrailConfig:
+    """Normalize guardrail percentages to fractional values (0-1) when needed."""
+    return GuardrailConfig(
+        min_stock_pct=_normalize_guardrail_pct(config.min_stock_pct),
+        max_stock_pct=_normalize_guardrail_pct(config.max_stock_pct),
+        max_trade_pct_of_position=_normalize_guardrail_pct(config.max_trade_pct_of_position),
+        max_daily_notional=config.max_daily_notional,
+        max_orders_per_day=config.max_orders_per_day,
+    )
+
+
 @dataclass
 class OrderPolicyConfig:
     """Order policy configuration for order execution rules."""

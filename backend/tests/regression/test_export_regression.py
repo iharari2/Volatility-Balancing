@@ -10,8 +10,8 @@ from io import BytesIO
 from fastapi.testclient import TestClient
 from openpyxl import load_workbook
 
-# Import the FastAPI app
-from app.main import app
+# Import the FastAPI app factory
+from app.main import create_app
 
 # Import domain entities for creating test data
 from domain.entities.position import Position
@@ -25,6 +25,8 @@ from application.services.excel_template_service import ExcelTemplateService
 from application.services.comprehensive_excel_export_service import ComprehensiveExcelExportService
 from application.services.enhanced_excel_export_service import EnhancedExcelExportService
 
+pytestmark = pytest.mark.online
+
 
 class TestExportRegression:
     """Comprehensive regression tests for all export functionality"""
@@ -32,7 +34,9 @@ class TestExportRegression:
     @pytest.fixture
     def client(self):
         """Create test client"""
-        return TestClient(app)
+        app = create_app(enable_trading_worker=False)
+        with TestClient(app) as test_client:
+            yield test_client
 
     @pytest.fixture
     def mock_position(self):

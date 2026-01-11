@@ -3,11 +3,16 @@
 # =========================
 import pytest
 from starlette.testclient import TestClient
-from app.main import app
+from app.main import create_app
 
 
 @pytest.fixture
-def client():
+def app():
+    return create_app(enable_trading_worker=False)
+
+
+@pytest.fixture
+def client(app):
     """Create test client."""
     return TestClient(app)
 
@@ -17,6 +22,7 @@ class TestMainApp:
 
     def test_app_creation(self):
         """Test that the app is created successfully."""
+        app = create_app(enable_trading_worker=False)
         assert app is not None
         assert app.title == "Volatility Balancing API"
         assert app.version == "v1"
@@ -220,7 +226,7 @@ class TestMainApp:
     def test_application_startup(self):
         """Test that the application starts up without errors."""
         # This test ensures the app can be instantiated
-        from app.main import app
+        app = create_app(enable_trading_worker=False)
 
         assert app is not None
 

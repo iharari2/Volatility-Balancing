@@ -15,6 +15,18 @@ from typing import Dict, List, Any, Optional
 class VerboseTimelineService:
     """Service for building verbose timeline views from simulation or live trading data."""
 
+    @staticmethod
+    def _normalize_guardrail_pct(value: Any, default: float) -> float:
+        if value is None:
+            return default
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return default
+        if 0 <= numeric <= 1:
+            return numeric * 100
+        return numeric
+
     def build_timeline_from_simulation(
         self, simulation_result: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
@@ -185,10 +197,14 @@ class VerboseTimelineService:
             # Guardrail config
             # Try to extract from time_series_data or use defaults
             # These should ideally come from the position config at that time
-            guardrail_min_stock_pct = ts_data.get("guardrail_min_stock_pct", 20.0)
-            guardrail_max_stock_pct = ts_data.get("guardrail_max_stock_pct", 60.0)
-            guardrail_max_trade_pct_of_position = ts_data.get(
-                "guardrail_max_trade_pct_of_position", 10.0
+            guardrail_min_stock_pct = self._normalize_guardrail_pct(
+                ts_data.get("guardrail_min_stock_pct"), 20.0
+            )
+            guardrail_max_stock_pct = self._normalize_guardrail_pct(
+                ts_data.get("guardrail_max_stock_pct"), 60.0
+            )
+            guardrail_max_trade_pct_of_position = self._normalize_guardrail_pct(
+                ts_data.get("guardrail_max_trade_pct_of_position"), 10.0
             )
 
             # Guardrail decision

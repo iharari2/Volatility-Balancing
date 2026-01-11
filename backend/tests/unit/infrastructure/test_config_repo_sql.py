@@ -217,8 +217,8 @@ class TestSQLConfigRepo_GuardrailConfigs:
 
         assert result is not None
         assert result.min_stock_pct == Decimal("0")
-        assert result.max_stock_pct == Decimal("50")
-        assert result.max_trade_pct_of_position == Decimal("10")
+        assert result.max_stock_pct == Decimal("0.5")
+        assert result.max_trade_pct_of_position == Decimal("0.1")
         assert result.max_daily_notional == Decimal("10000")
         assert result.max_orders_per_day == 5
 
@@ -243,7 +243,7 @@ class TestSQLConfigRepo_GuardrailConfigs:
 
         assert result is not None
         assert result.min_stock_pct == Decimal("0")
-        assert result.max_stock_pct == Decimal("100")
+        assert result.max_stock_pct == Decimal("1.0")
         assert result.max_trade_pct_of_position is None
         assert result.max_daily_notional is None
         assert result.max_orders_per_day is None
@@ -266,8 +266,8 @@ class TestSQLConfigRepo_GuardrailConfigs:
         config_repo.set_guardrail_config(position_id, updated_config)
 
         result = config_repo.get_guardrail_config(position_id)
-        assert result.min_stock_pct == Decimal("10")
-        assert result.max_stock_pct == Decimal("90")
+        assert result.min_stock_pct == Decimal("0.1")
+        assert result.max_stock_pct == Decimal("0.9")
         assert result.max_orders_per_day == 10
 
 

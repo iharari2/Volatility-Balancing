@@ -36,6 +36,15 @@ class YFinanceAdapter(MarketDataRepo):
         self._logger = logging.getLogger(__name__)
         self._patch_print_once()
 
+    def _deterministic_guard(self, ticker: str) -> bool:
+        if os.getenv("TICK_DETERMINISTIC", "").lower() in {"1", "true", "yes", "on"}:
+            self._logger.warning(
+                "Deterministic mode enabled; skipping real market data fetch for %s",
+                ticker,
+            )
+            return True
+        return False
+
     def _patch_print_once(self) -> None:
         if YFinanceAdapter._print_once_patched:
             return
@@ -103,6 +112,8 @@ class YFinanceAdapter(MarketDataRepo):
 
     def get_price(self, ticker: str, force_refresh: bool = False) -> Optional[PriceData]:
         """Get current price data for a ticker with cache + retry backoff."""
+        if self._deterministic_guard(ticker):
+            return None
         self.last_error_kind = None
         self.last_error = None
         cached = self._get_cached_price(ticker, allow_stale=False)
@@ -692,6 +703,8 @@ class YFinanceAdapter(MarketDataRepo):
 
     def get_reference_price(self, ticker: str) -> Optional[PriceData]:
         """Get reference price following the specification policy."""
+        if self._deterministic_guard(ticker):
+            return None
         price_data = self.get_price(ticker)
         if not price_data:
             return None
@@ -735,6 +748,8 @@ class YFinanceAdapter(MarketDataRepo):
 
     def get_current_quote(self, ticker: str) -> Optional[PriceData]:
         """Get the most current quote available, bypassing cache for fresh data."""
+        if self._deterministic_guard(ticker):
+            return None
         try:
             stock = yf.Ticker(ticker)
             current_time = datetime.now(self.tz_utc)
@@ -837,6 +852,8 @@ class YFinanceAdapter(MarketDataRepo):
         intraday_interval_minutes: int = 30,
     ) -> List[PriceData]:
         """Fetch historical data from yfinance and store it."""
+        if self._deterministic_guard(ticker):
+            return []
         try:
             # Validate input parameters
             if not ticker or not isinstance(ticker, str):

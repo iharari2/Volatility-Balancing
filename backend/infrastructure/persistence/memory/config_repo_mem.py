@@ -6,7 +6,12 @@
 from typing import Optional, Dict, Tuple
 
 from domain.ports.config_repo import ConfigRepo, ConfigScope
-from domain.value_objects.configs import TriggerConfig, GuardrailConfig, OrderPolicyConfig
+from domain.value_objects.configs import (
+    TriggerConfig,
+    GuardrailConfig,
+    OrderPolicyConfig,
+    normalize_guardrail_config,
+)
 
 
 class InMemoryConfigRepo(ConfigRepo):
@@ -80,7 +85,8 @@ class InMemoryConfigRepo(ConfigRepo):
         position_id: str,
     ) -> Optional[GuardrailConfig]:
         """Get guardrail configuration for a position."""
-        return self._guardrail_configs.get(position_id)
+        config = self._guardrail_configs.get(position_id)
+        return normalize_guardrail_config(config) if config else None
 
     def set_guardrail_config(
         self,
@@ -88,7 +94,7 @@ class InMemoryConfigRepo(ConfigRepo):
         config: GuardrailConfig,
     ) -> None:
         """Set guardrail configuration for a position."""
-        self._guardrail_configs[position_id] = config
+        self._guardrail_configs[position_id] = normalize_guardrail_config(config)
 
     def get_order_policy_config(
         self,

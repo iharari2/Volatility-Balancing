@@ -8,5 +8,5 @@ router = APIRouter()
 
 
 @router.get("/healthz")
-def root_health() -> Dict[str, str]:
+async def root_health() -> Dict[str, str]:
     return {"status": "ok"}

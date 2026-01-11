@@ -3,6 +3,11 @@
 # =========================
 import os
 import pytest
+import asyncio
+import functools
+from concurrent.futures import ThreadPoolExecutor
+import starlette.concurrency
+import fastapi.routing
 
 # Make sure tests use in-memory for faster execution
 os.environ.setdefault("APP_PERSISTENCE", "memory")
@@ -10,11 +15,10 @@ os.environ.setdefault("APP_EVENTS", "memory")
 os.environ.setdefault("APP_IDEMPOTENCY", "memory")
 os.environ.setdefault("SQL_URL", "sqlite:///./vb_test.sqlite")
 os.environ.setdefault("APP_AUTO_CREATE", "1")  # Create tables for portfolio repo
-os.environ.setdefault("TRADING_WORKER_ENABLED", "false")
-os.environ.setdefault("TRADING_WORKER_INTERVAL_SECONDS", "3600")
+os.environ.setdefault("TICK_DETERMINISTIC", "true")
 
 from starlette.testclient import TestClient
-from app.main import app
+from app.main import create_app
 from app.di import container
 
 # Ensure database tables are created for portfolio repo
@@ -24,6 +28,19 @@ from infrastructure.persistence.sql.models import get_engine, create_all
 sql_url = os.getenv("SQL_URL", "sqlite:///./vb_test.sqlite")
 portfolio_engine = get_engine(sql_url)
 create_all(portfolio_engine)
+
+_threadpool_executor = ThreadPoolExecutor(max_workers=4)
+
+
+async def _patched_run_in_threadpool(func, *args, **kwargs):
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        _threadpool_executor, functools.partial(func, *args, **kwargs)
+    )
+
+
+starlette.concurrency.run_in_threadpool = _patched_run_in_threadpool
+fastapi.routing.run_in_threadpool = _patched_run_in_threadpool
 
 
 @pytest.fixture(autouse=True)
@@ -38,7 +55,9 @@ def reset_container():
 def client():
     # Reset container to ensure clean state
     container.reset()
-    return TestClient(app)
+    app = create_app(enable_trading_worker=False)
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 @pytest.fixture()

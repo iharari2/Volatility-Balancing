@@ -1,9 +1,24 @@
 #!/usr/bin/env python3
 """Test script to check what market data YFinance is actually returning"""
 
+import os
 import yfinance as yf
 from datetime import datetime, timezone
 import pytz
+import pytest
+from typing import Optional
+
+pytestmark = pytest.mark.online
+
+
+def _truthy(value: Optional[str]) -> bool:
+    if value is None:
+        return False
+    return value.strip().lower() not in ("0", "false", "no", "off", "")
+
+
+if _truthy(os.getenv("TICK_DETERMINISTIC")):
+    pytest.skip("Skipping live yfinance test in deterministic mode.", allow_module_level=True)
 
 
 def test_yfinance_data(ticker="AAPL"):

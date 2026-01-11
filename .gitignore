@@ -9,3 +9,4 @@ vb.sqlite
 build/
 wheelhouse/
 *.whl
+backend/logs/*.jsonl

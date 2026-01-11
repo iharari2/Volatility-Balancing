@@ -6,6 +6,11 @@ import pytest
 
 
 BASE_URL = os.getenv("LIVE_SERVER_BASE_URL", "http://127.0.0.1:8000")
+pytestmark = pytest.mark.e2e
+
+
+def _e2e_enabled() -> bool:
+    return os.getenv("E2E_SERVER", "").lower() in ("1", "true", "yes")
 
 
 def _curl_json(url: str) -> tuple[int, dict]:
@@ -21,11 +26,9 @@ def _curl_json(url: str) -> tuple[int, dict]:
     return int(status), json.loads(body)
 
 
-@pytest.mark.skipif(
-    os.getenv("LIVE_SERVER_TESTS", "false").lower() != "true",
-    reason="LIVE_SERVER_TESTS not enabled",
-)
 def test_market_price_invalid_ticker_live():
+    if not _e2e_enabled() and os.getenv("LIVE_SERVER_TESTS", "false").lower() != "true":
+        pytest.skip("E2E_SERVER/LIVE_SERVER_TESTS not enabled")
     if os.getenv("LIVE_SERVER_FORCE_ERROR", "false").lower() == "true":
         pytest.skip("LIVE_SERVER_FORCE_ERROR enabled; invalid ticker returns 503")
     try:
@@ -43,11 +46,9 @@ def test_market_price_invalid_ticker_live():
     assert "No market data found for THISISNOTATICKER" in detail
 
 
-@pytest.mark.skipif(
-    os.getenv("LIVE_SERVER_TESTS", "false").lower() != "true",
-    reason="LIVE_SERVER_TESTS not enabled",
-)
 def test_market_price_forced_error_live():
+    if not _e2e_enabled() and os.getenv("LIVE_SERVER_TESTS", "false").lower() != "true":
+        pytest.skip("E2E_SERVER/LIVE_SERVER_TESTS not enabled")
     if os.getenv("LIVE_SERVER_FORCE_ERROR", "false").lower() != "true":
         pytest.skip("LIVE_SERVER_FORCE_ERROR not enabled")
     try:
