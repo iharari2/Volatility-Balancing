@@ -1,2 +1,3 @@
 -r requirements-base.txt
 -e .
+yfinance==0.2.54

@@ -28,6 +28,7 @@ from app.routes.trading import router as trading_router
 
 from app.routes.excel_export import router as excel_export_router
 from app.routes.simulations import router as simulations_router
+from app.routes.sim import router as sim_router
 from app.routes.positions_cockpit import router as positions_cockpit_router
 from app.routes.portfolio_cockpit_api import router as portfolio_cockpit_router
 from application.services.trading_worker import start_trading_worker, stop_trading_worker
@@ -101,6 +102,7 @@ def create_app(enable_trading_worker: bool | None = None) -> FastAPI:
     app.include_router(trading_router)  # trading_router already has /v1 prefix
     app.include_router(excel_export_router)  # excel_export_router already has /v1 prefix
     app.include_router(simulations_router)  # simulations_router already has /v1 prefix
+    app.include_router(sim_router)
     app.include_router(
         positions_cockpit_router
     )  # positions_cockpit_router already has /v1/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id} prefix
