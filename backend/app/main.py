@@ -17,6 +17,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes.health import router as health_router
+from app.routes.version import router as version_router
 from app.routes.positions import router as positions_router
 from app.routes.portfolios import router as portfolios_router
 from app.routes.orders import router as orders_router
@@ -90,6 +91,7 @@ def create_app(enable_trading_worker: bool | None = None) -> FastAPI:
             allow_headers=["*"],
         )
     app.include_router(health_router, prefix=API_PREFIX)
+    app.include_router(version_router)
     app.include_router(positions_router)  # positions_router already has /v1 prefix
     app.include_router(portfolios_router)  # portfolios_router already has /v1/portfolios prefix
     app.include_router(orders_router, prefix=API_PREFIX)
