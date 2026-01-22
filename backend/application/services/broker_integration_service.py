@@ -404,13 +404,36 @@ class BrokerIntegrationService:
             return
 
         try:
-            self.event_logger.log_order_event(
-                position_id=order.position_id,
-                order_id=order.id,
-                action=order.side,
-                qty=order.qty,
-                price=order.avg_fill_price or 0.0,
-                status=order.status,
+            from application.events import EventType
+
+            # Map internal event types to EventType enum
+            if event_type == "fill_processed":
+                log_event_type = EventType.EXECUTION_RECORDED
+            else:
+                log_event_type = EventType.ORDER_CREATED
+
+            # Build payload with order details and event-specific details
+            payload = {
+                "order_id": order.id,
+                "position_id": order.position_id,
+                "side": order.side,
+                "qty": order.qty,
+                "status": order.status,
+                "broker_order_id": order.broker_order_id,
+                "avg_fill_price": order.avg_fill_price,
+                "filled_qty": order.filled_qty,
+                "total_commission": order.total_commission,
+                "internal_event_type": event_type,
+                **details,
+            }
+
+            self.event_logger.log(
+                event_type=log_event_type,
+                tenant_id=order.tenant_id,
+                portfolio_id=order.portfolio_id,
+                asset_id=order.position_id,
+                source="broker_integration",
+                payload=payload,
             )
         except Exception as e:
             logger.warning(f"Failed to log event: {e}")
