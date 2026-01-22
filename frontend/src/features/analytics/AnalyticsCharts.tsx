@@ -67,7 +67,7 @@ export default function AnalyticsCharts({ positions, analyticsData }: AnalyticsC
 
     // Calculate buy & hold: assume we hold initial stock allocation and it grows with market
     // Since we don't have individual stock prices, we'll use the stock value ratio
-    return portfolioValueData.map((point, i) => {
+    return portfolioValueData.map((point: { date: string; value: number }, i: number) => {
       const currentPoint = timeSeries[i];
       if (!currentPoint) return { date: point.date, portfolio: point.value, buyHold: initialValue };
 

@@ -20,8 +20,7 @@ export const useMarketPrice = (ticker: string) => {
         high: data.high,
         low: data.low,
         close: data.close,
-        timestamp: data.timestamp,
-        hasAllOHLC: data.open !== undefined && data.high !== undefined && 
+        hasAllOHLC: data.open !== undefined && data.high !== undefined &&
                     data.low !== undefined && data.close !== undefined
       });
       return data;

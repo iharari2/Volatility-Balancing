@@ -333,7 +333,6 @@ export default function PositionsAndConfigPage() {
       console.log('Position created successfully:', result);
 
       await loadData();
-      setShowAddPositionModal(false);
       // After creating a position, move user to the Strategy Config tab
       navigate(`/portfolios/${currentPortfolioId}/positions?tab=config`);
       toast.success(`Position ${positionData.ticker} added successfully`);
@@ -692,7 +691,7 @@ export default function PositionsAndConfigPage() {
 
               <AnalyticsKPIs
                 positions={
-                  !selectedPositionId || selectedPositionId === 'all'
+                  (!selectedPositionId || selectedPositionId === 'all'
                     ? positions.map((p) => ({
                         ...p,
                         anchorPrice: p.anchor_price || 0,
@@ -710,13 +709,13 @@ export default function PositionsAndConfigPage() {
                           marketValue: p.position_value || 0,
                           cashAmount: p.cash || 0,
                           ticker: p.asset || p.ticker || 'UNKNOWN',
-                        }))
+                        }))) as any
                 }
               />
 
               <AnalyticsCharts
                 positions={
-                  !selectedPositionId || selectedPositionId === 'all'
+                  (!selectedPositionId || selectedPositionId === 'all'
                     ? positions.map((p) => ({
                         ...p,
                         anchorPrice: p.anchor_price || 0,
@@ -734,7 +733,7 @@ export default function PositionsAndConfigPage() {
                           marketValue: p.position_value || 0,
                           cashAmount: p.cash || 0,
                           ticker: p.asset || p.ticker || 'UNKNOWN',
-                        }))
+                        }))) as any
                 }
               />
             </div>

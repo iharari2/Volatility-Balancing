@@ -84,7 +84,7 @@ export default function VerboseTimelineView({ simulationId, ticker }: VerboseTim
         total_rows: data.total_rows,
         rows_count: data.rows?.length || 0,
       });
-      setRows(data.rows || []);
+      setRows((data.rows || []) as TimelineRow[]);
       if (!data.rows || data.rows.length === 0) {
         console.warn('[VerboseTimeline] No timeline rows returned');
       }

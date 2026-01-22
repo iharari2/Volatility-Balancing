@@ -275,7 +275,7 @@ export default function EnhancedSimulationAnalytics({ data }: EnhancedSimulation
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" />
                   <YAxis />
-                  <Tooltip formatter={(value, name) => [`${value.toFixed(2)}%`, name]} />
+                  <Tooltip formatter={(value, name) => [`${Number(value).toFixed(2)}%`, name]} />
                   <Legend />
                   <Area
                     type="monotone"
@@ -382,7 +382,7 @@ export default function EnhancedSimulationAnalytics({ data }: EnhancedSimulation
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" />
                   <YAxis />
-                  <Tooltip formatter={(value, name) => [`${value.toFixed(2)}%`, name]} />
+                  <Tooltip formatter={(value, name) => [`${Number(value).toFixed(2)}%`, name]} />
                   <Legend />
                   <Line
                     type="monotone"

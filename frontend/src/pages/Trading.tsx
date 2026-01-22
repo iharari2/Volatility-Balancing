@@ -249,13 +249,6 @@ const Trading: React.FC = () => {
   const [selectedPositionForConfig, setSelectedPositionForConfig] = useState<Position | null>(null);
   const [refreshFrequency, setRefreshFrequency] = useState(30); // seconds
   const [autoRefresh, setAutoRefresh] = useState(true);
-
-  // Auto-select first position if none selected and positions exist
-  React.useEffect(() => {
-    if (!selectedPosition && positions.length > 0) {
-      setSelectedPosition(positions[0].id);
-    }
-  }, [positions, selectedPosition]);
   const [liveData, setLiveData] = useState({
     marketOpen: true,
     lastUpdate: new Date().toLocaleTimeString(),
@@ -265,6 +258,13 @@ const Trading: React.FC = () => {
 
   // Get positions from shared context
   const positions = getActivePositions();
+
+  // Auto-select first position if none selected and positions exist
+  React.useEffect(() => {
+    if (!selectedPosition && positions.length > 0) {
+      setSelectedPosition(positions[0].id);
+    }
+  }, [positions, selectedPosition]);
 
   // Debug logging
   console.log('Trading component - positions:', positions);
@@ -633,7 +633,7 @@ const Trading: React.FC = () => {
                 </tr>
               ) : (
                 positions.map((position) => {
-                  const ochlData = ochlDataMap.get(position.id) || generateOCHLData(position);
+                  const ochlData = ochlDataMap.get(position.id) || { open: 0, close: 0, high: 0, low: 0 };
                   return (
                     <PositionRow
                       key={position.id}

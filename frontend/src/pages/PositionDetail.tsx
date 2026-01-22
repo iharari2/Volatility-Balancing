@@ -273,15 +273,15 @@ export default function PositionDetail() {
                     },
                     body: JSON.stringify({
                       order_policy: {
-                        trigger_threshold_pct: config.triggers.triggerThresholdPct,
-                        rebalance_ratio: config.triggers.rebalanceRatio,
-                        commission_rate: config.triggers.commissionRate,
-                        min_notional: config.triggers.minNotional,
-                        allow_after_hours: config.triggers.allowAfterHours,
+                        trigger_threshold_pct: config.orderPolicy.trigger_threshold_pct,
+                        rebalance_ratio: config.orderPolicy.rebalance_ratio,
+                        commission_rate: config.orderPolicy.commission_rate,
+                        min_notional: config.orderPolicy.min_notional,
+                        allow_after_hours: config.orderPolicy.allow_after_hours,
                       },
                       guardrails: {
-                        min_stock_alloc_pct: config.guardrails.minStockAllocPct,
-                        max_stock_alloc_pct: config.guardrails.maxStockAllocPct,
+                        min_stock_alloc_pct: config.guardrails.min_stock_alloc_pct,
+                        max_stock_alloc_pct: config.guardrails.max_stock_alloc_pct,
                         max_orders_per_day: 5,
                       },
                     }),
@@ -312,7 +312,7 @@ export default function PositionDetail() {
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Events Timeline */}
-          <EventTimeline events={events?.events || []} />
+          <EventTimeline events={(events?.events || []) as any} />
         </div>
       </div>
 

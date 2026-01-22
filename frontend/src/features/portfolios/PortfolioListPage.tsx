@@ -48,10 +48,10 @@ export default function PortfolioListPage() {
 
       // Create a new portfolio with similar name
       const newName = `${portfolio.name} (Copy)`;
-      await portfolioApi.create({
+      if (!selectedTenantId) return;
+      await portfolioApi.create(selectedTenantId, {
         name: newName,
         description: portfolio.description || undefined,
-        user_id: portfolio.userId || 'default',
       });
       await refreshPortfolios();
     } catch (error) {
@@ -72,10 +72,11 @@ export default function PortfolioListPage() {
       )
     ) {
       try {
+        if (!selectedTenantId) return;
         await portfolioApi.delete(selectedTenantId, portfolioId);
         // If deleted portfolio was selected, clear selection
         if (selectedPortfolioId === portfolioId) {
-          setSelectedPortfolioId(null);
+          setSelectedPortfolioId('');
         }
         await refreshPortfolios();
       } catch (error) {

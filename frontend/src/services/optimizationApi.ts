@@ -7,16 +7,12 @@ import {
   ConfigResponse,
   StartResponse,
   ProgressResponse,
-  ResultsResponse,
   HeatmapData,
   MetricsResponse,
   ParameterTypeInfo,
   ParameterTypesResponse,
   OptimizationResult,
-  OptimizationConfig,
-  OptimizationProgress,
   OptimizationMetric,
-  ParameterType,
 } from '../types/optimization';
 
 class OptimizationApiService {
@@ -151,8 +147,8 @@ class OptimizationApiService {
     }
 
     const data: MetricsResponse = await response.json();
-    // Extract just the value properties from the response objects
-    return data.metrics.map((metric) => metric.value as OptimizationMetric);
+    // Return the metrics array directly (already OptimizationMetric[])
+    return data.metrics;
   }
 
   async getParameterTypes(): Promise<ParameterTypeInfo[]> {
@@ -204,7 +200,7 @@ class OptimizationApiService {
   }
 
   // Cancel polling (if needed)
-  private pollingIntervals: Map<string, NodeJS.Timeout> = new Map();
+  private pollingIntervals: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
   startPolling(
     id: string,

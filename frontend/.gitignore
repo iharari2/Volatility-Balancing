@@ -32,3 +32,6 @@ Thumbs.db
 11.6.0
 vite
 volatility-balancing-frontend@*
+
+*storybook.log
+storybook-static

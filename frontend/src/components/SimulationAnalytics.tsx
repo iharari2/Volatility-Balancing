@@ -37,6 +37,10 @@ export interface SimulationAnalyticsData {
     date: string;
     return: number;
     portfolio_value: number;
+    cash?: number;
+    stock_value?: number;
+    shares?: number;
+    price?: number;
   }>;
   priceData: Array<{
     timestamp: string;
@@ -239,8 +243,8 @@ export default function SimulationAnalytics({ data, isLoading }: SimulationAnaly
     }));
 
     // Add trade triggers as separate data points
-    const tradeData = tradeTriggersData.map((trigger) => ({
-      dayIndex: trigger.x,
+    const tradeData = tradeTriggersData.map((trigger, index) => ({
+      dayIndex: index + 1, // Use index as dayIndex for trades
       price: trigger.y,
       portfolioValue: null, // Will be interpolated
       hasTrade: true,
@@ -250,7 +254,7 @@ export default function SimulationAnalytics({ data, isLoading }: SimulationAnaly
     }));
 
     // Combine and sort by day index
-    const combined = [...baseData, ...tradeData].sort((a, b) => a.dayIndex - b.dayIndex);
+    const combined = [...baseData, ...tradeData].sort((a, b) => Number(a.dayIndex) - Number(b.dayIndex));
 
     console.log('Chart data with triggers:', combined);
     return combined;
@@ -441,9 +445,9 @@ export default function SimulationAnalytics({ data, isLoading }: SimulationAnaly
                 <Tooltip
                   formatter={(value, name) => {
                     if (name === 'price') {
-                      return [`$${value.toFixed(2)}`, 'Asset Price'];
+                      return [`$${Number(value).toFixed(2)}`, 'Asset Price'];
                     }
-                    return [`$${value.toLocaleString()}`, 'Portfolio Value'];
+                    return [`$${Number(value).toLocaleString()}`, 'Portfolio Value'];
                   }}
                   labelFormatter={(label) => label}
                 />
@@ -535,7 +539,7 @@ export default function SimulationAnalytics({ data, isLoading }: SimulationAnaly
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
                 <YAxis />
-                <Tooltip formatter={(value) => [`${value.toFixed(2)}%`, 'Daily Return']} />
+                <Tooltip formatter={(value) => [`${Number(value).toFixed(2)}%`, 'Daily Return']} />
                 <Bar dataKey="dailyReturn" fill="#3B82F6" name="Daily Return (%)" />
               </BarChart>
             </ResponsiveContainer>
@@ -554,7 +558,7 @@ export default function SimulationAnalytics({ data, isLoading }: SimulationAnaly
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
                 <YAxis />
-                <Tooltip formatter={(value) => [`${value.toFixed(1)}%`, 'Allocation']} />
+                <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}%`, 'Allocation']} />
                 <Legend />
                 <Area
                   type="monotone"
@@ -651,7 +655,7 @@ export default function SimulationAnalytics({ data, isLoading }: SimulationAnaly
       {/* Trigger Analysis Table - Full Width */}
       {data?.triggerAnalysis && data.triggerAnalysis.length > 0 && (
         <div className="mt-6">
-          <TriggerAnalysisTable data={data.triggerAnalysis} />
+          <TriggerAnalysisTable data={data.triggerAnalysis as any} />
         </div>
       )}
     </div>

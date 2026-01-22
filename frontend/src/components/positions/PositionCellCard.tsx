@@ -81,7 +81,7 @@ export default function PositionCellCard({
       ? ((currentPrice - initialPriceForReturn) / initialPriceForReturn) * 100
       : 0;
   const stockReturn = positionReturn; // Both measured from same initial point
-  const alpha = 0; // Alpha would be calculated from actual trading performance
+  const alpha: number = 0; // Alpha would be calculated from actual trading performance
 
   const priceChange = marketData?.close
     ? currentPrice - marketData.close

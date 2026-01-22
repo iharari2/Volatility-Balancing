@@ -418,6 +418,9 @@ export default function PositionDetailPage() {
     console.warn('Position loaded with errors:', error);
   }
 
+  // TypeScript guard - position is guaranteed non-null after the early return above
+  if (!position) return null;
+
   const asset = position.asset || position.ticker || 'UNKNOWN';
   const currentPrice = marketData?.price || position.anchor_price || position.avg_cost || 0;
   const stockValue = position.qty * currentPrice;

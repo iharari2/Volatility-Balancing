@@ -832,4 +832,4 @@ export const simulationProgressApi = {
     }),
 };
 
-export { ApiError };
+export { ApiError, request };

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Pause,
+  Play,
   Download,
   Filter,
   ChevronDown,
@@ -195,7 +196,7 @@ export default function PositionCockpitPage() {
     if (!portfolioId || !positionId) return;
 
     let isMounted = true;
-    let timeoutId: NodeJS.Timeout | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const loadEvents = async () => {
       if (!isMounted) return;
@@ -748,8 +749,8 @@ export default function PositionCockpitPage() {
                                 : 'text-red-600'
                             }`}
                           >
-                            {cockpitData.stock_vs_baseline.pct >= 0 ? '+' : ''}
-                            {cockpitData.stock_vs_baseline.pct.toFixed(2)}%
+                            {(cockpitData.stock_vs_baseline.pct ?? 0) >= 0 ? '+' : ''}
+                            {(cockpitData.stock_vs_baseline.pct ?? 0).toFixed(2)}%
                           </div>
                           <div className="text-xs text-gray-500">
                             {cockpitData.stock_vs_baseline.abs !== null &&
@@ -767,7 +768,7 @@ export default function PositionCockpitPage() {
                   <button
                     onClick={() => {
                       // TODO: Implement reset baseline
-                      toast.info('Reset baseline functionality coming soon');
+                      toast('Reset baseline functionality coming soon');
                     }}
                     className="w-full px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
                   >

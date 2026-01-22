@@ -572,7 +572,7 @@ const Analysis: React.FC = () => {
                             />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(value) => `${value.toFixed(1)}%`} />
+                        <Tooltip formatter={(value) => `${Number(value).toFixed(1)}%`} />
                       </RechartsPieChart>
                     </ResponsiveContainer>
                   </div>

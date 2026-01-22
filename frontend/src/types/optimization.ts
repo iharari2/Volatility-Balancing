@@ -79,6 +79,14 @@ export interface OptimizationResult {
   status: OptimizationResultStatus;
   created_at: string;
   completed_at?: string;
+  // Additional properties for display
+  parameters?: Record<string, any>;
+  return?: number;
+  sharpe_ratio?: number;
+  max_drawdown?: number;
+  volatility?: number;
+  total_trades?: number;
+  config?: Record<string, any>;
 }
 
 export interface ParameterCombination {

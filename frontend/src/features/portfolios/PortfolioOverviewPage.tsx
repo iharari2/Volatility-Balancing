@@ -146,19 +146,16 @@ export default function PortfolioOverviewPage() {
         },
         positions: overviewResponse.positions.map((pos) => {
           const price = pos.anchor || pos.avg_cost || 0;
-          const cash = pos.cash || 0;
-          const stock_value = pos.stock_value || pos.qty * price;
-          const total_value = pos.total_value || cash + stock_value;
+          const stock_value = pos.qty * price;
+          const value = stock_value; // Position value is just stock value; cash is at portfolio level
           return {
             ticker: pos.asset,
             qty: pos.qty,
             price: price,
-            cash: cash,
-            stock_value: stock_value,
-            total_value: total_value,
+            value: value,
             weight_percent:
               overviewResponse.kpis.total_value > 0
-                ? (total_value / overviewResponse.kpis.total_value) * 100
+                ? (value / overviewResponse.kpis.total_value) * 100
                 : 0,
             pnl: 0, // TODO: Calculate from API
             pnl_percent: 0, // TODO: Calculate from API
@@ -187,7 +184,7 @@ export default function PortfolioOverviewPage() {
       console.error('Error loading portfolio overview:', err);
       setError(err.message || 'Failed to load portfolio overview');
       // Show error banner in developer mode
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         console.error('Data model broken: overview endpoint returned error', err);
       }
     } finally {
@@ -592,23 +589,9 @@ export default function PortfolioOverviewPage() {
                           {pos.qty.toLocaleString()}
                         </td>
                         <td className="px-3 py-2 text-sm text-gray-700">${pos.price.toFixed(2)}</td>
-                        <td className="px-3 py-2 text-sm text-gray-700">
-                          $
-                          {pos.cash.toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
-                        </td>
-                        <td className="px-3 py-2 text-sm text-gray-700">
-                          $
-                          {pos.stock_value.toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
-                        </td>
                         <td className="px-3 py-2 text-sm font-medium text-gray-900">
                           $
-                          {pos.total_value.toLocaleString(undefined, {
+                          {pos.value.toLocaleString(undefined, {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2,
                           })}

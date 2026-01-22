@@ -226,14 +226,15 @@ export const ParameterConfigForm: React.FC<ParameterConfigFormProps> = ({
           minimize: formData.optimization_criteria.minimize,
           description: '',
         },
+        constraints: constraints,
         created_by: '550e8400-e29b-41d4-a716-446655440000', // TODO: Get from auth context
         description: `Optimization for ${formData.ticker}`,
         max_combinations: 1000, // Default limit
         batch_size: 10,
       };
 
-      const config = await createConfig(configData);
-      onConfigCreated?.(config.id);
+      const config = await createConfig(configData as any);
+      onConfigCreated?.((config as any)?.id || 'new-config');
     } catch (error) {
       console.error('Failed to create config:', error);
     }
@@ -318,7 +319,7 @@ export const ParameterConfigForm: React.FC<ParameterConfigFormProps> = ({
                     label={category.charAt(0).toUpperCase() + category.slice(1)}
                   >
                     {getParametersByCategory(category).map((param) => (
-                      <option key={param.id} value={param.id} disabled={parameterRanges[param.id]}>
+                      <option key={param.id} value={param.id} disabled={!!parameterRanges[param.id]}>
                         {param.name} - {param.description}
                       </option>
                     ))}
@@ -343,7 +344,7 @@ export const ParameterConfigForm: React.FC<ParameterConfigFormProps> = ({
                 <div key={paramName} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <h4 className="font-medium text-gray-900">{range.name || paramName}</h4>
+                      <h4 className="font-medium text-gray-900">{(range as any).name || paramName}</h4>
                       <p className="text-sm text-gray-600 mt-1">{range.description}</p>
                       {paramInfo?.examples && (
                         <div className="mt-2">

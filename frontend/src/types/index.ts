@@ -75,6 +75,7 @@ export interface OrderPolicy {
   rebalance_ratio: number;
   commission_rate: number;
   allow_after_hours: boolean;
+  order_sizing_strategy?: string;
 }
 
 export interface Guardrails {

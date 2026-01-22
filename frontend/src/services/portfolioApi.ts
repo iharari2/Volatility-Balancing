@@ -91,7 +91,7 @@ class PortfolioApiService {
   }
 
   async updatePosition(
-    positionId: string,
+    _positionId: string,
     position: Partial<CreatePositionRequest>,
   ): Promise<CreatePositionResponse> {
     // The backend POST endpoint handles updates for existing positions with the same ticker

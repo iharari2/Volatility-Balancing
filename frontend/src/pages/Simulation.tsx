@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, Settings, Download, Target, Eye } from 'lucide-react';
+import { Play, Settings, Download, Target, Eye, X } from 'lucide-react';
 import { marketDataService } from '../services/marketDataService';
 
 interface SimulationConfig {
@@ -435,9 +435,9 @@ const Simulation: React.FC = () => {
 
   // Generate heat map data for parameter sensitivity analysis
   const generateHeatMapData = () => {
-    const data = [];
-    const buyTriggers = [];
-    const sellTriggers = [];
+    const data: { buyTrigger: string; sellTrigger: string; performance: string; sharpeRatio: string; maxDrawdown: string }[] = [];
+    const buyTriggers: number[] = [];
+    const sellTriggers: number[] = [];
 
     // Generate parameter combinations
     for (
@@ -470,7 +470,7 @@ const Simulation: React.FC = () => {
         data.push({
           buyTrigger: buyTrigger.toFixed(1),
           sellTrigger: sellTrigger.toFixed(1),
-          performance: Math.max(0, performance.toFixed(2)),
+          performance: Math.max(0, performance).toFixed(2),
           sharpeRatio: (performance / 15).toFixed(2),
           maxDrawdown: (Math.random() * -10).toFixed(2),
         });

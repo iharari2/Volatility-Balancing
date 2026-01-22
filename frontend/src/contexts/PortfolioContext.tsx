@@ -1,34 +1,84 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useTenantPortfolio } from './TenantPortfolioContext';
 
+export interface PositionConfig {
+  buyTrigger: number;
+  sellTrigger: number;
+  lowGuardrail: number;
+  highGuardrail: number;
+  rebalanceRatio: number;
+  minQuantity: number;
+  commission: number;
+  dividendTax: number;
+  tradeAfterHours: boolean;
+}
+
+export const DEFAULT_CONFIG: PositionConfig = {
+  buyTrigger: -0.03,
+  sellTrigger: 0.03,
+  lowGuardrail: 0.25,
+  highGuardrail: 0.75,
+  rebalanceRatio: 1.66667,
+  minQuantity: 1,
+  commission: 0.0001,
+  dividendTax: 0.25,
+  tradeAfterHours: true,
+};
+
 export interface Position {
   id: string;
   ticker: string;
-  name?: string;
-  qty?: number;
-  units?: number;
-  cash?: number;
-  cashAmount?: number;
-  assetAmount?: number;
-  currentPrice?: number;
-  anchorPrice?: number;
-  marketValue?: number;
-  pnl?: number;
-  pnlPercent?: number;
-  isActive?: boolean;
-  isArchived?: boolean;
-  lastTrade?: string;
-  shares?: number;
-  config?: {
-    buyTrigger: number;
-    sellTrigger: number;
-    lowGuardrail: number;
-    highGuardrail: number;
-    rebalanceRatio: number;
-    minQuantity: number;
-    commission: number;
-    dividendTax: number;
-    tradeAfterHours: boolean;
+  asset?: string; // Alias for ticker (backward compatibility)
+  name: string;
+  qty: number;
+  units: number;
+  cash: number;
+  cashAmount: number;
+  assetAmount: number;
+  currentPrice: number;
+  anchorPrice: number;
+  anchor_price?: number; // Alias for anchorPrice (backward compatibility)
+  marketValue: number;
+  pnl: number;
+  pnlPercent: number;
+  isActive: boolean;
+  isArchived: boolean;
+  lastTrade: string;
+  shares: number;
+  config: PositionConfig;
+}
+
+// Helper to create a complete position with defaults
+export function createPosition(partial: Partial<Position>): Position {
+  const qty = partial.qty ?? partial.units ?? 0;
+  const currentPrice = partial.currentPrice ?? partial.anchorPrice ?? 0;
+  const assetAmount = partial.assetAmount ?? qty * currentPrice;
+  const cashAmount = partial.cashAmount ?? partial.cash ?? 0;
+  const marketValue = partial.marketValue ?? assetAmount;
+  const anchorPrice = partial.anchorPrice ?? currentPrice;
+
+  const ticker = partial.ticker ?? partial.asset ?? '';
+  return {
+    id: partial.id ?? '',
+    ticker,
+    asset: ticker, // Alias for backward compatibility
+    name: partial.name ?? ticker,
+    qty,
+    units: qty,
+    cash: cashAmount,
+    cashAmount,
+    assetAmount,
+    currentPrice,
+    anchorPrice,
+    anchor_price: anchorPrice, // Alias for backward compatibility
+    marketValue,
+    pnl: partial.pnl ?? 0,
+    pnlPercent: partial.pnlPercent ?? 0,
+    isActive: partial.isActive ?? true,
+    isArchived: partial.isArchived ?? false,
+    lastTrade: partial.lastTrade ?? '',
+    shares: partial.shares ?? qty,
+    config: { ...DEFAULT_CONFIG, ...partial.config },
   };
 }
 
@@ -64,7 +114,7 @@ interface PortfolioOverview {
     stock_pct: number;
     cash_pct: number;
     pnl_pct: number;
-    pnl_abs: number;
+    pnl_abs?: number;
   };
 }
 
@@ -127,18 +177,21 @@ export function PortfolioProvider({ children }: PortfolioProviderProps) {
         portfolioApi.getOverview(selectedTenantId, selectedPortfolioId),
       ]);
 
-      // Transform API positions to Position format
-      const transformedPositions: Position[] = apiPositions.map((pos: any) => ({
-        id: pos.id,
-        ticker: pos.asset,
-        qty: pos.qty,
-        anchorPrice: pos.anchor_price,
-        currentPrice: pos.anchor_price, // Will be updated with market data
-        cashAmount: pos.cash || 0, // Cash lives in PositionCell
-        marketValue: pos.qty * (pos.anchor_price || 0),
-        isActive: true,
-        isArchived: false,
-      }));
+      // Transform API positions to Position format using createPosition helper
+      const transformedPositions: Position[] = apiPositions.map((pos: any) =>
+        createPosition({
+          id: pos.id,
+          ticker: pos.asset,
+          name: pos.asset, // Will be updated with company name if available
+          qty: pos.qty,
+          anchorPrice: pos.anchor_price ?? 0,
+          currentPrice: pos.anchor_price ?? 0, // Will be updated with market data
+          cashAmount: pos.cash ?? 0,
+          marketValue: pos.qty * (pos.anchor_price || 0),
+          isActive: true,
+          isArchived: false,
+        })
+      );
 
       setPositions(transformedPositions);
       setOverview(apiOverview);

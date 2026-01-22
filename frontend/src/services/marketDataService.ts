@@ -105,7 +105,7 @@ class MarketDataService {
         const start = new Date(startDate);
         const end = new Date(endDate);
 
-        for (const [date, values] of Object.entries(timeSeries)) {
+        for (const [date, values] of Object.entries(timeSeries) as [string, Record<string, string>][]) {
           const dataDate = new Date(date);
           if (dataDate >= start && dataDate <= end) {
             historicalData.push({

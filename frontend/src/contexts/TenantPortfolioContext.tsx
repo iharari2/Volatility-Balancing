@@ -15,6 +15,7 @@ interface Portfolio {
   totalValue?: number;
   positionCount?: number;
   autoTradingEnabled?: boolean;
+  state?: string;
   created_at?: string;
   updated_at?: string;
 }

@@ -200,11 +200,11 @@ export default function Analytics() {
 
       return {
         x: timelinePoint?.day || 0, // Day number for x-axis
-        y: timelinePoint?.price || 0, // Price for y-axis
+        y: timelinePoint?.portfolioValue || 0, // Portfolio value for y-axis
         date: eventDate,
         timestamp: event.timestamp,
         type: event.type,
-        price: timelinePoint?.price || 0,
+        price: timelinePoint?.portfolioValue || 0,
         portfolioValue: timelinePoint?.portfolioValue || 0,
         side: event.data?.side || 'unknown',
         qty: event.data?.qty || 0,
@@ -590,9 +590,9 @@ export default function Analytics() {
                 <Tooltip
                   formatter={(value, name) => {
                     if (name === 'price') {
-                      return [`$${value.toFixed(2)}`, 'Asset Price'];
+                      return [`$${Number(value).toFixed(2)}`, 'Asset Price'];
                     }
-                    return [`$${value.toLocaleString()}`, 'Portfolio Value'];
+                    return [`$${Number(value).toLocaleString()}`, 'Portfolio Value'];
                   }}
                   labelFormatter={(label) => `Day ${label}`}
                 />
@@ -617,7 +617,7 @@ export default function Analytics() {
                 <Scatter
                   yAxisId="left"
                   data={tradeTriggersData}
-                  fill={(entry) => (entry.side === 'buy' ? '#ef4444' : '#f59e0b')}
+                  fill="#ef4444"
                   name="Trade Triggers"
                 />
               </ComposedChart>

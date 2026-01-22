@@ -135,10 +135,11 @@ export default function SimulationControls({
     let newConfig;
     if (field.includes('.')) {
       const [parent, child] = field.split('.');
+      const parentValue = config[parent as keyof SimulationConfig];
       newConfig = {
         ...config,
         [parent]: {
-          ...config[parent as keyof SimulationConfig],
+          ...(typeof parentValue === 'object' && parentValue !== null ? parentValue : {}),
           [child]: value,
         },
       };
@@ -166,9 +167,10 @@ export default function SimulationControls({
       if (sharedFields.includes(field) || field.startsWith('guardrails.')) {
         if (field.includes('.')) {
           const [parent, child] = field.split('.');
+          const parentValue = config[parent as keyof SimulationConfig];
           onSharedConfigChange({
             [parent]: {
-              ...config[parent as keyof SimulationConfig],
+              ...(typeof parentValue === 'object' && parentValue !== null ? parentValue : {}),
               [child]: value,
             },
           });

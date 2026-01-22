@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { simulationApi } from '../lib/api';
-import { SimulationResult, SimulationConfig } from '../components/SimulationResults';
+import { SimulationConfig } from '../components/SimulationControls';
 
 export const useRunSimulation = () => {
   return useMutation({
@@ -11,9 +11,10 @@ export const useRunSimulation = () => {
       } catch (error) {
         // Log the actual error for debugging
         console.error('Simulation API failed:', error);
+        const err = error as Error & { status?: number };
         console.error('Error details:', {
-          message: error.message,
-          status: error.status,
+          message: err.message,
+          status: err.status,
           config: config,
         });
         throw error; // Re-throw to see the actual error
