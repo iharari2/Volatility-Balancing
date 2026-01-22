@@ -95,6 +95,11 @@ class BrokerIntegrationService:
             order_type="market",
         )
 
+        # Set current market price for stub broker (real brokers execute at market)
+        # This ensures the stub uses actual yfinance price for fills
+        if hasattr(self.broker, 'set_price'):
+            self.broker.set_price(symbol, current_price)
+
         # Submit to broker
         try:
             response = self.broker.submit_order(request)
