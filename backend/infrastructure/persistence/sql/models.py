@@ -101,11 +101,30 @@ class OrderModel(Base):
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
 
+    # Broker integration fields (Phase 1)
+    broker_order_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    broker_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    submitted_to_broker_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    filled_qty: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    avg_fill_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    total_commission: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    last_broker_update: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     __table_args__ = (
         UniqueConstraint("position_id", "idempotency_key", name="uq_orders_pos_idempotency"),
         Index("ix_orders_tenant_portfolio", "tenant_id", "portfolio_id"),
         Index("ix_orders_position_created_at", "position_id", "created_at"),
+        Index("ix_orders_broker_order_id", "broker_order_id"),
         CheckConstraint("side IN ('BUY','SELL')", name="ck_orders_side"),
+        CheckConstraint(
+            "status IN ('created', 'submitted', 'pending', 'working', 'partial', 'filled', 'rejected', 'cancelled')",
+            name="ck_orders_status",
+        ),
     )
 
 

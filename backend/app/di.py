@@ -76,6 +76,11 @@ from infrastructure.adapters.event_logger_adapter import EventLoggerAdapter
 from infrastructure.adapters.sim_order_service_adapter import SimOrderServiceAdapter
 from infrastructure.adapters.sim_position_repo_adapter import SimPositionRepoAdapter
 
+# Broker integration
+from domain.ports.broker_service import IBrokerService
+from infrastructure.adapters.stub_broker_adapter import StubBrokerAdapter
+from application.services.broker_integration_service import BrokerIntegrationService
+
 # New clean architecture: Orchestrators
 from application.orchestrators.live_trading import LiveTradingOrchestrator
 from application.orchestrators.simulation import SimulationOrchestrator
@@ -130,6 +135,10 @@ class _Container:
     # New clean architecture: Orchestrators
     live_trading_orchestrator: LiveTradingOrchestrator
     simulation_orchestrator: SimulationOrchestrator
+
+    # Broker integration (Phase 1)
+    broker: IBrokerService
+    broker_integration: BrokerIntegrationService
 
     # Config providers (for backward compatibility with Position entities)
     trigger_config_provider: Callable[[str], TriggerConfig]
@@ -364,10 +373,46 @@ class _Container:
             clock=self.clock,
         )
 
+        # --- Broker Integration (Phase 1) ---
+        # Select broker backend based on environment variable
+        broker_backend = os.getenv("APP_BROKER", "stub").lower()
+
+        if broker_backend == "stub":
+            fill_mode = os.getenv("STUB_BROKER_FILL_MODE", "immediate")
+            self.broker = StubBrokerAdapter(fill_mode=fill_mode)
+        elif broker_backend == "alpaca":
+            # Phase 3: Alpaca integration
+            # For now, fall back to stub
+            self.broker = StubBrokerAdapter(fill_mode="immediate")
+        else:
+            # Default to stub broker
+            self.broker = StubBrokerAdapter(fill_mode="immediate")
+
+        # Create ExecuteOrderUC for broker integration service
+        from application.use_cases.execute_order_uc import ExecuteOrderUC
+        execute_order_uc = ExecuteOrderUC(
+            positions=self.positions,
+            orders=self.orders,
+            trades=self.trades,
+            events=self.events,
+            clock=self.clock,
+        )
+
+        # Create BrokerIntegrationService
+        self.broker_integration = BrokerIntegrationService(
+            broker=self.broker,
+            orders_repo=self.orders,
+            execute_order_uc=execute_order_uc,
+            event_logger=unified_logger,
+        )
+
         # Update submit_order_uc with guardrail_config_provider after it's created
         # (We need to do this after guardrail_config_provider is defined)
         # Actually, we'll set it after creating the providers below
-        order_service_adapter = LiveOrderServiceAdapter(submit_order_uc)
+        order_service_adapter = LiveOrderServiceAdapter(
+            submit_order_uc,
+            broker_integration_service=self.broker_integration,
+        )
 
         # Create simulation adapters
         sim_order_service_adapter = SimOrderServiceAdapter(self.simulation)
@@ -442,6 +487,10 @@ class _Container:
         # Update submit_order_uc with guardrail_config_provider
         submit_order_uc.guardrail_config_provider = guardrail_config_provider
 
+        # Update execute_order_uc with config providers (for broker integration)
+        execute_order_uc.guardrail_config_provider = guardrail_config_provider
+        execute_order_uc.order_policy_config_provider = order_policy_config_provider
+
         # Create orchestrators (use unified event logger directly for audit trail)
         # Orchestrators use the new IEventLogger interface from application.ports.event_logger
         self.live_trading_orchestrator = LiveTradingOrchestrator(
@@ -487,6 +536,9 @@ class _Container:
         self.portfolio_state.clear()
         if hasattr(self, "_timeline_session_factory"):
             self.evaluation_timeline = EvaluationTimelineRepoSQL(self._timeline_session_factory)
+        # Reset broker if it's a stub
+        if hasattr(self, "broker") and hasattr(self.broker, "reset"):
+            self.broker.reset()
         # Note: dividend repos don't have clear() methods yet, but they're in-memory so they reset on restart
 
 
@@ -523,3 +575,13 @@ def get_evaluate_position_uc():
         order_policy_config_provider=container.order_policy_config_provider,
         config_repo=container.config,
     )
+
+
+def get_broker() -> IBrokerService:
+    """Get the broker service."""
+    return container.broker
+
+
+def get_broker_integration() -> BrokerIntegrationService:
+    """Get the broker integration service."""
+    return container.broker_integration

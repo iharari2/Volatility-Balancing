@@ -76,6 +76,15 @@ class SQLOrdersRepo(OrdersRepo):
                 commission_estimated=getattr(row, "commission_estimated", None),
                 created_at=row.created_at,
                 updated_at=row.updated_at,
+                # Broker integration fields
+                broker_order_id=getattr(row, "broker_order_id", None),
+                broker_status=getattr(row, "broker_status", None),
+                submitted_to_broker_at=getattr(row, "submitted_to_broker_at", None),
+                filled_qty=getattr(row, "filled_qty", 0.0) or 0.0,
+                avg_fill_price=getattr(row, "avg_fill_price", None),
+                total_commission=getattr(row, "total_commission", 0.0) or 0.0,
+                last_broker_update=getattr(row, "last_broker_update", None),
+                rejection_reason=getattr(row, "rejection_reason", None),
             )
 
     def save(self, order: Order) -> None:
@@ -96,6 +105,15 @@ class SQLOrdersRepo(OrdersRepo):
                         commission_estimated=order.commission_estimated,
                         created_at=order.created_at,
                         updated_at=order.updated_at,
+                        # Broker integration fields
+                        broker_order_id=order.broker_order_id,
+                        broker_status=order.broker_status,
+                        submitted_to_broker_at=order.submitted_to_broker_at,
+                        filled_qty=order.filled_qty,
+                        avg_fill_price=order.avg_fill_price,
+                        total_commission=order.total_commission,
+                        last_broker_update=order.last_broker_update,
+                        rejection_reason=order.rejection_reason,
                     )
                 )
             else:
@@ -109,6 +127,15 @@ class SQLOrdersRepo(OrdersRepo):
                 obj.commission_rate_snapshot = order.commission_rate_snapshot
                 obj.commission_estimated = order.commission_estimated
                 obj.updated_at = order.updated_at
+                # Broker integration fields
+                obj.broker_order_id = order.broker_order_id
+                obj.broker_status = order.broker_status
+                obj.submitted_to_broker_at = order.submitted_to_broker_at
+                obj.filled_qty = order.filled_qty
+                obj.avg_fill_price = order.avg_fill_price
+                obj.total_commission = order.total_commission
+                obj.last_broker_update = order.last_broker_update
+                obj.rejection_reason = order.rejection_reason
             s.commit()
 
     def count_for_position_on_day(self, position_id: str, day: date) -> int:
@@ -141,6 +168,8 @@ class SQLOrdersRepo(OrdersRepo):
             return [
                 Order(
                     id=r.id,
+                    tenant_id=r.tenant_id,
+                    portfolio_id=r.portfolio_id,
                     position_id=r.position_id,
                     side=cast(OrderSide, r.side),
                     qty=r.qty,
@@ -150,6 +179,15 @@ class SQLOrdersRepo(OrdersRepo):
                     commission_estimated=getattr(r, "commission_estimated", None),
                     created_at=r.created_at,
                     updated_at=r.updated_at,
+                    # Broker integration fields
+                    broker_order_id=getattr(r, "broker_order_id", None),
+                    broker_status=getattr(r, "broker_status", None),
+                    submitted_to_broker_at=getattr(r, "submitted_to_broker_at", None),
+                    filled_qty=getattr(r, "filled_qty", 0.0) or 0.0,
+                    avg_fill_price=getattr(r, "avg_fill_price", None),
+                    total_commission=getattr(r, "total_commission", 0.0) or 0.0,
+                    last_broker_update=getattr(r, "last_broker_update", None),
+                    rejection_reason=getattr(r, "rejection_reason", None),
                 )
                 for r in rows
             ]
