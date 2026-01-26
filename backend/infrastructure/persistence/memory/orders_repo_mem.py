@@ -72,3 +72,19 @@ class InMemoryOrdersRepo(OrdersRepo):
             for o in self._items.values()
             if o.position_id == position_id and start <= o.created_at < end
         )
+
+    def list_all(self, limit: int = 1000) -> Iterable[Order]:
+        """List all orders, ordered by most recent first."""
+        all_orders = sorted(
+            self._items.values(),
+            key=lambda o: o.created_at,
+            reverse=True,
+        )
+        return all_orders[:limit]
+
+    def list_by_status(self, statuses: Iterable[str], limit: int = 1000) -> Iterable[Order]:
+        """List orders filtered by status values."""
+        status_set = set(statuses)
+        filtered = [o for o in self._items.values() if o.status in status_set]
+        filtered.sort(key=lambda o: o.created_at, reverse=True)
+        return filtered[:limit]

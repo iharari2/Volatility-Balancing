@@ -191,3 +191,53 @@ class SQLOrdersRepo(OrdersRepo):
                 )
                 for r in rows
             ]
+
+    def list_all(self, limit: int = 1000) -> Iterable[Order]:
+        """List all orders, ordered by most recent first."""
+        with self._sf() as s:
+            rows: List[OrderModel] = (
+                s.query(OrderModel)
+                .order_by(desc(OrderModel.created_at))
+                .limit(limit)
+                .all()
+            )
+            return [self._row_to_order(r) for r in rows]
+
+    def list_by_status(self, statuses: Iterable[str], limit: int = 1000) -> Iterable[Order]:
+        """List orders filtered by status values."""
+        status_list = list(statuses)
+        with self._sf() as s:
+            rows: List[OrderModel] = (
+                s.query(OrderModel)
+                .filter(OrderModel.status.in_(status_list))
+                .order_by(desc(OrderModel.created_at))
+                .limit(limit)
+                .all()
+            )
+            return [self._row_to_order(r) for r in rows]
+
+    def _row_to_order(self, r: OrderModel) -> Order:
+        """Convert an OrderModel row to an Order entity."""
+        return Order(
+            id=r.id,
+            tenant_id=r.tenant_id,
+            portfolio_id=r.portfolio_id,
+            position_id=r.position_id,
+            side=cast(OrderSide, r.side),
+            qty=r.qty,
+            status=cast(OrderStatus, r.status),
+            idempotency_key=r.idempotency_key,
+            commission_rate_snapshot=getattr(r, "commission_rate_snapshot", None),
+            commission_estimated=getattr(r, "commission_estimated", None),
+            created_at=r.created_at,
+            updated_at=r.updated_at,
+            # Broker integration fields
+            broker_order_id=getattr(r, "broker_order_id", None),
+            broker_status=getattr(r, "broker_status", None),
+            submitted_to_broker_at=getattr(r, "submitted_to_broker_at", None),
+            filled_qty=getattr(r, "filled_qty", 0.0) or 0.0,
+            avg_fill_price=getattr(r, "avg_fill_price", None),
+            total_commission=getattr(r, "total_commission", 0.0) or 0.0,
+            last_broker_update=getattr(r, "last_broker_update", None),
+            rejection_reason=getattr(r, "rejection_reason", None),
+        )

@@ -647,3 +647,368 @@ class EvaluationTimelineRepoSQL(EvaluationTimelineRepo):
                     pass
             result[col.name] = value
         return result
+
+    def get_position_snapshot_at(
+        self,
+        tenant_id: str,
+        portfolio_id: str,
+        position_id: str,
+        as_of: datetime,
+        mode: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get the position state as of a specific timestamp.
+
+        Returns the most recent evaluation record before or at the given timestamp.
+        """
+        try:
+            with self.session_factory() as session:
+                # Reflect table to get actual columns
+                metadata = MetaData()
+                bind = session.get_bind()
+                reflected_table = Table(
+                    "position_evaluation_timeline", metadata, autoload_with=bind
+                )
+                actual_db_columns = {col.name for col in reflected_table.columns}
+
+                # Determine timestamp column
+                timestamp_col = "evaluated_at" if "evaluated_at" in actual_db_columns else "timestamp"
+
+                # Build query
+                where_clauses = [
+                    "tenant_id = :tenant_id",
+                    "portfolio_id = :portfolio_id",
+                    "position_id = :position_id",
+                    f"{timestamp_col} <= :as_of",
+                ]
+                params = {
+                    "tenant_id": tenant_id,
+                    "portfolio_id": portfolio_id,
+                    "position_id": position_id,
+                    "as_of": as_of,
+                }
+
+                if mode:
+                    where_clauses.append("mode = :mode")
+                    params["mode"] = mode
+
+                columns_str = ", ".join(sorted(actual_db_columns))
+                where_str = " AND ".join(where_clauses)
+
+                sql = f"""
+                    SELECT {columns_str}
+                    FROM position_evaluation_timeline
+                    WHERE {where_str}
+                    ORDER BY {timestamp_col} DESC
+                    LIMIT 1
+                """
+
+                result = session.execute(text(sql), params)
+                row = result.fetchone()
+
+                if not row:
+                    return None
+
+                # Convert to dict
+                record = {}
+                for i, col_name in enumerate(sorted(actual_db_columns)):
+                    value = row[i]
+                    if isinstance(value, str) and col_name in [
+                        "price_validation_rejections",
+                        "price_validation_warnings",
+                        "evaluation_details",
+                    ]:
+                        try:
+                            value = json.loads(value)
+                        except Exception:
+                            pass
+                    record[col_name] = value
+
+                return record
+
+        except Exception as e:
+            self._logger.error(f"Error in get_position_snapshot_at: {e}")
+            return None
+
+    def get_daily_summaries(
+        self,
+        tenant_id: str,
+        portfolio_id: str,
+        position_id: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        mode: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get daily summary of position/portfolio performance.
+
+        Returns aggregated daily data with open/close/high/low values.
+        """
+        try:
+            with self.session_factory() as session:
+                # Reflect table to get actual columns
+                metadata = MetaData()
+                bind = session.get_bind()
+                reflected_table = Table(
+                    "position_evaluation_timeline", metadata, autoload_with=bind
+                )
+                actual_db_columns = {col.name for col in reflected_table.columns}
+
+                # Determine timestamp and value columns
+                timestamp_col = "evaluated_at" if "evaluated_at" in actual_db_columns else "timestamp"
+                value_col = "position_total_value_before" if "position_total_value_before" in actual_db_columns else None
+
+                if not value_col:
+                    self._logger.warning("Cannot compute daily summaries: position_total_value_before column not found")
+                    return []
+
+                # Build WHERE clause
+                where_clauses = [
+                    "tenant_id = :tenant_id",
+                    "portfolio_id = :portfolio_id",
+                ]
+                params = {
+                    "tenant_id": tenant_id,
+                    "portfolio_id": portfolio_id,
+                }
+
+                if position_id:
+                    where_clauses.append("position_id = :position_id")
+                    params["position_id"] = position_id
+
+                if mode:
+                    where_clauses.append("mode = :mode")
+                    params["mode"] = mode
+
+                if start_date:
+                    where_clauses.append(f"{timestamp_col} >= :start_date")
+                    params["start_date"] = start_date
+
+                if end_date:
+                    where_clauses.append(f"{timestamp_col} <= :end_date")
+                    params["end_date"] = end_date
+
+                where_str = " AND ".join(where_clauses)
+
+                # Use date() function for SQLite, DATE() for PostgreSQL
+                # SQLite: date(timestamp)
+                # PostgreSQL: DATE(timestamp)
+                # Both work with DATE() in most cases
+                sql = f"""
+                    SELECT
+                        DATE({timestamp_col}) as date,
+                        MIN({value_col}) as low_value,
+                        MAX({value_col}) as high_value,
+                        COUNT(*) as evaluation_count,
+                        SUM(CASE WHEN action IN ('BUY', 'SELL') THEN 1 ELSE 0 END) as trade_count
+                    FROM position_evaluation_timeline
+                    WHERE {where_str}
+                    GROUP BY DATE({timestamp_col})
+                    ORDER BY date DESC
+                """
+
+                result = session.execute(text(sql), params)
+                rows = result.fetchall()
+
+                summaries = []
+                for row in rows:
+                    # Get first and last values for the day (open/close)
+                    day_date = row[0]
+                    day_params = {**params, "day_date": day_date}
+                    day_where = where_str + f" AND DATE({timestamp_col}) = :day_date"
+
+                    # Get open (first record of day)
+                    open_sql = f"""
+                        SELECT {value_col}
+                        FROM position_evaluation_timeline
+                        WHERE {day_where}
+                        ORDER BY {timestamp_col} ASC
+                        LIMIT 1
+                    """
+                    open_result = session.execute(text(open_sql), day_params)
+                    open_row = open_result.fetchone()
+                    open_value = open_row[0] if open_row else None
+
+                    # Get close (last record of day)
+                    close_sql = f"""
+                        SELECT {value_col}
+                        FROM position_evaluation_timeline
+                        WHERE {day_where}
+                        ORDER BY {timestamp_col} DESC
+                        LIMIT 1
+                    """
+                    close_result = session.execute(text(close_sql), day_params)
+                    close_row = close_result.fetchone()
+                    close_value = close_row[0] if close_row else None
+
+                    summaries.append({
+                        "date": str(day_date),
+                        "open_value": float(open_value) if open_value else None,
+                        "close_value": float(close_value) if close_value else None,
+                        "high_value": float(row[2]) if row[2] else None,
+                        "low_value": float(row[1]) if row[1] else None,
+                        "evaluation_count": row[3],
+                        "trade_count": row[4] or 0,
+                    })
+
+                return summaries
+
+        except Exception as e:
+            self._logger.error(f"Error in get_daily_summaries: {e}")
+            return []
+
+    def get_performance_series(
+        self,
+        tenant_id: str,
+        portfolio_id: str,
+        position_id: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        mode: Optional[str] = None,
+        interval: str = "1h",
+    ) -> List[Dict[str, Any]]:
+        """
+        Get time series of portfolio/position value for charting.
+
+        Returns data points at the specified interval.
+        """
+        try:
+            with self.session_factory() as session:
+                # Reflect table to get actual columns
+                metadata = MetaData()
+                bind = session.get_bind()
+                reflected_table = Table(
+                    "position_evaluation_timeline", metadata, autoload_with=bind
+                )
+                actual_db_columns = {col.name for col in reflected_table.columns}
+
+                # Determine columns
+                timestamp_col = "evaluated_at" if "evaluated_at" in actual_db_columns else "timestamp"
+                total_value_col = "position_total_value_before" if "position_total_value_before" in actual_db_columns else None
+                stock_value_col = "position_stock_value_before" if "position_stock_value_before" in actual_db_columns else None
+                cash_col = "position_cash_before" if "position_cash_before" in actual_db_columns else None
+                qty_col = "position_qty_before" if "position_qty_before" in actual_db_columns else None
+
+                if not total_value_col:
+                    self._logger.warning("Cannot compute performance series: required columns not found")
+                    return []
+
+                # Build WHERE clause
+                where_clauses = [
+                    "tenant_id = :tenant_id",
+                    "portfolio_id = :portfolio_id",
+                ]
+                params = {
+                    "tenant_id": tenant_id,
+                    "portfolio_id": portfolio_id,
+                }
+
+                if position_id:
+                    where_clauses.append("position_id = :position_id")
+                    params["position_id"] = position_id
+
+                if mode:
+                    where_clauses.append("mode = :mode")
+                    params["mode"] = mode
+
+                if start_date:
+                    where_clauses.append(f"{timestamp_col} >= :start_date")
+                    params["start_date"] = start_date
+
+                if end_date:
+                    where_clauses.append(f"{timestamp_col} <= :end_date")
+                    params["end_date"] = end_date
+
+                where_str = " AND ".join(where_clauses)
+
+                # Build SELECT columns
+                select_cols = [
+                    timestamp_col,
+                    total_value_col,
+                ]
+                if stock_value_col:
+                    select_cols.append(stock_value_col)
+                if cash_col:
+                    select_cols.append(cash_col)
+                if qty_col:
+                    select_cols.append(qty_col)
+
+                # For simplicity, return all records and let the caller downsample
+                # A production implementation would use window functions for proper interval sampling
+                sql = f"""
+                    SELECT {', '.join(select_cols)}
+                    FROM position_evaluation_timeline
+                    WHERE {where_str}
+                    ORDER BY {timestamp_col} ASC
+                """
+
+                result = session.execute(text(sql), params)
+                rows = result.fetchall()
+
+                series = []
+                for row in rows:
+                    timestamp = row[0]
+                    total_value = float(row[1]) if row[1] else 0.0
+                    stock_value = float(row[2]) if len(row) > 2 and row[2] else 0.0
+                    cash = float(row[3]) if len(row) > 3 and row[3] else 0.0
+                    qty = float(row[4]) if len(row) > 4 and row[4] else 0.0
+
+                    allocation_pct = (stock_value / total_value * 100) if total_value > 0 else 0.0
+
+                    series.append({
+                        "timestamp": timestamp.isoformat() if hasattr(timestamp, 'isoformat') else str(timestamp),
+                        "total_value": total_value,
+                        "stock_value": stock_value,
+                        "cash": cash,
+                        "qty": qty,
+                        "allocation_pct": round(allocation_pct, 2),
+                    })
+
+                # Downsample if interval specified
+                if interval and len(series) > 0:
+                    series = self._downsample_series(series, interval)
+
+                return series
+
+        except Exception as e:
+            self._logger.error(f"Error in get_performance_series: {e}")
+            return []
+
+    def _downsample_series(self, series: List[Dict[str, Any]], interval: str) -> List[Dict[str, Any]]:
+        """Downsample time series to the specified interval."""
+        if not series:
+            return series
+
+        # Parse interval
+        interval_seconds = {
+            "1m": 60,
+            "5m": 300,
+            "15m": 900,
+            "30m": 1800,
+            "1h": 3600,
+            "4h": 14400,
+            "1d": 86400,
+        }.get(interval, 3600)
+
+        result = []
+        last_bucket = None
+
+        for point in series:
+            # Parse timestamp
+            ts_str = point["timestamp"]
+            if isinstance(ts_str, str):
+                try:
+                    ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+            else:
+                ts = ts_str
+
+            # Calculate bucket
+            bucket = int(ts.timestamp()) // interval_seconds
+
+            if bucket != last_bucket:
+                result.append(point)
+                last_bucket = bucket
+
+        return result

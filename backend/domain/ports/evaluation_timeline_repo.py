@@ -83,3 +83,100 @@ class EvaluationTimelineRepo(ABC):
     ) -> List[Dict[str, Any]]:
         """List evaluation records for a simulation run."""
         ...
+
+    def get_position_snapshot_at(
+        self,
+        tenant_id: str,
+        portfolio_id: str,
+        position_id: str,
+        as_of: datetime,
+        mode: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get the position state as of a specific timestamp.
+
+        Returns the most recent evaluation record before or at the given timestamp.
+
+        Args:
+            tenant_id: Tenant ID
+            portfolio_id: Portfolio ID
+            position_id: Position ID
+            as_of: The timestamp to query state at
+            mode: Filter by mode (LIVE, SIMULATION)
+
+        Returns:
+            The evaluation record closest to (but not after) as_of, or None if not found
+        """
+        # Default implementation using list_by_position
+        records = self.list_by_position(
+            tenant_id=tenant_id,
+            portfolio_id=portfolio_id,
+            position_id=position_id,
+            mode=mode,
+            end_date=as_of,
+            limit=1,
+        )
+        return records[0] if records else None
+
+    def get_daily_summaries(
+        self,
+        tenant_id: str,
+        portfolio_id: str,
+        position_id: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        mode: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get daily summary of position/portfolio performance.
+
+        Returns one record per day with:
+        - date: The date
+        - open_value: First recorded total value of the day
+        - close_value: Last recorded total value of the day
+        - high_value: Maximum total value during the day
+        - low_value: Minimum total value during the day
+        - evaluation_count: Number of evaluations that day
+        - trade_count: Number of trades executed that day
+
+        Args:
+            tenant_id: Tenant ID
+            portfolio_id: Portfolio ID
+            position_id: Optional position ID (if None, aggregates portfolio)
+            start_date: Start date filter
+            end_date: End date filter
+            mode: Filter by mode (LIVE, SIMULATION)
+
+        Returns:
+            List of daily summary records
+        """
+        # Default implementation - subclasses can override with efficient SQL
+        return []
+
+    def get_performance_series(
+        self,
+        tenant_id: str,
+        portfolio_id: str,
+        position_id: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        mode: Optional[str] = None,
+        interval: str = "1h",
+    ) -> List[Dict[str, Any]]:
+        """
+        Get time series of portfolio/position value for charting.
+
+        Args:
+            tenant_id: Tenant ID
+            portfolio_id: Portfolio ID
+            position_id: Optional position ID (if None, uses portfolio)
+            start_date: Start date filter
+            end_date: End date filter
+            mode: Filter by mode (LIVE, SIMULATION)
+            interval: Time interval - "1h", "4h", "1d"
+
+        Returns:
+            List of {timestamp, total_value, stock_value, cash, allocation_pct}
+        """
+        # Default implementation - subclasses can override with efficient SQL
+        return []

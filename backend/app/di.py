@@ -1,8 +1,11 @@
 # backend/app/di.py
 from __future__ import annotations
 
+import logging
 import os
 from typing import Callable, Any
+
+logger = logging.getLogger(__name__)
 
 from domain.ports.positions_repo import PositionsRepo
 from domain.ports.portfolio_repo import PortfolioRepo
@@ -373,7 +376,7 @@ class _Container:
             clock=self.clock,
         )
 
-        # --- Broker Integration (Phase 1) ---
+        # --- Broker Integration (Phase 1 & 3) ---
         # Select broker backend based on environment variable
         broker_backend = os.getenv("APP_BROKER", "stub").lower()
 
@@ -382,8 +385,27 @@ class _Container:
             self.broker = StubBrokerAdapter(fill_mode=fill_mode)
         elif broker_backend == "alpaca":
             # Phase 3: Alpaca integration
-            # For now, fall back to stub
-            self.broker = StubBrokerAdapter(fill_mode="immediate")
+            from infrastructure.config.broker_credentials import (
+                has_alpaca_credentials,
+                get_alpaca_credentials,
+            )
+            from infrastructure.adapters.alpaca_broker_adapter import AlpacaBrokerAdapter
+
+            if has_alpaca_credentials():
+                try:
+                    credentials = get_alpaca_credentials()
+                    self.broker = AlpacaBrokerAdapter(credentials)
+                except ImportError as e:
+                    logger.warning(f"Alpaca not available, falling back to stub: {e}")
+                    self.broker = StubBrokerAdapter(fill_mode="immediate")
+                except Exception as e:
+                    logger.error(f"Failed to initialize Alpaca broker: {e}")
+                    self.broker = StubBrokerAdapter(fill_mode="immediate")
+            else:
+                logger.warning(
+                    "APP_BROKER=alpaca but credentials not configured, falling back to stub"
+                )
+                self.broker = StubBrokerAdapter(fill_mode="immediate")
         else:
             # Default to stub broker
             self.broker = StubBrokerAdapter(fill_mode="immediate")
@@ -585,3 +607,19 @@ def get_broker() -> IBrokerService:
 def get_broker_integration() -> BrokerIntegrationService:
     """Get the broker integration service."""
     return container.broker_integration
+
+
+def get_order_status_worker_manager():
+    """Get the order status worker manager, initialized with dependencies."""
+    from application.services.order_status_worker import OrderStatusWorkerManager
+
+    manager = OrderStatusWorkerManager.get_instance()
+    if manager.worker is None:
+        poll_interval = float(os.getenv("ORDER_STATUS_POLL_INTERVAL", "5.0"))
+        manager.initialize(
+            orders_repo=container.orders,
+            broker_integration=container.broker_integration,
+            positions_repo=container.positions,
+            poll_interval_seconds=poll_interval,
+        )
+    return manager

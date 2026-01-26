@@ -9,6 +9,7 @@ All endpoints are scoped to tenant_id and portfolio_id for security.
 """
 
 from typing import Optional, List, Dict, Any
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 
@@ -491,3 +492,307 @@ def update_position_config(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating position config: {str(e)}")
+
+
+# =============================================================================
+# Position History Endpoints (Multi-Day Trading Support)
+# =============================================================================
+
+
+class PositionSnapshotResponse(BaseModel):
+    """Response model for position snapshot at a point in time."""
+
+    position_id: str
+    as_of: str
+    total_value: Optional[float]
+    stock_value: Optional[float]
+    cash: Optional[float]
+    qty: Optional[float]
+    allocation_pct: Optional[float]
+    market_price: Optional[float]
+    found: bool
+
+
+@router.get("/history/snapshot")
+def get_position_snapshot_at(
+    tenant_id: str,
+    portfolio_id: str,
+    position_id: str,
+    as_of: Optional[str] = Query(None, description="ISO timestamp to query state at (default: now)"),
+    mode: Optional[str] = Query("LIVE", description="Mode filter: LIVE or SIMULATION"),
+) -> PositionSnapshotResponse:
+    """
+    Get position state as of a specific timestamp.
+
+    Useful for viewing historical portfolio state during multi-day trading.
+    Returns the most recent evaluation record before or at the given timestamp.
+    """
+    try:
+        if not hasattr(container, "evaluation_timeline"):
+            raise HTTPException(status_code=501, detail="Timeline repository not available")
+
+        # Parse as_of timestamp
+        if as_of:
+            try:
+                as_of_dt = datetime.fromisoformat(as_of.replace("Z", "+00:00"))
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"Invalid timestamp format: {as_of}")
+        else:
+            as_of_dt = datetime.now(timezone.utc)
+
+        # Get snapshot
+        snapshot = container.evaluation_timeline.get_position_snapshot_at(
+            tenant_id=tenant_id,
+            portfolio_id=portfolio_id,
+            position_id=position_id,
+            as_of=as_of_dt,
+            mode=mode,
+        )
+
+        if not snapshot:
+            return PositionSnapshotResponse(
+                position_id=position_id,
+                as_of=as_of_dt.isoformat(),
+                total_value=None,
+                stock_value=None,
+                cash=None,
+                qty=None,
+                allocation_pct=None,
+                market_price=None,
+                found=False,
+            )
+
+        total_value = snapshot.get("position_total_value_before")
+        stock_value = snapshot.get("position_stock_value_before")
+        cash = snapshot.get("position_cash_before")
+        qty = snapshot.get("position_qty_before")
+        market_price = snapshot.get("market_price_raw")
+
+        allocation_pct = None
+        if total_value and stock_value and total_value > 0:
+            allocation_pct = round((stock_value / total_value) * 100, 2)
+
+        return PositionSnapshotResponse(
+            position_id=position_id,
+            as_of=as_of_dt.isoformat(),
+            total_value=float(total_value) if total_value else None,
+            stock_value=float(stock_value) if stock_value else None,
+            cash=float(cash) if cash else None,
+            qty=float(qty) if qty else None,
+            allocation_pct=allocation_pct,
+            market_price=float(market_price) if market_price else None,
+            found=True,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting position snapshot: {str(e)}")
+
+
+class DailySummary(BaseModel):
+    """Daily summary of position performance."""
+
+    date: str
+    open_value: Optional[float]
+    close_value: Optional[float]
+    high_value: Optional[float]
+    low_value: Optional[float]
+    daily_return_pct: Optional[float]
+    evaluation_count: int
+    trade_count: int
+
+
+class DailySummariesResponse(BaseModel):
+    """Response model for daily summaries."""
+
+    position_id: str
+    days: List[DailySummary]
+    total_days: int
+
+
+@router.get("/history/daily", response_model=DailySummariesResponse)
+def get_position_daily_summaries(
+    tenant_id: str,
+    portfolio_id: str,
+    position_id: str,
+    start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[str] = Query(None, description="End date (ISO format)"),
+    mode: Optional[str] = Query("LIVE", description="Mode filter: LIVE or SIMULATION"),
+) -> DailySummariesResponse:
+    """
+    Get daily performance summaries for a position.
+
+    Returns aggregated daily data including open/close/high/low values,
+    daily returns, and trade counts. Useful for multi-day performance tracking.
+    """
+    try:
+        if not hasattr(container, "evaluation_timeline"):
+            raise HTTPException(status_code=501, detail="Timeline repository not available")
+
+        # Parse dates
+        start_dt = None
+        end_dt = None
+        if start_date:
+            try:
+                start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"Invalid start_date format: {start_date}")
+        if end_date:
+            try:
+                end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"Invalid end_date format: {end_date}")
+
+        # Get daily summaries
+        summaries = container.evaluation_timeline.get_daily_summaries(
+            tenant_id=tenant_id,
+            portfolio_id=portfolio_id,
+            position_id=position_id,
+            start_date=start_dt,
+            end_date=end_dt,
+            mode=mode,
+        )
+
+        # Calculate daily returns
+        days = []
+        prev_close = None
+        for summary in reversed(summaries):  # Process oldest first for return calculation
+            daily_return_pct = None
+            if prev_close and summary.get("open_value"):
+                daily_return_pct = round(
+                    ((summary["close_value"] - prev_close) / prev_close) * 100, 2
+                ) if summary.get("close_value") else None
+
+            days.append(DailySummary(
+                date=summary["date"],
+                open_value=summary.get("open_value"),
+                close_value=summary.get("close_value"),
+                high_value=summary.get("high_value"),
+                low_value=summary.get("low_value"),
+                daily_return_pct=daily_return_pct,
+                evaluation_count=summary.get("evaluation_count", 0),
+                trade_count=summary.get("trade_count", 0),
+            ))
+
+            if summary.get("close_value"):
+                prev_close = summary["close_value"]
+
+        # Reverse back to newest first
+        days.reverse()
+
+        return DailySummariesResponse(
+            position_id=position_id,
+            days=days,
+            total_days=len(days),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting daily summaries: {str(e)}")
+
+
+class PerformancePoint(BaseModel):
+    """Single point in performance time series."""
+
+    timestamp: str
+    total_value: float
+    stock_value: float
+    cash: float
+    qty: float
+    allocation_pct: float
+
+
+class PerformanceSeriesResponse(BaseModel):
+    """Response model for performance time series."""
+
+    position_id: str
+    interval: str
+    start_time: Optional[str]
+    end_time: Optional[str]
+    points: List[PerformancePoint]
+    total_points: int
+
+
+@router.get("/history/performance", response_model=PerformanceSeriesResponse)
+def get_position_performance_series(
+    tenant_id: str,
+    portfolio_id: str,
+    position_id: str,
+    start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[str] = Query(None, description="End date (ISO format)"),
+    interval: str = Query("1h", description="Time interval: 1m, 5m, 15m, 30m, 1h, 4h, 1d"),
+    mode: Optional[str] = Query("LIVE", description="Mode filter: LIVE or SIMULATION"),
+) -> PerformanceSeriesResponse:
+    """
+    Get time series of position value for charting.
+
+    Returns portfolio value at regular intervals for building performance charts.
+    Useful for tracking position performance over multiple days.
+    """
+    try:
+        if not hasattr(container, "evaluation_timeline"):
+            raise HTTPException(status_code=501, detail="Timeline repository not available")
+
+        # Validate interval
+        valid_intervals = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
+        if interval not in valid_intervals:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid interval: {interval}. Must be one of: {', '.join(valid_intervals)}"
+            )
+
+        # Parse dates
+        start_dt = None
+        end_dt = None
+        if start_date:
+            try:
+                start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"Invalid start_date format: {start_date}")
+        if end_date:
+            try:
+                end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"Invalid end_date format: {end_date}")
+
+        # Get performance series
+        series = container.evaluation_timeline.get_performance_series(
+            tenant_id=tenant_id,
+            portfolio_id=portfolio_id,
+            position_id=position_id,
+            start_date=start_dt,
+            end_date=end_dt,
+            mode=mode,
+            interval=interval,
+        )
+
+        points = [
+            PerformancePoint(
+                timestamp=p["timestamp"],
+                total_value=p["total_value"],
+                stock_value=p["stock_value"],
+                cash=p["cash"],
+                qty=p["qty"],
+                allocation_pct=p["allocation_pct"],
+            )
+            for p in series
+        ]
+
+        start_time = points[0].timestamp if points else None
+        end_time = points[-1].timestamp if points else None
+
+        return PerformanceSeriesResponse(
+            position_id=position_id,
+            interval=interval,
+            start_time=start_time,
+            end_time=end_time,
+            points=points,
+            total_points=len(points),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting performance series: {str(e)}")

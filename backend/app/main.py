@@ -25,6 +25,7 @@ from app.routes.dividends import router as dividends_router
 from app.routes.optimization import router as optimization_router
 from app.routes.market import router as market_router
 from app.routes.trading import router as trading_router
+from app.routes.audit import router as audit_router
 
 from app.routes.excel_export import router as excel_export_router
 from app.routes.simulations import router as simulations_router
@@ -42,16 +43,40 @@ def _resolve_worker_enabled(override: bool | None) -> bool:
     return os.getenv("TRADING_WORKER_ENABLED", "true").lower() == "true"
 
 
-def create_app(enable_trading_worker: bool | None = None) -> FastAPI:
+def _resolve_order_status_worker_enabled() -> bool:
+    return os.getenv("ORDER_STATUS_WORKER_ENABLED", "true").lower() == "true"
+
+
+def create_app(enable_trading_worker: bool | None = None, enable_order_status_worker: bool | None = None) -> FastAPI:
     """Create the FastAPI app with optional worker toggle for tests."""
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         """Lifespan context manager for startup and shutdown events."""
+        # Start trading worker
         worker_enabled = _resolve_worker_enabled(enable_trading_worker)
         if worker_enabled:
             start_trading_worker()
+
+        # Start order status worker (polls for order fills from broker)
+        order_status_enabled = (
+            enable_order_status_worker
+            if enable_order_status_worker is not None
+            else _resolve_order_status_worker_enabled()
+        )
+        order_status_manager = None
+        if order_status_enabled:
+            from app.di import get_order_status_worker_manager
+            order_status_manager = get_order_status_worker_manager()
+            await order_status_manager.start()
+
         yield
+
+        # Stop order status worker
+        if order_status_manager is not None:
+            await order_status_manager.stop()
+
+        # Stop trading worker
         if worker_enabled:
             stop_trading_worker()
 
@@ -100,6 +125,7 @@ def create_app(enable_trading_worker: bool | None = None) -> FastAPI:
     app.include_router(optimization_router)  # optimization_router already has /v1 prefix
     app.include_router(market_router)
     app.include_router(trading_router)  # trading_router already has /v1 prefix
+    app.include_router(audit_router)  # audit_router already has /v1 prefix
     app.include_router(excel_export_router)  # excel_export_router already has /v1 prefix
     app.include_router(simulations_router)  # simulations_router already has /v1 prefix
     app.include_router(sim_router)
