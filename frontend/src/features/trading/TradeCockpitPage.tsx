@@ -10,6 +10,7 @@ import {
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
 import EmptyState from '../../components/shared/EmptyState';
 import PerformanceChart from '../../components/charts/PerformanceChart';
+import DecisionMonitor from '../../components/trading/DecisionMonitor';
 import { Briefcase, TrendingUp, BarChart3 } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 
@@ -244,6 +245,13 @@ export default function TradeCockpitPage() {
                   </div>
                 ))}
               </div>
+
+              {/* Decision Monitor */}
+              <DecisionMonitor
+                portfolioId={selectedPortfolioId!}
+                positionId={selectedPositionId!}
+                refreshInterval={10}
+              />
 
               {/* Performance Chart */}
               <div className="bg-white border border-gray-200 rounded-lg p-5">
