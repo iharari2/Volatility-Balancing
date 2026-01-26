@@ -9,7 +9,8 @@ import {
 } from '../../api/cockpit';
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
 import EmptyState from '../../components/shared/EmptyState';
-import { Briefcase, TrendingUp } from 'lucide-react';
+import PerformanceChart from '../../components/charts/PerformanceChart';
+import { Briefcase, TrendingUp, BarChart3 } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 
 const formatCurrency = (value?: number | null) => {
@@ -48,6 +49,7 @@ export default function TradeCockpitPage() {
   const [loadingPortfolios, setLoadingPortfolios] = useState(true);
   const [loadingPositions, setLoadingPositions] = useState(false);
   const [loadingCockpit, setLoadingCockpit] = useState(false);
+  const [chartInterval, setChartInterval] = useState<'1h' | '4h' | '1d'>('1h');
 
   useEffect(() => {
     const loadPortfolios = async () => {
@@ -241,6 +243,38 @@ export default function TradeCockpitPage() {
                     <p className="text-xl font-bold text-gray-900 mt-2">{card.value}</p>
                   </div>
                 ))}
+              </div>
+
+              {/* Performance Chart */}
+              <div className="bg-white border border-gray-200 rounded-lg p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5 text-gray-500" />
+                    <h3 className="text-sm font-semibold text-gray-900">Performance Over Time</h3>
+                  </div>
+                  <div className="flex gap-1">
+                    {(['1h', '4h', '1d'] as const).map((interval) => (
+                      <button
+                        key={interval}
+                        onClick={() => setChartInterval(interval)}
+                        className={`px-3 py-1 text-xs rounded ${
+                          chartInterval === interval
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {interval}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <PerformanceChart
+                  portfolioId={selectedPortfolioId!}
+                  positionId={selectedPositionId!}
+                  interval={chartInterval}
+                  height={250}
+                  chartType="area"
+                />
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
