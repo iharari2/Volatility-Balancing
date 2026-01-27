@@ -324,6 +324,135 @@ def get_worker_status() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Error getting worker status: {str(e)}")
 
 
+@router.get("/trading/diagnostics")
+def get_trading_diagnostics() -> Dict[str, Any]:
+    """
+    Get comprehensive diagnostics for why trading might not be happening.
+
+    This endpoint checks:
+    1. Worker status
+    2. Portfolio states
+    3. Position anchor prices
+    4. Timeline write status
+    """
+    try:
+        from application.services.trading_worker import get_trading_worker
+
+        diagnostics = {
+            "worker": {},
+            "portfolios": [],
+            "active_positions": [],
+            "issues": [],
+            "recommendations": [],
+        }
+
+        # Check worker status
+        try:
+            worker = get_trading_worker()
+            diagnostics["worker"] = {
+                "running": worker.is_running(),
+                "enabled": worker.enabled,
+                "interval_seconds": worker.interval_seconds,
+            }
+            if not worker.enabled:
+                diagnostics["issues"].append("Worker is DISABLED")
+                diagnostics["recommendations"].append(
+                    "Enable worker: POST /v1/trading/worker/enable with {\"enabled\": true}"
+                )
+            if not worker.is_running():
+                diagnostics["issues"].append("Worker is NOT RUNNING")
+        except Exception as e:
+            diagnostics["worker"] = {"error": str(e)}
+            diagnostics["issues"].append(f"Could not get worker status: {e}")
+
+        # Check portfolios
+        tenant_id = "default"
+        portfolios = container.portfolio_repo.list_all(tenant_id=tenant_id)
+
+        for portfolio in portfolios:
+            positions = container.positions.list_all(
+                tenant_id=portfolio.tenant_id,
+                portfolio_id=portfolio.id,
+            )
+            positions_with_anchor = [p for p in positions if p.anchor_price is not None]
+
+            portfolio_info = {
+                "id": portfolio.id,
+                "name": portfolio.name,
+                "trading_state": portfolio.trading_state,
+                "is_running": portfolio.trading_state == "RUNNING",
+                "total_positions": len(positions),
+                "positions_with_anchor": len(positions_with_anchor),
+            }
+            diagnostics["portfolios"].append(portfolio_info)
+
+            if portfolio.trading_state != "RUNNING":
+                diagnostics["issues"].append(
+                    f"Portfolio '{portfolio.name}' (id={portfolio.id}) is in state '{portfolio.trading_state}', not 'RUNNING'"
+                )
+                diagnostics["recommendations"].append(
+                    f"Set portfolio to RUNNING: PUT /v1/tenants/default/portfolios/{portfolio.id}/trading-state with {{\"state\": \"RUNNING\"}}"
+                )
+
+            if portfolio.trading_state == "RUNNING":
+                for pos in positions:
+                    if pos.anchor_price is not None:
+                        diagnostics["active_positions"].append({
+                            "position_id": pos.id,
+                            "portfolio_id": portfolio.id,
+                            "asset": pos.asset_symbol,
+                            "anchor_price": pos.anchor_price,
+                            "qty": pos.qty,
+                            "cash": getattr(pos, 'cash', 0),
+                        })
+                    else:
+                        diagnostics["issues"].append(
+                            f"Position {pos.id} ({pos.asset_symbol}) has no anchor_price set"
+                        )
+
+        # Check timeline writes
+        if hasattr(container, "evaluation_timeline"):
+            try:
+                # Try to get recent timeline entries
+                for portfolio in portfolios:
+                    if portfolio.trading_state == "RUNNING":
+                        positions = container.positions.list_all(
+                            tenant_id=portfolio.tenant_id,
+                            portfolio_id=portfolio.id,
+                        )
+                        for pos in positions:
+                            if pos.anchor_price is not None:
+                                timeline = container.evaluation_timeline.list_by_position(
+                                    tenant_id=portfolio.tenant_id,
+                                    portfolio_id=portfolio.id,
+                                    position_id=pos.id,
+                                    mode="LIVE",
+                                    limit=1,
+                                )
+                                if not timeline:
+                                    diagnostics["issues"].append(
+                                        f"Position {pos.id} ({pos.asset_symbol}) has NO timeline entries"
+                                    )
+                                    diagnostics["recommendations"].append(
+                                        f"Run manual cycle: POST /v1/trading/cycle?position_id={pos.id}"
+                                    )
+            except Exception as e:
+                diagnostics["issues"].append(f"Error checking timeline: {e}")
+
+        # Summary
+        diagnostics["summary"] = {
+            "total_issues": len(diagnostics["issues"]),
+            "active_position_count": len(diagnostics["active_positions"]),
+            "can_trade": len(diagnostics["active_positions"]) > 0 and diagnostics["worker"].get("enabled", False),
+        }
+
+        return diagnostics
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error getting diagnostics: {str(e)}")
+
+
 class WorkerEnableRequest(BaseModel):
     enabled: bool
 

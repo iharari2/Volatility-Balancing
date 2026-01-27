@@ -17,7 +17,7 @@ class Portfolio:
     description: Optional[str] = None
     user_id: str = "default"  # For multi-user support in the future
     type: str = "LIVE"  # LIVE/SIM/SANDBOX
-    trading_state: str = "NOT_CONFIGURED"  # READY/RUNNING/PAUSED/ERROR/NOT_CONFIGURED
+    trading_state: str = "RUNNING"  # READY/RUNNING/PAUSED/ERROR/NOT_CONFIGURED
     trading_hours_policy: str = "OPEN_ONLY"  # OPEN_ONLY/OPEN_PLUS_AFTER_HOURS
 
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))

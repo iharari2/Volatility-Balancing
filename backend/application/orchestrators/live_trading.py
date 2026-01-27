@@ -62,8 +62,31 @@ class LiveTradingOrchestrator:
         Args:
             source: Source of the cycle trigger ("worker", "api/manual", etc.)
         """
-        for position_id in self.position_repo.get_active_positions_for_trading():
-            self.run_cycle_for_position(position_id, source=source)
+        import logging
+        logger = logging.getLogger(__name__)
+
+        positions_evaluated = 0
+        triggers_fired = 0
+        orders_created = 0
+        errors_count = 0
+
+        active_positions = list(self.position_repo.get_active_positions_for_trading())
+        logger.info("Trading cycle starting: %d active positions to evaluate", len(active_positions))
+
+        for position_id in active_positions:
+            result = self.run_cycle_for_position(position_id, source=source)
+            positions_evaluated += 1
+            if result is not None:
+                # Check if order was created by looking at event log
+                # Note: This is a simplified check - actual order creation is tracked in run_cycle_for_position
+                pass
+            else:
+                errors_count += 1
+
+        logger.info(
+            "Trading cycle complete: %d positions evaluated, %d errors",
+            positions_evaluated, errors_count
+        )
 
     def run_cycle_for_position(self, position_id: str, source: str = "worker") -> Optional[str]:
         """

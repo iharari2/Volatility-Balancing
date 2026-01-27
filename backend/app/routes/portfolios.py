@@ -806,6 +806,121 @@ def update_portfolio_config(
         raise HTTPException(status_code=500, detail=f"Error updating portfolio config: {str(e)}")
 
 
+class SetTradingStateRequest(BaseModel):
+    """Request model for setting portfolio trading state."""
+    state: str  # RUNNING, PAUSED, NOT_CONFIGURED
+
+
+@router.get("/{portfolio_id}/trading-state", response_model=Dict[str, Any])
+def get_portfolio_trading_state(
+    tenant_id: str,
+    portfolio_id: str,
+    portfolio_service: PortfolioService = Depends(get_portfolio_service),
+) -> Dict[str, Any]:
+    """
+    Get portfolio trading state.
+
+    Returns current trading state and diagnostics about why trading might not be active.
+    """
+    try:
+        portfolio = portfolio_service.get_portfolio(tenant_id=tenant_id, portfolio_id=portfolio_id)
+        if not portfolio:
+            raise HTTPException(status_code=404, detail="Portfolio not found")
+
+        # Get positions to check anchor status
+        positions = portfolio_service.get_portfolio_positions(tenant_id=tenant_id, portfolio_id=portfolio_id)
+        positions_with_anchor = [p for p in positions if p.anchor_price is not None]
+
+        # Get worker status
+        worker_status = {"running": False, "enabled": False}
+        try:
+            from application.services.trading_worker import get_trading_worker
+            worker = get_trading_worker()
+            worker_status = {
+                "running": worker.is_running(),
+                "enabled": worker.enabled,
+                "interval_seconds": worker.interval_seconds,
+            }
+        except Exception:
+            pass
+
+        return {
+            "portfolio_id": portfolio_id,
+            "trading_state": portfolio.trading_state,
+            "is_active_for_trading": portfolio.trading_state == "RUNNING",
+            "total_positions": len(positions),
+            "positions_with_anchor": len(positions_with_anchor),
+            "can_trade": portfolio.trading_state == "RUNNING" and len(positions_with_anchor) > 0,
+            "worker_status": worker_status,
+            "diagnostics": {
+                "portfolio_state_ok": portfolio.trading_state == "RUNNING",
+                "has_positions_with_anchor": len(positions_with_anchor) > 0,
+                "worker_running": worker_status.get("running", False),
+                "worker_enabled": worker_status.get("enabled", False),
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting trading state: {str(e)}")
+
+
+@router.put("/{portfolio_id}/trading-state", response_model=Dict[str, Any])
+def set_portfolio_trading_state(
+    tenant_id: str,
+    portfolio_id: str,
+    request: SetTradingStateRequest,
+    portfolio_service: PortfolioService = Depends(get_portfolio_service),
+) -> Dict[str, Any]:
+    """
+    Set portfolio trading state.
+
+    Valid states:
+    - RUNNING: Portfolio is actively trading (background worker will evaluate positions)
+    - PAUSED: Trading is paused (evaluations will not occur)
+    - NOT_CONFIGURED: Trading not configured yet (default state)
+    """
+    try:
+        valid_states = ["RUNNING", "PAUSED", "NOT_CONFIGURED"]
+        state = request.state.upper()
+        if state not in valid_states:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid state: {request.state}. Must be one of: {', '.join(valid_states)}"
+            )
+
+        portfolio = portfolio_service.get_portfolio(tenant_id=tenant_id, portfolio_id=portfolio_id)
+        if not portfolio:
+            raise HTTPException(status_code=404, detail="Portfolio not found")
+
+        # Update trading state directly in database
+        from app.di import container
+        if hasattr(container.portfolio_repo, '_sf'):
+            from infrastructure.persistence.sql.models import PortfolioModel
+            with container.portfolio_repo._sf() as session:
+                portfolio_model = session.get(PortfolioModel, portfolio_id)
+                if portfolio_model:
+                    old_state = portfolio_model.trading_state
+                    portfolio_model.trading_state = state
+                    session.commit()
+
+                    return {
+                        "message": f"Portfolio trading state changed from {old_state} to {state}",
+                        "portfolio_id": portfolio_id,
+                        "old_state": old_state,
+                        "new_state": state,
+                        "is_active_for_trading": state == "RUNNING",
+                    }
+
+        raise HTTPException(status_code=500, detail="Could not update portfolio state")
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error setting trading state: {str(e)}")
+
+
 @router.get("/{portfolio_id}/config/effective", response_model=Dict[str, Any])
 def get_effective_config(
     tenant_id: str,

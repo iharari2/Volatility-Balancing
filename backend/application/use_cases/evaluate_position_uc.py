@@ -597,7 +597,7 @@ class EvaluatePositionUC:
             )
             max_trade_notional = total_value * max_pct
             max_buy_notional = min(position.cash, max_trade_notional)
-            max_buy_qty = max_buy_notional / current_price
+            max_buy_qty = max_buy_notional / float(current_price)
             if raw_qty > max_buy_qty:
                 self._logger.debug(
                     "Order sizing capped buy qty=%.2f to max_per_trade=%.2f (%.1f%% of $%.2f cash).",
@@ -1404,12 +1404,16 @@ class EvaluatePositionUC:
                     "Attempting to save timeline row for position %s.", position.id
                 )
                 record_id = self.evaluation_timeline_repo.save(timeline_row)
-                self._logger.debug("Timeline row saved successfully (record_id=%s).", record_id)
+                self._logger.info(
+                    "Timeline write result for position %s: success=True, record_id=%s, action=%s",
+                    position.id, record_id, action
+                )
                 return record_id
             except Exception as timeline_error:
                 # Don't fail evaluation if timeline write fails (e.g., missing columns)
                 self._logger.warning(
-                    "Failed to write timeline row: %s", timeline_error, exc_info=True
+                    "Timeline write result for position %s: success=False, error=%s",
+                    position.id, timeline_error, exc_info=True
                 )
 
             # Also write to PositionEvent (simplified immutable log)

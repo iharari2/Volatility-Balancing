@@ -36,6 +36,37 @@ from application.services.trading_worker import start_trading_worker, stop_tradi
 API_PREFIX = "/v1"
 
 
+def _fix_portfolio_trading_states():
+    """
+    Fix existing portfolios that have trading_state != RUNNING.
+
+    This ensures all portfolios are active for trading by default.
+    Called on app startup to fix legacy portfolios created before the default was changed.
+    """
+    try:
+        from app.di import container
+        from infrastructure.persistence.sql.models import PortfolioModel
+
+        if hasattr(container, 'portfolio_repo') and hasattr(container.portfolio_repo, '_sf'):
+            with container.portfolio_repo._sf() as session:
+                # Find all portfolios not in RUNNING state
+                portfolios = session.query(PortfolioModel).filter(
+                    PortfolioModel.trading_state != "RUNNING"
+                ).all()
+
+                if portfolios:
+                    for portfolio in portfolios:
+                        old_state = portfolio.trading_state
+                        portfolio.trading_state = "RUNNING"
+                        print(f"[Startup] Fixed portfolio '{portfolio.name}' (id={portfolio.id}): {old_state} -> RUNNING")
+                    session.commit()
+                    print(f"[Startup] Fixed {len(portfolios)} portfolio(s) to RUNNING state")
+                else:
+                    print("[Startup] All portfolios already in RUNNING state")
+    except Exception as e:
+        print(f"[Startup] Warning: Could not fix portfolio states: {e}")
+
+
 def _resolve_worker_enabled(override: bool | None) -> bool:
     if override is not None:
         return override
@@ -48,6 +79,10 @@ def create_app(enable_trading_worker: bool | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         """Lifespan context manager for startup and shutdown events."""
+        # Fix any portfolios stuck in non-RUNNING state
+        _fix_portfolio_trading_states()
+
+        # Start trading worker
         worker_enabled = _resolve_worker_enabled(enable_trading_worker)
         if worker_enabled:
             start_trading_worker()
@@ -95,7 +130,7 @@ def create_app(enable_trading_worker: bool | None = None) -> FastAPI:
     app.include_router(version_router)
     app.include_router(positions_router)  # positions_router already has /v1 prefix
     app.include_router(portfolios_router)  # portfolios_router already has /v1/portfolios prefix
-    app.include_router(orders_router, prefix=API_PREFIX)
+    app.include_router(orders_router)  # orders_router already has /api prefix in routes
     app.include_router(dividends_router)  # dividends_router already has /v1 prefix
     app.include_router(optimization_router)  # optimization_router already has /v1 prefix
     app.include_router(market_router)

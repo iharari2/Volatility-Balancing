@@ -239,7 +239,7 @@ class PortfolioModel(Base):
     tenant_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     type: Mapped[str] = mapped_column(String, nullable=False, default="LIVE")  # LIVE/SIM/SANDBOX
     trading_state: Mapped[str] = mapped_column(
-        String, nullable=False, default="NOT_CONFIGURED"
+        String, nullable=False, default="RUNNING"
     )  # READY/RUNNING/PAUSED/ERROR/NOT_CONFIGURED
     trading_hours_policy: Mapped[str] = mapped_column(
         String, nullable=False, default="OPEN_ONLY"
@@ -972,4 +972,63 @@ class PositionEventModel(Base):
             name="ck_position_events_event_type",
         ),
         CheckConstraint("action IN ('BUY', 'SELL', 'NONE')", name="ck_position_events_action"),
+    )
+
+
+class TradingExperimentModel(Base):
+    """
+    SQL model for TradingExperiment entity.
+
+    Tracks multi-day trading experiments comparing portfolio performance
+    against buy-and-hold baseline.
+    """
+
+    __tablename__ = "trading_experiments"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    ticker: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    initial_capital: Mapped[float] = mapped_column(Float, nullable=False)
+
+    # Status: RUNNING, PAUSED, COMPLETED
+    status: Mapped[str] = mapped_column(String, nullable=False, default="RUNNING", index=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Position reference
+    position_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    portfolio_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+
+    # Buy-and-hold baseline
+    baseline_price: Mapped[float] = mapped_column(Float, nullable=False)
+    baseline_shares_equivalent: Mapped[float] = mapped_column(Float, nullable=False)
+
+    # Running metrics
+    current_portfolio_value: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    current_buyhold_value: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    evaluation_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    trade_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_commission_paid: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+
+    __table_args__ = (
+        Index("ix_trading_experiments_tenant_id", "tenant_id"),
+        Index("ix_trading_experiments_status", "status"),
+        Index("ix_trading_experiments_ticker", "ticker"),
+        Index("ix_trading_experiments_position_id", "position_id"),
+        Index("ix_trading_experiments_portfolio_id", "portfolio_id"),
+        CheckConstraint(
+            "status IN ('RUNNING', 'PAUSED', 'COMPLETED')",
+            name="ck_trading_experiments_status",
+        ),
     )
