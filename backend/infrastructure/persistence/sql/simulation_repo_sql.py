@@ -88,104 +88,110 @@ def _model_from_entity(entity: SimulationResult) -> SimulationResultModel:
 class SQLSimulationRepo(SimulationRepo):
     """SQL implementation of simulation repository."""
 
-    def __init__(self, session: Session):
-        self.session = session
+    def __init__(self, session_factory):
+        """Initialize with a sessionmaker factory."""
+        self._sf = session_factory
 
     def save_simulation_result(self, result: SimulationResult) -> None:
         """Save a simulation result."""
-        # Check if result already exists
-        existing = (
-            self.session.query(SimulationResultModel)
-            .filter(SimulationResultModel.id == str(result.id))
-            .first()
-        )
+        with self._sf() as session:
+            # Check if result already exists
+            existing = (
+                session.query(SimulationResultModel)
+                .filter(SimulationResultModel.id == str(result.id))
+                .first()
+            )
 
-        if existing:
-            # Update existing
-            existing.ticker = result.ticker
-            existing.start_date = datetime.fromisoformat(result.start_date.replace("Z", "+00:00"))
-            existing.end_date = datetime.fromisoformat(result.end_date.replace("Z", "+00:00"))
-            existing.total_trading_days = result.total_trading_days
-            existing.initial_cash = result.initial_cash
-            existing.algorithm_trades = result.algorithm_trades
-            existing.algorithm_pnl = result.algorithm_pnl
-            existing.algorithm_return_pct = result.algorithm_return_pct
-            existing.algorithm_volatility = result.algorithm_volatility
-            existing.algorithm_sharpe_ratio = result.algorithm_sharpe_ratio
-            existing.algorithm_max_drawdown = result.algorithm_max_drawdown
-            existing.buy_hold_pnl = result.buy_hold_pnl
-            existing.buy_hold_return_pct = result.buy_hold_return_pct
-            existing.buy_hold_volatility = result.buy_hold_volatility
-            existing.buy_hold_sharpe_ratio = result.buy_hold_sharpe_ratio
-            existing.buy_hold_max_drawdown = result.buy_hold_max_drawdown
-            existing.excess_return = result.excess_return
-            existing.alpha = result.alpha
-            existing.beta = result.beta
-            existing.information_ratio = result.information_ratio
-            existing.trade_log = result.trade_log
-            existing.daily_returns = result.daily_returns
-            existing.dividend_analysis = result.dividend_analysis
-            existing.price_data = result.price_data
-            existing.trigger_analysis = result.trigger_analysis
-            existing.time_series_data = result.time_series_data
-            existing.debug_info = result.debug_info
-            existing.updated_at = datetime.now(timezone.utc)
-        else:
-            # Create new
-            model = _model_from_entity(result)
-            self.session.add(model)
+            if existing:
+                # Update existing
+                existing.ticker = result.ticker
+                existing.start_date = datetime.fromisoformat(result.start_date.replace("Z", "+00:00"))
+                existing.end_date = datetime.fromisoformat(result.end_date.replace("Z", "+00:00"))
+                existing.total_trading_days = result.total_trading_days
+                existing.initial_cash = result.initial_cash
+                existing.algorithm_trades = result.algorithm_trades
+                existing.algorithm_pnl = result.algorithm_pnl
+                existing.algorithm_return_pct = result.algorithm_return_pct
+                existing.algorithm_volatility = result.algorithm_volatility
+                existing.algorithm_sharpe_ratio = result.algorithm_sharpe_ratio
+                existing.algorithm_max_drawdown = result.algorithm_max_drawdown
+                existing.buy_hold_pnl = result.buy_hold_pnl
+                existing.buy_hold_return_pct = result.buy_hold_return_pct
+                existing.buy_hold_volatility = result.buy_hold_volatility
+                existing.buy_hold_sharpe_ratio = result.buy_hold_sharpe_ratio
+                existing.buy_hold_max_drawdown = result.buy_hold_max_drawdown
+                existing.excess_return = result.excess_return
+                existing.alpha = result.alpha
+                existing.beta = result.beta
+                existing.information_ratio = result.information_ratio
+                existing.trade_log = result.trade_log
+                existing.daily_returns = result.daily_returns
+                existing.dividend_analysis = result.dividend_analysis
+                existing.price_data = result.price_data
+                existing.trigger_analysis = result.trigger_analysis
+                existing.time_series_data = result.time_series_data
+                existing.debug_info = result.debug_info
+                existing.updated_at = datetime.now(timezone.utc)
+            else:
+                # Create new
+                model = _model_from_entity(result)
+                session.add(model)
 
-        self.session.commit()
+            session.commit()
 
     def get_simulation_result(self, result_id: UUID) -> Optional[SimulationResult]:
         """Get a simulation result by ID."""
-        model = (
-            self.session.query(SimulationResultModel)
-            .filter(SimulationResultModel.id == str(result_id))
-            .first()
-        )
+        with self._sf() as session:
+            model = (
+                session.query(SimulationResultModel)
+                .filter(SimulationResultModel.id == str(result_id))
+                .first()
+            )
 
-        if model:
-            return _entity_from_model(model)
-        return None
+            if model:
+                return _entity_from_model(model)
+            return None
 
     def list_simulations(self, limit: int = 100, offset: int = 0) -> List[SimulationResult]:
         """List all simulation results with pagination."""
-        models = (
-            self.session.query(SimulationResultModel)
-            .order_by(desc(SimulationResultModel.created_at))
-            .offset(offset)
-            .limit(limit)
-            .all()
-        )
+        with self._sf() as session:
+            models = (
+                session.query(SimulationResultModel)
+                .order_by(desc(SimulationResultModel.created_at))
+                .offset(offset)
+                .limit(limit)
+                .all()
+            )
 
-        return [_entity_from_model(model) for model in models]
+            return [_entity_from_model(model) for model in models]
 
     def get_simulations_by_ticker(self, ticker: str, limit: int = 100) -> List[SimulationResult]:
         """Get simulation results for a specific ticker."""
-        models = (
-            self.session.query(SimulationResultModel)
-            .filter(SimulationResultModel.ticker == ticker)
-            .order_by(desc(SimulationResultModel.created_at))
-            .limit(limit)
-            .all()
-        )
+        with self._sf() as session:
+            models = (
+                session.query(SimulationResultModel)
+                .filter(SimulationResultModel.ticker == ticker)
+                .order_by(desc(SimulationResultModel.created_at))
+                .limit(limit)
+                .all()
+            )
 
-        return [_entity_from_model(model) for model in models]
+            return [_entity_from_model(model) for model in models]
 
     def delete_simulation_result(self, result_id: UUID) -> bool:
         """Delete a simulation result by ID."""
-        model = (
-            self.session.query(SimulationResultModel)
-            .filter(SimulationResultModel.id == str(result_id))
-            .first()
-        )
+        with self._sf() as session:
+            model = (
+                session.query(SimulationResultModel)
+                .filter(SimulationResultModel.id == str(result_id))
+                .first()
+            )
 
-        if model:
-            self.session.delete(model)
-            self.session.commit()
-            return True
-        return False
+            if model:
+                session.delete(model)
+                session.commit()
+                return True
+            return False
 
     def run_simulation(
         self, ticker: str, start_date: str, end_date: str, parameters: dict

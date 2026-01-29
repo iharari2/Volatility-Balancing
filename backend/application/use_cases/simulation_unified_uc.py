@@ -373,45 +373,30 @@ class SimulationUnifiedUC:
                     ticker=result.ticker,
                     start_date=result.start_date.isoformat(),
                     end_date=result.end_date.isoformat(),
-                    parameters={
-                        "initial_cash": result.initial_cash,
-                        "position_config": position_config or {},
-                        "include_after_hours": include_after_hours,
-                        "intraday_interval_minutes": intraday_interval_minutes,
-                        "detailed_trigger_analysis": detailed_trigger_analysis,
-                        "initial_asset_value": initial_asset_value,
-                        "initial_asset_units": initial_asset_units,
-                    },
-                    metrics={
-                        "algorithm_trades": result.algorithm_trades,
-                        "algorithm_pnl": result.algorithm_pnl,
-                        "algorithm_return_pct": result.algorithm_return_pct,
-                        "algorithm_volatility": result.algorithm_volatility,
-                        "algorithm_sharpe_ratio": result.algorithm_sharpe_ratio,
-                        "algorithm_max_drawdown": result.algorithm_max_drawdown,
-                        "buy_hold_pnl": result.buy_hold_pnl,
-                        "buy_hold_return_pct": result.buy_hold_return_pct,
-                        "buy_hold_volatility": result.buy_hold_volatility,
-                        "buy_hold_sharpe_ratio": result.buy_hold_sharpe_ratio,
-                        "buy_hold_max_drawdown": result.buy_hold_max_drawdown,
-                        "excess_return": result.excess_return,
-                        "alpha": result.alpha,
-                        "beta": result.beta,
-                        "information_ratio": result.information_ratio,
-                        "total_dividends_received": result.total_dividends_received,
-                    },
-                    raw_data={
-                        "trade_log": result.trade_log,
-                        "daily_returns": result.daily_returns,
-                        "dividend_events": result.dividend_events,
-                        "price_data": result.price_data,
-                        "trigger_analysis": result.trigger_analysis,
-                        "time_series_data": result.time_series_data,
-                        "dividend_analysis": result.dividend_analysis,
-                        "debug_storage_info": result.debug_storage_info,
-                        "debug_retrieval_info": result.debug_retrieval_info,
-                        "debug_info": result.debug_info,
-                    },
+                    total_trading_days=result.total_trading_days,
+                    initial_cash=result.initial_cash,
+                    algorithm_trades=result.algorithm_trades,
+                    algorithm_pnl=result.algorithm_pnl,
+                    algorithm_return_pct=result.algorithm_return_pct,
+                    algorithm_volatility=result.algorithm_volatility,
+                    algorithm_sharpe_ratio=result.algorithm_sharpe_ratio,
+                    algorithm_max_drawdown=result.algorithm_max_drawdown,
+                    buy_hold_pnl=result.buy_hold_pnl,
+                    buy_hold_return_pct=result.buy_hold_return_pct,
+                    buy_hold_volatility=result.buy_hold_volatility,
+                    buy_hold_sharpe_ratio=result.buy_hold_sharpe_ratio,
+                    buy_hold_max_drawdown=result.buy_hold_max_drawdown,
+                    excess_return=result.excess_return,
+                    alpha=result.alpha,
+                    beta=result.beta,
+                    information_ratio=result.information_ratio,
+                    trade_log=result.trade_log,
+                    daily_returns=result.daily_returns,
+                    dividend_analysis=result.dividend_analysis,
+                    price_data=result.price_data,
+                    trigger_analysis=result.trigger_analysis,
+                    time_series_data=result.time_series_data,
+                    debug_info=result.debug_info,
                 )
 
                 self.simulation_repo.save_simulation_result(domain_result)
@@ -497,33 +482,34 @@ class SimulationUnifiedUC:
         guardrails = GuardrailPolicy(
             min_stock_alloc_pct=position_config["guardrails"]["min_stock_alloc_pct"],
             max_stock_alloc_pct=position_config["guardrails"]["max_stock_alloc_pct"],
-            max_orders_per_day=100,  # Allow more orders for simulation
+            max_orders_per_day=999999,  # Unlimited for simulation (clock uses real date, not sim date)
         )
 
         # Calculate initial position based on asset allocation
+        # Default to 50/50 split if no asset value/units specified
         initial_qty = 0.0
         initial_cash_after_asset = initial_cash
 
-        if initial_asset_value is not None and initial_asset_value > 0:
-            # Use asset value to calculate shares at first price
-            if sim_data.price_data:
-                first_price = sim_data.price_data[0].price
-                if first_price <= 0:
-                    raise ValueError(f"Invalid first price: {first_price}")
+        if sim_data.price_data:
+            first_price = sim_data.price_data[0].price
+            if first_price <= 0:
+                raise ValueError(f"Invalid first price: {first_price}")
+
+            if initial_asset_value is not None and initial_asset_value > 0:
+                # Use asset value to calculate shares at first price
                 initial_qty = initial_asset_value / first_price
-                # Don't subtract asset value from cash - this represents the total portfolio value
-                # The cash represents the liquid portion, asset_value represents the invested portion
                 initial_cash_after_asset = initial_cash
-        elif initial_asset_units is not None and initial_asset_units > 0:
-            # Use specified number of units
-            if sim_data.price_data:
-                first_price = sim_data.price_data[0].price
-                if first_price <= 0:
-                    raise ValueError(f"Invalid first price: {first_price}")
+            elif initial_asset_units is not None and initial_asset_units > 0:
+                # Use specified number of units
                 initial_qty = initial_asset_units
-                # cost = initial_qty * first_price  # Not used in current implementation
-                # Don't subtract cost from cash - this represents the total portfolio value
                 initial_cash_after_asset = initial_cash
+            else:
+                # Default: 50/50 split between cash and shares
+                # Total value = initial_cash, split equally
+                half_value = initial_cash / 2.0
+                initial_qty = half_value / first_price
+                initial_cash_after_asset = half_value
+                print(f"Using default 50/50 split: {initial_qty:.4f} shares @ ${first_price:.2f} + ${initial_cash_after_asset:.2f} cash")
 
         position = Position(
             id=position_id,
@@ -559,8 +545,15 @@ class SimulationUnifiedUC:
 
         for price_data in sim_data.price_data:
             current_price = price_data.price
+            # Ensure timestamp is Python datetime, not pandas Timestamp
             current_time = price_data.timestamp
+            if hasattr(current_time, 'to_pydatetime'):
+                current_time = current_time.to_pydatetime()
             current_day = current_time.date()
+
+            # Update the market_storage price cache so get_price() returns current simulation price
+            if market_data_source and hasattr(market_data_source, 'store_price_data'):
+                market_data_source.store_price_data(sim_data.ticker, price_data)
 
             # Update progress less frequently for better performance
             processed_points += 1
@@ -694,6 +687,10 @@ class SimulationUnifiedUC:
                         # Update position in repository
                         temp_positions.save(position)
 
+            # Capture anchor price BEFORE evaluation (used for trigger calculation)
+            # This is the reference price that determines if a trigger fires
+            pre_eval_anchor = position.anchor_price
+
             # Track trigger analysis (optimized for performance)
             # Only create detailed trigger info if detailed analysis is enabled
             if detailed_trigger_analysis:
@@ -702,7 +699,7 @@ class SimulationUnifiedUC:
                     "date": current_time.strftime("%Y-%m-%d"),
                     "time": current_time.strftime("%H:%M:%S"),
                     "price": current_price,
-                    "anchor_price": position.anchor_price,
+                    "anchor_price": pre_eval_anchor,
                     "price_change_pct": (
                         ((current_price / position.anchor_price) - 1) * 100
                         if position.anchor_price
@@ -735,10 +732,10 @@ class SimulationUnifiedUC:
                 trigger_info = {
                     "timestamp": current_time.isoformat(),
                     "price": current_price,
-                    "anchor_price": position.anchor_price,
+                    "anchor_price": pre_eval_anchor,
                     "price_change_pct": (
-                        ((current_price / position.anchor_price) - 1) * 100
-                        if position.anchor_price
+                        ((current_price / pre_eval_anchor) - 1) * 100
+                        if pre_eval_anchor
                         else 0
                     ),
                     "triggered": False,
@@ -751,7 +748,16 @@ class SimulationUnifiedUC:
 
             # Evaluate position using the actual trading logic
             try:
-                evaluation = evaluate_uc.evaluate(position_id, current_price)
+                # Simulation uses synthetic tenant/portfolio IDs (must match position creation)
+                sim_tenant_id = "simulation"
+                sim_portfolio_id = "simulation"
+                evaluation = evaluate_uc.evaluate(
+                    tenant_id=sim_tenant_id,
+                    portfolio_id=sim_portfolio_id,
+                    position_id=position_id,
+                    current_price=current_price,
+                    write_timeline=False,  # Simulation writes its own timeline
+                )
 
                 # Write to timeline for EVERY evaluation (simulation mode)
                 self._write_simulation_timeline_row(
@@ -766,101 +772,135 @@ class SimulationUnifiedUC:
                     timestamp=current_time,
                 )
 
-                if evaluation["trigger_detected"] and evaluation["order_proposal"]:
-                    order_proposal = evaluation["order_proposal"]
-                    trigger_info.update(
-                        {
-                            "triggered": True,
-                            "side": order_proposal["side"],
-                            "qty": order_proposal["trimmed_qty"],
-                            "reason": "Trigger condition met",
-                        }
-                    )
+                # Debug: Log ALL evaluations that detect triggers
+                delta_pct = evaluation.get("delta_pct", 0)
+                threshold_pct = position.order_policy.trigger_threshold_pct * 100 if position.order_policy else 3.0
+                if evaluation.get("trigger_detected", False):
+                    print(f"  >>> EVAL TRIGGER: price=${current_price:.2f}, anchor=${position.anchor_price:.2f}, delta={delta_pct:+.2f}% (threshold=±{threshold_pct:.1f}%), trigger_detected={evaluation.get('trigger_detected')}, trigger_type={evaluation.get('trigger_type')}")
 
-                    # Submit order using actual trading logic
-                    order_request = CreateOrderRequest(
-                        side=order_proposal["side"], qty=abs(order_proposal["trimmed_qty"])
-                    )
+                # Debug: Log evaluation results periodically
+                if len(trigger_analysis) < 20 or len(trigger_analysis) % 100 == 0:
+                    print(f"  Eval #{len(trigger_analysis)}: price=${current_price:.2f}, anchor=${position.anchor_price:.2f}, delta={delta_pct:+.2f}% (threshold=±{threshold_pct:.1f}%), trigger={evaluation.get('trigger_detected', False)}")
 
-                    try:
-                        submit_response = submit_uc.execute(
-                            position_id, order_request, f"sim_{current_time.timestamp()}"
-                        )
+                if evaluation["trigger_detected"]:
+                    # Mark as triggered even if order_proposal is blocked by guardrails
+                    trigger_info["triggered"] = True
+                    trigger_info["side"] = evaluation.get("trigger_type")
+                    trigger_info["reason"] = evaluation.get("reasoning", "Trigger condition met")
+                    print(f"  >>> TRIGGER DETECTED: side={trigger_info['side']}, trigger_info['triggered']={trigger_info['triggered']}")
 
-                        if submit_response.accepted:
-                            # Execute order using actual trading logic
-                            fill_request = FillOrderRequest(
-                                qty=abs(order_proposal["trimmed_qty"]),
-                                price=current_price,
-                                commission=order_proposal["commission"],
-                            )
-
-                            try:
-                                fill_response = execute_uc.execute(
-                                    submit_response.order_id, fill_request
-                                )
-
-                                if fill_response.status == "filled":
-                                    # Update position reference
-                                    position = temp_positions.get(position_id)
-
-                                    # Log the trade
-                                    trade_log.append(
-                                        {
-                                            "timestamp": current_time.isoformat(),
-                                            "side": order_proposal["side"],
-                                            "qty": order_proposal["trimmed_qty"],
-                                            "price": current_price,
-                                            "commission": order_proposal["commission"],
-                                            "cash_after": position.cash,
-                                            "shares_after": position.qty,
-                                        }
-                                    )
-
-                                    # Mark as executed
-                                    trigger_info.update(
-                                        {
-                                            "executed": True,
-                                            "commission": order_proposal["commission"],
-                                            "cash_after": position.cash,
-                                            "shares_after": position.qty,
-                                        }
-                                    )
-
-                                    # Update timeline row with execution info
-                                    self._update_simulation_timeline_execution(
-                                        position=position,
-                                        price_data=price_data,
-                                        order_id=submit_response.order_id,
-                                        trade_id=None,  # TODO: Get trade_id from execution
-                                        execution_price=current_price,
-                                        execution_qty=order_proposal["trimmed_qty"],
-                                        execution_commission=order_proposal["commission"],
-                                        simulation_id=simulation_id,
-                                        ticker=ticker or sim_data.ticker,
-                                        timestamp=current_time,
-                                    )
-
-                            except Exception as e:
-                                # Order execution failed - continue simulation
-                                trigger_info.update(
-                                    {"executed": False, "execution_error": f"Execution failed: {e}"}
-                                )
-                                print(f"Order execution failed: {e}")
-                        else:
-                            trigger_info.update(
-                                {
-                                    "executed": False,
-                                    "execution_error": f"Order not accepted: {submit_response}",
-                                }
-                            )
-
-                    except Exception as e:
-                        # Order submission failed - continue simulation
+                    if evaluation["order_proposal"]:
+                        order_proposal = evaluation["order_proposal"]
                         trigger_info.update(
-                            {"executed": False, "execution_error": f"Submission failed: {e}"}
+                            {
+                                "side": order_proposal["side"],
+                                "qty": order_proposal["trimmed_qty"],
+                            }
                         )
-                        print(f"Order submission failed: {e}")
+
+                        # Submit order using actual trading logic
+                        order_request = CreateOrderRequest(
+                            side=order_proposal["side"], qty=abs(order_proposal["trimmed_qty"])
+                        )
+
+                        try:
+                            submit_response = submit_uc.execute(
+                                tenant_id="simulation",
+                                portfolio_id="simulation",
+                                position_id=position_id,
+                                request=order_request,
+                                idempotency_key=f"sim_{current_time.timestamp()}",
+                            )
+
+                            if submit_response.accepted:
+                                # Execute order using actual trading logic
+                                fill_request = FillOrderRequest(
+                                    qty=abs(order_proposal["trimmed_qty"]),
+                                    price=current_price,
+                                    commission=order_proposal["commission"],
+                                )
+
+                                try:
+                                    fill_response = execute_uc.execute(
+                                        submit_response.order_id, fill_request
+                                    )
+
+                                    if fill_response.status == "filled":
+                                        # Update position reference
+                                        position = temp_positions.get(
+                                            tenant_id="simulation",
+                                            portfolio_id="simulation",
+                                            position_id=position_id
+                                        )
+
+                                        # Reset anchor price to execution price after trade
+                                        old_anchor = position.anchor_price
+                                        position.set_anchor_price(current_price)
+                                        temp_positions.save(position)
+                                        print(f"  >>> ANCHOR RESET: {old_anchor:.2f} -> {current_price:.2f} after {order_proposal['side']} trade")
+
+                                        # Log the trade
+                                        trade_log.append(
+                                            {
+                                                "timestamp": current_time.isoformat(),
+                                                "side": order_proposal["side"],
+                                                "qty": order_proposal["trimmed_qty"],
+                                                "price": current_price,
+                                                "commission": order_proposal["commission"],
+                                                "cash_after": position.cash,
+                                                "shares_after": position.qty,
+                                            }
+                                        )
+
+                                        # Mark as executed
+                                        trigger_info.update(
+                                            {
+                                                "executed": True,
+                                                "commission": order_proposal["commission"],
+                                                "cash_after": position.cash,
+                                                "shares_after": position.qty,
+                                            }
+                                        )
+
+                                        # Update timeline row with execution info
+                                        self._update_simulation_timeline_execution(
+                                            position=position,
+                                            price_data=price_data,
+                                            order_id=submit_response.order_id,
+                                            trade_id=None,  # TODO: Get trade_id from execution
+                                            execution_price=current_price,
+                                            execution_qty=order_proposal["trimmed_qty"],
+                                            execution_commission=order_proposal["commission"],
+                                            simulation_id=simulation_id,
+                                            ticker=ticker or sim_data.ticker,
+                                            timestamp=current_time,
+                                        )
+
+                                except Exception as e:
+                                    # Order execution failed - continue simulation
+                                    trigger_info.update(
+                                        {"executed": False, "execution_error": f"Execution failed: {e}"}
+                                    )
+                                    print(f"Order execution failed: {e}")
+                            else:
+                                trigger_info.update(
+                                    {
+                                        "executed": False,
+                                        "execution_error": f"Order not accepted: {submit_response}",
+                                    }
+                                )
+
+                        except Exception as e:
+                            # Order submission failed - continue simulation
+                            trigger_info.update(
+                                {"executed": False, "execution_error": f"Submission failed: {e}"}
+                            )
+                            print(f"Order submission failed: {e}")
+                    else:
+                        # Trigger detected but order blocked (e.g., by guardrails)
+                        trigger_info["qty"] = 0
+                        trigger_info["executed"] = False
+                        trigger_info["execution_error"] = "Order blocked by guardrails (no valid order proposal)"
                 else:
                     # No trigger - check why
                     if abs(trigger_info["price_change_pct"]) < trigger_info["trigger_threshold"]:
@@ -872,6 +912,9 @@ class SimulationUnifiedUC:
 
             except Exception as e:
                 # Evaluation failed - continue simulation
+                import traceback
+                print(f"Evaluation failed: {e}")
+                traceback.print_exc()
                 trigger_info.update(
                     {"executed": False, "execution_error": f"Evaluation failed: {e}"}
                 )
@@ -886,6 +929,13 @@ class SimulationUnifiedUC:
             portfolio_values.append(portfolio_value)
 
             # Collect comprehensive time-series data for every time point
+            # Use delta_pct from evaluation (more accurate than local calculation)
+            eval_delta_pct = evaluation.get("delta_pct", 0) if evaluation else 0
+
+            # Debug: Log triggered events
+            if trigger_info.get("triggered", False):
+                print(f"  >>> Adding triggered event to time_series_data: triggered={trigger_info.get('triggered')}, side={trigger_info.get('side')}, price_change={eval_delta_pct:.2f}%")
+
             time_series_data.append(
                 {
                     "timestamp": current_time.isoformat(),
@@ -894,7 +944,7 @@ class SimulationUnifiedUC:
                     "price": current_price,
                     "volume": getattr(price_data, "volume", 0),
                     "is_market_hours": getattr(price_data, "is_market_hours", True),
-                    "anchor_price": position.anchor_price,
+                    "anchor_price": pre_eval_anchor,  # Use pre-trade anchor for accurate trigger display
                     "shares": position.qty,
                     "cash": position.cash,
                     "asset_value": position.qty * current_price,
@@ -904,11 +954,7 @@ class SimulationUnifiedUC:
                         if portfolio_value > 0
                         else 0
                     ),
-                    "price_change_pct": (
-                        ((current_price / position.anchor_price) - 1) * 100
-                        if position.anchor_price
-                        else 0
-                    ),
+                    "price_change_pct": eval_delta_pct,
                     "trigger_threshold_pct": position.order_policy.trigger_threshold_pct * 100,
                     "triggered": trigger_info.get("triggered", False),
                     "side": trigger_info.get("side"),
@@ -926,7 +972,9 @@ class SimulationUnifiedUC:
                     "dividend_net": 0.0,
                     "dividend_withholding": 0.0,
                     "execution_error": trigger_info.get("execution_error"),
-                    "reason": trigger_info.get("reason", "No trigger"),
+                    "reason": evaluation.get("reasoning", trigger_info.get("reason", "No trigger")) if evaluation else "No evaluation",
+                    # Show new anchor price if it changed (i.e., a trade executed)
+                    "new_anchor_price": position.anchor_price if position.anchor_price != pre_eval_anchor else None,
                 }
             )
 
@@ -969,6 +1017,11 @@ class SimulationUnifiedUC:
         if portfolio_values:
             print(f"  First portfolio value: ${portfolio_values[0]:.2f}")
             print(f"  Last portfolio value: ${portfolio_values[-1]:.2f}")
+
+        # Debug: Count triggered events
+        triggered_count = sum(1 for ts in time_series_data if ts.get("triggered", False))
+        print(f"  Time series data points: {len(time_series_data)}")
+        print(f"  Triggered events in time_series_data: {triggered_count}")
 
         volatility = self._calculate_volatility([r["return"] for r in daily_returns])
         sharpe_ratio = self._calculate_sharpe_ratio(daily_returns)
@@ -1239,6 +1292,10 @@ class SimulationUnifiedUC:
             return  # Timeline repo not available or no simulation_id
 
         try:
+            # Ensure timestamp is a Python datetime, not a pandas Timestamp
+            import pandas as pd
+            if isinstance(timestamp, pd.Timestamp):
+                timestamp = timestamp.to_pydatetime()
             from application.helpers.timeline_builder import build_timeline_row_from_evaluation
 
             # For simulation, use synthetic tenant_id/portfolio_id
@@ -1334,6 +1391,11 @@ class SimulationUnifiedUC:
             return
 
         try:
+            # Ensure timestamp is a Python datetime, not a pandas Timestamp
+            import pandas as pd
+            if isinstance(timestamp, pd.Timestamp):
+                timestamp = timestamp.to_pydatetime()
+
             # Find the most recent timeline row for this simulation/position/timestamp
             # For now, we'll create a new row with execution info
             # TODO: Implement update logic to find and update existing row

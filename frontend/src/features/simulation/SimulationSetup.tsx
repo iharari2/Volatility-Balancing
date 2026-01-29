@@ -16,6 +16,9 @@ interface SimulationConfig {
   mode: 'single' | 'sweep';
   resolution: '1min' | '5min' | '15min' | '30min' | '1hour' | 'daily';
   allowAfterHours: boolean;
+  // Trigger thresholds (as percentages, e.g., 3 = 3%)
+  triggerThresholdPct: number;
+  initialCash: number;
 }
 
 export default function SimulationSetup({ onRun, isRunning }: SimulationSetupProps) {
@@ -28,6 +31,8 @@ export default function SimulationSetup({ onRun, isRunning }: SimulationSetupPro
     mode: 'single',
     resolution: '30min',
     allowAfterHours: true,
+    triggerThresholdPct: 3,
+    initialCash: 10000,
   });
 
   const handleRun = () => {
@@ -41,18 +46,35 @@ export default function SimulationSetup({ onRun, isRunning }: SimulationSetupPro
       <div className="space-y-6">
         <div>
           <label className="label">Asset to Simulate</label>
-          <select
-            value={config.asset}
-            onChange={(e) => setConfig({ ...config, asset: e.target.value })}
-            className="input"
-          >
-            {positions.map((pos) => (
-              <option key={pos.id} value={pos.ticker || pos.asset}>
-                {pos.ticker || pos.asset}
-              </option>
-            ))}
-            {positions.length === 0 && <option value="AAPL">AAPL</option>}
-          </select>
+          <div className="relative">
+            <input
+              type="text"
+              list="ticker-suggestions"
+              value={config.asset}
+              onChange={(e) => setConfig({ ...config, asset: e.target.value.toUpperCase() })}
+              placeholder="Enter any ticker (e.g., AAPL, TSLA, MSFT)"
+              className="input"
+            />
+            <datalist id="ticker-suggestions">
+              {positions.map((pos) => (
+                <option key={pos.id} value={pos.ticker || pos.asset} />
+              ))}
+              {/* Common tickers as suggestions */}
+              <option value="AAPL" />
+              <option value="MSFT" />
+              <option value="GOOGL" />
+              <option value="AMZN" />
+              <option value="TSLA" />
+              <option value="META" />
+              <option value="NVDA" />
+              <option value="SPY" />
+              <option value="QQQ" />
+              <option value="VOO" />
+            </datalist>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Type any ticker symbol available on Yahoo Finance
+          </p>
         </div>
 
         <div>
@@ -110,6 +132,41 @@ export default function SimulationSetup({ onRun, isRunning }: SimulationSetupPro
               />
               <span className="ml-2 text-sm text-gray-700">Extended Hours</span>
             </label>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label">Initial Capital</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+              <input
+                type="number"
+                value={config.initialCash}
+                onChange={(e) => setConfig({ ...config, initialCash: parseFloat(e.target.value) || 10000 })}
+                min={100}
+                step={1000}
+                className="input pl-7"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="label">Trigger Threshold</label>
+            <div className="relative">
+              <input
+                type="number"
+                value={config.triggerThresholdPct}
+                onChange={(e) => setConfig({ ...config, triggerThresholdPct: parseFloat(e.target.value) || 3 })}
+                min={0.1}
+                max={50}
+                step={0.5}
+                className="input pr-7"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">%</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Buy when price drops {config.triggerThresholdPct}%, sell when it rises {config.triggerThresholdPct}%
+            </p>
           </div>
         </div>
 

@@ -215,6 +215,20 @@ export default function SimulationLabPage() {
         );
       }
 
+      // Build position_config with user-defined trigger threshold
+      const triggerThresholdDecimal = (config.triggerThresholdPct || 3) / 100; // Convert 3% to 0.03
+      const positionConfig = {
+        trigger_threshold_pct: triggerThresholdDecimal,
+        rebalance_ratio: 1.6667,
+        commission_rate: 0.0001,
+        min_notional: 100.0,
+        allow_after_hours: config.allowAfterHours ?? true,
+        guardrails: {
+          min_stock_alloc_pct: 0.25,
+          max_stock_alloc_pct: 0.75,
+        },
+      };
+
       const request = {
         ticker: config.asset.toUpperCase().trim(),
         start_date: startDateISO,
@@ -222,7 +236,7 @@ export default function SimulationLabPage() {
         initial_cash: config.initialCash || 10000,
         include_after_hours: config.allowAfterHours ?? false,
         intraday_interval_minutes: intradayIntervalMinutes,
-        position_config: config.position_config || undefined, // Use portfolio/template config by default
+        position_config: positionConfig,
       };
 
       console.log('Running simulation with config:', request);

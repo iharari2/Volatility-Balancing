@@ -668,6 +668,11 @@ def run_simulation_for_position(
             "sharpe_ratio": result.algorithm_sharpe_ratio,
             "max_drawdown": result.algorithm_max_drawdown,
             "volatility": result.algorithm_volatility,
+            "total_trading_days": result.total_trading_days,
+            # Include timeline/events data for GUI
+            "time_series_data": result.time_series_data,
+            "trade_log": result.trade_log,
+            "trigger_analysis": result.trigger_analysis,
         }
 
     except HTTPException:
@@ -782,6 +787,10 @@ def run_standalone_simulation(
                 "beta": result.beta,
                 "information_ratio": result.information_ratio,
             },
+            # Include timeline/events data for GUI
+            "time_series_data": result.time_series_data,
+            "trade_log": result.trade_log,
+            "trigger_analysis": result.trigger_analysis,
         }
 
     except HTTPException:
@@ -859,9 +868,21 @@ def evaluate_position_with_market_data_legacy(position_id: str) -> Dict[str, Any
 
 @router.get("/positions/{position_id}/timeline")
 async def list_position_timeline_legacy(
-    position_id: str, limit: int = Query(200, description="Maximum number of timeline rows")
+    position_id: str,
+    limit: int = Query(200, description="Maximum number of timeline rows"),
+    start_date: Optional[str] = Query(None, description="Filter events from this date (ISO format)"),
+    end_date: Optional[str] = Query(None, description="Filter events until this date (ISO format)"),
+    event_type: Optional[str] = Query(None, description="Filter by event/evaluation type (comma-separated for multiple)"),
+    action: Optional[str] = Query(None, description="Filter by action (BUY, SELL, HOLD, SKIP - comma-separated for multiple)"),
 ) -> List[Dict[str, Any]]:
-    """Legacy endpoint to list evaluation timeline rows for a position."""
+    """Legacy endpoint to list evaluation timeline rows for a position.
+
+    Supports filtering by:
+    - start_date: ISO format datetime string (e.g., 2024-01-01T00:00:00Z)
+    - end_date: ISO format datetime string
+    - event_type: Comma-separated list of event types (e.g., DAILY_CHECK,PRICE_UPDATE)
+    - action: Comma-separated list of actions (e.g., BUY,SELL)
+    """
     position, tenant_id, portfolio_id = _find_position_legacy(position_id)
     if not position:
         raise HTTPException(status_code=404, detail=f"Position {position_id} not found")
@@ -869,17 +890,49 @@ async def list_position_timeline_legacy(
     if not hasattr(container, "evaluation_timeline"):
         raise HTTPException(status_code=501, detail="Timeline repository not available")
 
+    # Parse date filters
+    parsed_start_date = None
+    parsed_end_date = None
+    if start_date:
+        try:
+            parsed_start_date = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid start_date format: {start_date}")
+    if end_date:
+        try:
+            parsed_end_date = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid end_date format: {end_date}")
+
     timeline = container.evaluation_timeline.list_by_position(
         tenant_id=tenant_id,
         portfolio_id=portfolio_id,
         position_id=position_id,
         mode="LIVE",
+        start_date=parsed_start_date,
+        end_date=parsed_end_date,
         limit=limit,
     )
 
-    # Normalize a few convenience fields for consumers
+    # Parse event_type and action filters
+    event_types = [t.strip().upper() for t in event_type.split(",")] if event_type else []
+    actions = [a.strip().upper() for a in action.split(",")] if action else []
+
+    # Normalize and filter
     normalized = []
     for row in timeline:
+        # Apply event_type filter
+        if event_types:
+            row_event_type = (row.get("evaluation_type") or row.get("event_type") or "").upper()
+            if row_event_type not in event_types:
+                continue
+
+        # Apply action filter
+        if actions:
+            row_action = (row.get("action") or "").upper()
+            if row_action not in actions:
+                continue
+
         row_copy = dict(row)
         if "current_price" not in row_copy:
             row_copy["current_price"] = row_copy.get("effective_price")
@@ -893,8 +946,22 @@ async def list_position_timeline_legacy(
 
 
 @router.get("/positions/{position_id}/events")
-def list_position_events_legacy(position_id: str, limit: int = Query(100)) -> Dict[str, Any]:
-    """Legacy endpoint to list events for a position."""
+def list_position_events_legacy(
+    position_id: str,
+    limit: int = Query(100),
+    start_date: Optional[str] = Query(None, description="Filter events from this date (ISO format)"),
+    end_date: Optional[str] = Query(None, description="Filter events until this date (ISO format)"),
+    event_type: Optional[str] = Query(None, description="Filter by event type (comma-separated for multiple)"),
+    search: Optional[str] = Query(None, description="Search in event messages"),
+) -> Dict[str, Any]:
+    """Legacy endpoint to list events for a position.
+
+    Supports filtering by:
+    - start_date: ISO format datetime string (e.g., 2024-01-01T00:00:00Z)
+    - end_date: ISO format datetime string
+    - event_type: Comma-separated list of event types (e.g., order_filled,trigger_detected)
+    - search: Text search in event messages
+    """
     position, tenant_id, portfolio_id = _find_position_legacy(position_id)
     if not position:
         raise HTTPException(status_code=404, detail=f"Position {position_id} not found")
@@ -908,7 +975,58 @@ def list_position_events_legacy(position_id: str, limit: int = Query(100)) -> Di
         limit=limit,
     )
 
-    return {"position_id": position_id, "events": events}
+    # Parse date filters
+    parsed_start_date = None
+    parsed_end_date = None
+    if start_date:
+        try:
+            parsed_start_date = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid start_date format: {start_date}")
+    if end_date:
+        try:
+            parsed_end_date = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid end_date format: {end_date}")
+
+    # Parse event_type filter
+    event_types = [t.strip().lower() for t in event_type.split(",")] if event_type else []
+
+    # Apply filters
+    filtered_events = []
+    for event in events:
+        # Date filter
+        if parsed_start_date or parsed_end_date:
+            event_ts = event.get("timestamp") or event.get("ts")
+            if event_ts:
+                if isinstance(event_ts, str):
+                    try:
+                        event_dt = datetime.fromisoformat(event_ts.replace("Z", "+00:00"))
+                    except ValueError:
+                        event_dt = None
+                else:
+                    event_dt = event_ts
+                if event_dt:
+                    if parsed_start_date and event_dt < parsed_start_date:
+                        continue
+                    if parsed_end_date and event_dt > parsed_end_date:
+                        continue
+
+        # Event type filter
+        if event_types:
+            event_event_type = (event.get("event_type") or event.get("type") or "").lower()
+            if event_event_type not in event_types:
+                continue
+
+        # Text search filter
+        if search:
+            message = (event.get("message") or "").lower()
+            if search.lower() not in message:
+                continue
+
+        filtered_events.append(event)
+
+    return {"position_id": position_id, "events": filtered_events}
 
 
 @router.post("/positions/{position_id}/orders/auto-size")
