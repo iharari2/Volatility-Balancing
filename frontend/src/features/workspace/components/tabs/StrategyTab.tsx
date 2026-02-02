@@ -153,6 +153,15 @@ export default function StrategyTab() {
         }
       );
       setIsPositionSpecific(true);
+
+      // Reload effective config to show updated values in the "Current Effective Settings" panel
+      try {
+        const effective = await portfolioScopedApi.getEffectiveConfig(tenantId, portfolioId);
+        setEffectiveConfig(effective);
+      } catch (reloadError) {
+        console.warn('Failed to reload effective config after save:', reloadError);
+      }
+
       toast.success('Strategy saved successfully');
     } catch (error: any) {
       toast.error(error?.message || 'Failed to save strategy');

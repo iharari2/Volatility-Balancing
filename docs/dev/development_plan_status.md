@@ -529,8 +529,8 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
 
 | ID  | Issue                                               | Priority | Status  |
 | --- | --------------------------------------------------- | -------- | ------- |
-| CP-1 | Strategy values do not seem persistent             | High     | Open    |
-| CP-2 | Current Effective Settings differ from what I save | High     | Open    |
+| CP-1 | Strategy values do not seem persistent             | High     | Fixed   |
+| CP-2 | Current Effective Settings differ from what I save | High     | Fixed   |
 | CP-3 | Navigation: How to go back to other screens (home, prev) | Medium | Open |
 
 ### **Simulation Enhancements**
@@ -544,15 +544,24 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
 
 ### **Detailed Issue Descriptions**
 
-#### **CP-1: Strategy values do not seem persistent**
+#### **CP-1: Strategy values do not seem persistent** ✅ FIXED
 - **Description**: Strategy configuration values are not being saved/loaded correctly between sessions
 - **Impact**: Users lose their strategy settings when navigating away or restarting
-- **Suggested Fix**: Review strategy persistence layer and database storage
+- **Root Cause**: StrategyConfigForm component had no state management or API integration
+- **Fix Applied**:
+  - Rewrote StrategyConfigForm with proper state, API calls, and save functionality
+  - Fixed duplicate setEditableConfig call in PositionsAndConfigPage that was overwriting config
 
-#### **CP-2: Current Effective Settings differ from what I save**
+#### **CP-2: Current Effective Settings differ from what I save** ✅ FIXED
 - **Description**: The displayed "Current Effective Settings" do not match the values that were saved
 - **Impact**: Confusion about which settings are actually active
-- **Suggested Fix**: Verify settings save/load flow and UI refresh after save
+- **Root Cause**:
+  1. Duplicate setEditableConfig initialization with inconsistent values
+  2. effectiveConfig not being reloaded after save
+- **Fix Applied**:
+  - Removed duplicate setEditableConfig call with conflicting values
+  - Added onReload callback to StrategyConfigTab to refresh data after save
+  - Added effectiveConfig reload in StrategyTab (workspace) after save
 
 #### **CP-3: Navigation back to other screens**
 - **Description**: No clear way to navigate back to home or previous screens
