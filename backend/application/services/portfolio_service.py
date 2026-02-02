@@ -10,7 +10,7 @@ capabilities, complementing the Position service which handles individual positi
 
 from __future__ import annotations
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from domain.entities.portfolio import Portfolio
 from domain.entities.portfolio_config import PortfolioConfig
@@ -622,49 +622,64 @@ class PortfolioService:
             from collections import defaultdict
 
             if hasattr(container, "evaluation_timeline"):
+                # Calculate date range based on days parameter
+                end_date = datetime.now(timezone.utc)
+                start_date = end_date - timedelta(days=days)
+
                 # Get timeline for all positions in the portfolio
-                # For large portfolios, this might need optimization
+                # Filter by date range and exclude simulation data for live analytics
                 rows = container.evaluation_timeline.list_by_portfolio(
-                    tenant_id=tenant_id, portfolio_id=portfolio_id, limit=1000
+                    tenant_id=tenant_id,
+                    portfolio_id=portfolio_id,
+                    start_date=start_date,
+                    end_date=end_date,
+                    limit=5000,  # Increased limit for more data points
                 )
 
-                # Group by day and position to get daily total value
-                daily_data = defaultdict(
-                    lambda: {"total_value": 0.0, "stock_value": 0.0, "cash": 0.0}
-                )
+                # Group by day and position, taking the latest evaluation per position per day
+                # Structure: {day: {position_id: {timestamp, values...}}}
+                daily_position_data: Dict[str, Dict[str, Dict[str, Any]]] = defaultdict(dict)
 
                 for row in rows:
-                    dt = row["timestamp"]
+                    dt = row.get("timestamp")
+                    if not dt:
+                        continue
                     if isinstance(dt, str):
                         dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
                     day_key = dt.strftime("%Y-%m-%d")
+                    position_id = row.get("position_id", "unknown")
 
-                    # We take the latest row for each position on each day
-                    # This is a bit simplified; ideally we'd have a portfolio_evaluation_timeline
-                    daily_data[day_key]["total_value"] += (
-                        row.get("position_total_value_after") or 0.0
-                    )
-                    daily_data[day_key]["stock_value"] += (
-                        row.get("position_stock_value_after") or 0.0
-                    )
-                    daily_data[day_key]["cash"] += row.get("position_cash_after") or 0.0
+                    # Keep only the latest evaluation per position per day
+                    existing = daily_position_data[day_key].get(position_id)
+                    if existing is None or dt > existing.get("timestamp", dt):
+                        daily_position_data[day_key][position_id] = {
+                            "timestamp": dt,
+                            "total_value": row.get("position_total_value_after") or 0.0,
+                            "stock_value": row.get("position_stock_value_after") or 0.0,
+                            "cash": row.get("position_cash_after") or 0.0,
+                        }
 
-                # Convert to sorted list
-                for day, data in sorted(daily_data.items()):
+                # Aggregate across positions for each day
+                for day in sorted(daily_position_data.keys()):
+                    positions_data = daily_position_data[day]
+                    total_value = sum(p["total_value"] for p in positions_data.values())
+                    stock_value = sum(p["stock_value"] for p in positions_data.values())
+                    cash_value = sum(p["cash"] for p in positions_data.values())
+
                     time_series.append(
                         {
                             "date": day,
-                            "value": data["total_value"],
-                            "stock": data["stock_value"],
-                            "cash": data["cash"],
+                            "value": total_value,
+                            "stock": stock_value,
+                            "cash": cash_value,
                             "stock_pct": (
-                                (data["stock_value"] / data["total_value"] * 100)
-                                if data["total_value"] > 0
+                                (stock_value / total_value * 100)
+                                if total_value > 0
                                 else 0.0
                             ),
                             "cash_pct": (
-                                (data["cash"] / data["total_value"] * 100)
-                                if data["total_value"] > 0
+                                (cash_value / total_value * 100)
+                                if total_value > 0
                                 else 0.0
                             ),
                         }
@@ -672,6 +687,28 @@ class PortfolioService:
 
         except Exception as e:
             print(f"Warning: Failed to fetch historical time series for analytics: {e}")
+            import traceback
+            traceback.print_exc()
+
+        # If no timeline data exists, create a single point from current position values
+        if not time_series and positions:
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            current_stock_value = 0.0
+            current_cash_value = 0.0
+            for pos in positions:
+                price = pos.anchor_price or pos.avg_cost or 0.0
+                current_stock_value += pos.qty * price
+                current_cash_value += pos.cash
+            current_total = current_stock_value + current_cash_value
+            if current_total > 0:
+                time_series.append({
+                    "date": today,
+                    "value": current_total,
+                    "stock": current_stock_value,
+                    "cash": current_cash_value,
+                    "stock_pct": (current_stock_value / current_total * 100) if current_total > 0 else 0.0,
+                    "cash_pct": (current_cash_value / current_total * 100) if current_total > 0 else 0.0,
+                })
 
         # 3. Calculate performance metrics from time series
         kpis = {}

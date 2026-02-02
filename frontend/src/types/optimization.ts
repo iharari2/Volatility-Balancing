@@ -117,6 +117,9 @@ export interface HeatmapData {
   metric: OptimizationMetric;
   cells: HeatmapCell[];
   statistics: HeatmapStatistics;
+  // Optional arrays of unique values for axes (can be derived from cells if not provided)
+  x_values?: number[];
+  y_values?: number[];
 }
 
 export interface HeatmapCell {
@@ -124,6 +127,7 @@ export interface HeatmapCell {
   y_value: number;
   metric_value: number;
   parameter_combination: ParameterCombination;
+  is_valid?: boolean; // Optional validity flag, defaults to true if cell exists
 }
 
 export interface HeatmapStatistics {

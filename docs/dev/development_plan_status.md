@@ -642,13 +642,15 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
 - **Description**: The Analytics & Reports page displays no data
 - **Impact**: Users cannot view analytics or reports for their trading activity
 - **Root Cause**:
-  1. Backend route missing `days` query parameter extraction
-  2. No user feedback when evaluation timeline data is empty
-- **Fix Applied**:
-  - Fixed backend route to accept and pass `days` query parameter
-  - Added empty state UI for charts when no time_series data exists
-  - Added warning banner in KPIs when limited data is available
-  - Users now see helpful guidance on how to generate analytics data
+  1. Backend `days` query parameter was received but never used to filter timeline data
+  2. Aggregation logic summed ALL evaluations per day, potentially double-counting positions
+  3. No fallback when evaluation timeline is empty but positions exist
+- **Fix Applied** (2026-02-03):
+  - Fixed `get_portfolio_analytics()` to use `days` parameter for date filtering with `start_date` and `end_date`
+  - Fixed aggregation to take latest evaluation per position per day, then sum across positions
+  - Added fallback to show current position values when no timeline history exists
+  - Added traceback logging for better error diagnosis
+  - Frontend already has empty state UI for charts and warning banner in KPIs
 
 #### **FEAT-1: Add dividend tracker**
 - **Description**: Add a dedicated dividend tracking feature for positions
