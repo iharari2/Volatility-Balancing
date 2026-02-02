@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Play, Download } from 'lucide-react';
+import { Play, Download, ArrowLeft } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { usePortfolio } from '../../contexts/PortfolioContext';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import SimulationResults from './SimulationResults';
@@ -276,6 +277,13 @@ export default function SimulationLabPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-primary-600 mb-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Workspace
+          </Link>
           <h1 className="text-3xl font-bold text-gray-900">Simulation Lab</h1>
           <p className="text-sm text-gray-500 mt-1">{selectedPortfolio.name}</p>
         </div>

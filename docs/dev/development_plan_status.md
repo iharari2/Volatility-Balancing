@@ -531,7 +531,7 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
 | --- | --------------------------------------------------- | -------- | ------- |
 | CP-1 | Strategy values do not seem persistent             | High     | Fixed   |
 | CP-2 | Current Effective Settings differ from what I save | High     | Fixed   |
-| CP-3 | Navigation: How to go back to other screens (home, prev) | Medium | Open |
+| CP-3 | Navigation: How to go back to other screens (home, prev) | Medium | Fixed |
 
 ### **Simulation Enhancements**
 
@@ -563,10 +563,15 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
   - Added onReload callback to StrategyConfigTab to refresh data after save
   - Added effectiveConfig reload in StrategyTab (workspace) after save
 
-#### **CP-3: Navigation back to other screens**
+#### **CP-3: Navigation back to other screens** ✅ FIXED
 - **Description**: No clear way to navigate back to home or previous screens
 - **Impact**: Poor user experience, users feel "trapped" in certain views
-- **Suggested Fix**: Add breadcrumb navigation or back button to header
+- **Fix Applied**:
+  - Added Home button with VB logo to WorkspaceTopBar that deselects position and navigates home
+  - Added breadcrumb showing Portfolio > Position in WorkspaceTopBar
+  - Added position header with close (X) button in RightPanel to deselect position
+  - Added "Back to Workspace" link in SimulationLabPage header
+  - Added "Back to Workspace" link in SettingsPage header
 
 #### **SIM-1: Add Buy/Sell markers to simulation charts**
 - **Description**: Simulation charts should show visual markers for buy and sell actions
