@@ -18,13 +18,10 @@ import { useState } from 'react';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 
 const navigation = [
-  { name: 'Overview', href: '/overview', icon: LayoutDashboard },
+  { name: 'Workspace', href: '/', icon: LayoutDashboard },
   { name: 'Portfolios', href: '/portfolios', icon: Briefcase },
-  { name: 'Position Cells & Config', href: '/positions', icon: Settings },
-  { name: 'Trading Console', href: '/trading', icon: Activity },
   { name: 'Simulation Lab', href: '/simulation', icon: PlaySquare },
   { name: 'Analytics & Reports', href: '/analytics', icon: BarChart3 },
-  { name: 'Audit Trail', href: '/audit', icon: FileSearch },
   { name: 'Settings', href: '/settings', icon: Cog },
 ];
 

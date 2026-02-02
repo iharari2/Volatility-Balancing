@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { useState } from 'react';
 import { Toaster } from 'react-hot-toast';
 import PageLayout from './components/layout/PageLayout';
@@ -7,15 +7,16 @@ import { OptimizationProvider } from './contexts/OptimizationContext';
 import { PortfolioProvider } from './contexts/PortfolioContext';
 import { TenantPortfolioProvider } from './contexts/TenantPortfolioContext';
 
-// New pages
+// New Workspace (Master-Detail Layout)
+import PositionWorkspacePage from './features/workspace/PositionWorkspacePage';
+
+// Feature pages
 import OverviewPage from './features/overview/OverviewPage';
 import PortfolioListPage from './features/portfolios/PortfolioListPage';
 import PortfolioOverviewPage from './features/portfolios/PortfolioOverviewPage';
 import PositionsPage from './features/positions/PositionsPage';
 import PositionsAndConfigPage from './features/positions/PositionsAndConfigPage';
 import PositionDetailPage from './features/positions/PositionDetailPage';
-// TradeScreenPage has been removed - use PositionCockpitPage instead
-// TradingConsolePage has been removed - use TradeSelectionPage instead
 import TradingConsolePage from './features/trading/TradingConsolePage';
 import TradeCockpitPage from './features/trading/TradeCockpitPage';
 import SimulationLabPage from './features/simulation/SimulationLabPage';
@@ -37,51 +38,131 @@ function App() {
       <PortfolioProvider>
         <ConfigurationProvider>
           <OptimizationProvider>
-            <PageLayout mode={mode}>
-              <Routes>
-                {/* New routes */}
-                <Route path="/" element={<OverviewPage />} />
-                <Route path="/overview" element={<OverviewPage />} />
-                <Route path="/portfolios" element={<PortfolioListPage />} />
-                <Route path="/portfolios/:portfolioId" element={<PortfolioOverviewPage />} />
-                <Route
-                  path="/portfolios/:portfolioId/positions"
-                  element={<PositionsAndConfigPage />}
-                />
-                <Route
-                  path="/portfolios/:portfolioId/positions/:positionId"
-                  element={<PositionDetailPage />}
-                />
-                <Route path="/positions" element={<PositionsAndConfigPage />} />
-                <Route path="/positions-legacy" element={<PositionsPage />} />
-                {/* Trading Console routes */}
-                <Route path="/trading" element={<TradingConsolePage />} />
-                <Route path="/trade" element={<TradeCockpitPage />} />
-                <Route
-                  path="/trade/:portfolioId/position/:positionId"
-                  element={<TradeCockpitPage />}
-                />
-                {/* Legacy trade screen routes - QUARANTINED
-                    Old TradeScreenPage has been replaced by PositionCockpitPage
-                    These routes are kept for backward compatibility but should not be used
-                    TODO: Remove these routes after migration period
-                */}
-                {/* <Route path="/portfolios/:portfolioId/trade-screen" element={<TradeScreenPage />} /> */}
-                {/* <Route path="/trade-screen" element={<TradeScreenPage />} /> */}
-                <Route path="/simulation" element={<SimulationLabPage />} />
-                <Route path="/analytics" element={<AnalyticsPage />} />
-                <Route path="/audit" element={<AuditTrailPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
+            <Routes>
+              {/* NEW: Position Workspace (Master-Detail Layout) - Default route */}
+              <Route path="/" element={<PositionWorkspacePage />} />
+              <Route path="/workspace" element={<PositionWorkspacePage />} />
 
-                {/* Legacy routes (temporary) */}
-                <Route path="/portfolio" element={<PortfolioManagement />} />
-                <Route path="/trading-legacy" element={<Trading />} />
-                <Route path="/simulation-legacy" element={<Simulation />} />
+              {/* Standalone pages with PageLayout */}
+              <Route
+                path="/simulation"
+                element={
+                  <PageLayout mode={mode}>
+                    <SimulationLabPage />
+                  </PageLayout>
+                }
+              />
+              <Route
+                path="/settings"
+                element={
+                  <PageLayout mode={mode}>
+                    <SettingsPage />
+                  </PageLayout>
+                }
+              />
 
-                {/* 404 catch-all route */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </PageLayout>
+              {/* Redirects from old routes to workspace */}
+              <Route path="/overview" element={<Navigate to="/" replace />} />
+              <Route path="/trading" element={<Navigate to="/?tab=trading" replace />} />
+              <Route path="/trade" element={<Navigate to="/?tab=trading" replace />} />
+              <Route path="/audit" element={<Navigate to="/?tab=events" replace />} />
+              <Route path="/positions" element={<Navigate to="/" replace />} />
+
+              {/* Legacy routes with PageLayout (kept for transition) */}
+              <Route
+                path="/portfolios"
+                element={
+                  <PageLayout mode={mode}>
+                    <PortfolioListPage />
+                  </PageLayout>
+                }
+              />
+              <Route
+                path="/portfolios/:portfolioId"
+                element={
+                  <PageLayout mode={mode}>
+                    <PortfolioOverviewPage />
+                  </PageLayout>
+                }
+              />
+              <Route
+                path="/portfolios/:portfolioId/positions"
+                element={
+                  <PageLayout mode={mode}>
+                    <PositionsAndConfigPage />
+                  </PageLayout>
+                }
+              />
+              <Route
+                path="/portfolios/:portfolioId/positions/:positionId"
+                element={
+                  <PageLayout mode={mode}>
+                    <PositionDetailPage />
+                  </PageLayout>
+                }
+              />
+              <Route
+                path="/trade/:portfolioId/position/:positionId"
+                element={
+                  <PageLayout mode={mode}>
+                    <TradeCockpitPage />
+                  </PageLayout>
+                }
+              />
+              <Route
+                path="/analytics"
+                element={
+                  <PageLayout mode={mode}>
+                    <AnalyticsPage />
+                  </PageLayout>
+                }
+              />
+
+              {/* Legacy routes (temporary) */}
+              <Route
+                path="/portfolio"
+                element={
+                  <PageLayout mode={mode}>
+                    <PortfolioManagement />
+                  </PageLayout>
+                }
+              />
+              <Route
+                path="/trading-legacy"
+                element={
+                  <PageLayout mode={mode}>
+                    <Trading />
+                  </PageLayout>
+                }
+              />
+              <Route
+                path="/simulation-legacy"
+                element={
+                  <PageLayout mode={mode}>
+                    <Simulation />
+                  </PageLayout>
+                }
+              />
+              <Route
+                path="/positions-legacy"
+                element={
+                  <PageLayout mode={mode}>
+                    <PositionsPage />
+                  </PageLayout>
+                }
+              />
+              <Route
+                path="/trading-console"
+                element={
+                  <PageLayout mode={mode}>
+                    <TradingConsolePage />
+                  </PageLayout>
+                }
+              />
+
+              {/* 404 catch-all route */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
             <Toaster position="top-right" />
           </OptimizationProvider>
         </ConfigurationProvider>
