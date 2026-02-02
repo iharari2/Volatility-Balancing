@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Play, Filter, Clock, TrendingUp, TrendingDown } from 'lucide-react';
+import { Download, Play, Filter, Clock, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
 import {
   ComposedChart,
   Line,
@@ -33,6 +33,17 @@ interface TimelineEvent {
   reason?: string;
 }
 
+interface DividendEvent {
+  date: string;
+  ex_date: string;
+  shares_held: number;
+  dps: number;
+  gross_amount: number;
+  withholding_tax: number;
+  net_amount: number;
+  anchor_adjustment: number;
+}
+
 interface SimulationResultsProps {
   result: {
     finalValue?: number;
@@ -60,12 +71,21 @@ interface SimulationResultsProps {
       price: number;
       commission: number;
     }>;
+    // Dividend fields
+    total_dividends_received?: number;
+    dividend_events?: DividendEvent[];
+    dividend_analysis?: {
+      total_dividends?: number;
+      dividend_yield?: number;
+      dividend_count?: number;
+      withholding_tax_total?: number;
+    };
   } | null;
 }
 
 export default function SimulationResults({ result }: SimulationResultsProps) {
   const [showTriggersOnly, setShowTriggersOnly] = useState(true);
-  const [activeTab, setActiveTab] = useState<'trades' | 'timeline'>('timeline');
+  const [activeTab, setActiveTab] = useState<'trades' | 'timeline' | 'dividends'>('timeline');
 
   if (!result) {
     return (
@@ -180,7 +200,7 @@ export default function SimulationResults({ result }: SimulationResultsProps) {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
             Final Value
@@ -221,6 +241,19 @@ export default function SimulationResults({ result }: SimulationResultsProps) {
             Trades
           </p>
           <p className="text-xl font-bold text-purple-600">{result.algorithm_trades || result.trades?.length || result.trade_log?.length || 0}</p>
+        </div>
+        <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+            Dividends
+          </p>
+          <p className="text-xl font-bold text-teal-600">
+            ${(result.total_dividends_received || result.dividend_analysis?.total_dividends || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          </p>
+          {(result.dividend_events?.length || result.dividend_analysis?.dividend_count || 0) > 0 && (
+            <p className="text-xs text-gray-500 mt-0.5">
+              {result.dividend_events?.length || result.dividend_analysis?.dividend_count || 0} payment{(result.dividend_events?.length || result.dividend_analysis?.dividend_count || 0) !== 1 ? 's' : ''}
+            </p>
+          )}
         </div>
       </div>
 
@@ -352,6 +385,17 @@ export default function SimulationResults({ result }: SimulationResultsProps) {
               }`}
             >
               Trade Log ({result.trades?.length || result.trade_log?.length || 0})
+            </button>
+            <button
+              onClick={() => setActiveTab('dividends')}
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
+                activeTab === 'dividends'
+                  ? 'bg-teal-100 text-teal-700'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <DollarSign className="h-4 w-4" />
+              Dividends ({result.dividend_events?.length || result.dividend_analysis?.dividend_count || 0})
             </button>
           </div>
 
@@ -555,6 +599,109 @@ export default function SimulationResults({ result }: SimulationResultsProps) {
               <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-200">
                 <p className="text-sm text-gray-500 italic">
                   No trades executed during this simulation.
+                </p>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Dividends Tab */}
+        {activeTab === 'dividends' && (
+          <>
+            {(result.dividend_events && result.dividend_events.length > 0) ? (
+              <div className="space-y-4">
+                {/* Dividend Summary */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-teal-50 rounded-lg border border-teal-100">
+                  <div>
+                    <p className="text-xs font-semibold text-teal-600 uppercase tracking-wider mb-1">Total Gross</p>
+                    <p className="text-lg font-bold text-gray-900">
+                      ${result.dividend_events.reduce((sum, d) => sum + (d.gross_amount || 0), 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-teal-600 uppercase tracking-wider mb-1">Withholding Tax</p>
+                    <p className="text-lg font-bold text-red-600">
+                      -${result.dividend_events.reduce((sum, d) => sum + (d.withholding_tax || 0), 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-teal-600 uppercase tracking-wider mb-1">Net Received</p>
+                    <p className="text-lg font-bold text-teal-700">
+                      ${result.dividend_events.reduce((sum, d) => sum + (d.net_amount || 0), 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-teal-600 uppercase tracking-wider mb-1">Payments</p>
+                    <p className="text-lg font-bold text-gray-900">{result.dividend_events.length}</p>
+                  </div>
+                </div>
+
+                {/* Dividend Events Table */}
+                <div className="-mx-6 overflow-x-auto max-h-96 overflow-y-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Ex-Date
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Shares Held
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          $/Share
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Gross
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Tax (25%)
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Net
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Anchor Adj.
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-100">
+                      {result.dividend_events.map((dividend, idx) => (
+                        <tr key={idx} className="hover:bg-teal-50 transition-colors">
+                          <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-900 font-medium">
+                            {dividend.ex_date || dividend.date}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-xs text-right text-gray-600">
+                            {dividend.shares_held?.toFixed(2) || '-'}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-xs text-right text-gray-600">
+                            ${dividend.dps?.toFixed(4) || '-'}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-xs text-right font-medium text-gray-900">
+                            ${dividend.gross_amount?.toFixed(2) || '-'}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-xs text-right text-red-600">
+                            -${dividend.withholding_tax?.toFixed(2) || '0.00'}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-xs text-right font-medium text-teal-700">
+                            ${dividend.net_amount?.toFixed(2) || '-'}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-xs text-right text-gray-500">
+                            -${dividend.anchor_adjustment?.toFixed(2) || dividend.dps?.toFixed(2) || '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                <DollarSign className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                <p className="text-sm text-gray-500 italic">
+                  No dividend payments during this simulation period.
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Dividends are processed on ex-dividend dates when you hold shares.
                 </p>
               </div>
             )}

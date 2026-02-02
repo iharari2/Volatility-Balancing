@@ -539,7 +539,7 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
 | ID  | Issue                                                    | Priority | Status  |
 | --- | -------------------------------------------------------- | -------- | ------- |
 | SIM-1 | Add markers to simulation for Actions (B/S) in charts | Medium   | Fixed   |
-| SIM-2 | Add dividends to simulation                            | Medium   | Open    |
+| SIM-2 | Add dividends to simulation                            | Medium   | Fixed   |
 | SIM-3 | Add comparison of Ticker performance on the same time  | Medium   | Open    |
 | SIM-4 | Export to Excel does not work                          | High     | Open    |
 
@@ -548,6 +548,18 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
 | ID  | Issue                                                    | Priority | Status  |
 | --- | -------------------------------------------------------- | -------- | ------- |
 | NAV-1 | Navigation menu can only be accessed from simulation menu | Medium | Fixed   |
+
+### **Analytics Issues**
+
+| ID  | Issue                                                    | Priority | Status  |
+| --- | -------------------------------------------------------- | -------- | ------- |
+| ANA-1 | Analytics & Reports does not show any data              | High     | Open    |
+
+### **Feature Requests**
+
+| ID  | Issue                                                    | Priority | Status  |
+| --- | -------------------------------------------------------- | -------- | ------- |
+| FEAT-1 | Add dividend tracker                                   | Medium   | Open    |
 
 ### **Detailed Issue Descriptions**
 
@@ -590,10 +602,15 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
   - Tooltips show trade details (price, quantity)
   - Added legend showing BUY/SELL marker colors
 
-#### **SIM-2: Add dividends to simulation**
+#### **SIM-2: Add dividends to simulation** ✅ FIXED
 - **Description**: Simulation does not account for dividend payments
 - **Impact**: Inaccurate simulation results for dividend-paying stocks
-- **Suggested Fix**: Integrate dividend data and include in P&L calculations
+- **Fix Applied**:
+  - Backend already had dividend processing (anchor adjustment, cash addition)
+  - Added Dividends KPI card showing total dividends received
+  - Added Dividends tab with summary (gross, tax, net, count)
+  - Added detailed dividend events table (ex-date, shares, DPS, amounts, anchor adjustment)
+  - Dividends are processed on ex-dividend dates with 25% withholding tax
 
 #### **SIM-3: Ticker performance comparison**
 - **Description**: Add ability to compare multiple ticker performances on same timeframe
@@ -614,6 +631,21 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
   - Added Portfolios and Analytics quick links to topbar (visible on larger screens)
   - Menu closes when clicking outside
   - Active page is highlighted in the dropdown
+
+#### **ANA-1: Analytics & Reports does not show any data**
+- **Description**: The Analytics & Reports page displays no data
+- **Impact**: Users cannot view analytics or reports for their trading activity
+- **Suggested Fix**: Investigate data fetching, API endpoints, and component rendering
+
+#### **FEAT-1: Add dividend tracker**
+- **Description**: Add a dedicated dividend tracking feature for positions
+- **Impact**: Users need visibility into upcoming and received dividends across their portfolio
+- **Suggested Features**:
+  - Dashboard showing upcoming ex-dividend dates
+  - Historical dividend payments received
+  - Dividend yield calculations per position
+  - Total dividend income tracking
+  - Dividend calendar view
 
 ---
 
