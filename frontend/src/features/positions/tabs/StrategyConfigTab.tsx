@@ -19,6 +19,7 @@ interface StrategyConfigTabProps {
   marketStatus: MarketStatus;
   onConfigChange: (config: PortfolioConfig) => void;
   onSave: (config: PortfolioConfig) => Promise<void>;
+  onReload?: () => Promise<void>; // Optional: callback to reload data after save
   onCopyTraceId: (traceId: string) => void;
   copiedTraceId: string | null;
 }
@@ -33,6 +34,7 @@ export default function StrategyConfigTab({
   marketStatus,
   onConfigChange,
   onSave,
+  onReload,
   onCopyTraceId,
   copiedTraceId,
 }: StrategyConfigTabProps) {
@@ -182,8 +184,12 @@ export default function StrategyConfigTab({
         });
         setIsPositionSpecific(true);
         toast.success('Position strategy saved successfully');
+        // Reload data to refresh effectiveConfig display
+        if (onReload) {
+          await onReload();
+        }
       } else {
-        // Otherwise, save portfolio-level config
+        // Otherwise, save portfolio-level config (onSave handles reload)
         await onSave(config);
       }
     } catch (error: any) {

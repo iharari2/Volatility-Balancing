@@ -245,21 +245,13 @@ export default function PositionsAndConfigPage() {
           last_updated: new Date().toISOString(),
         });
         // Set default editable config so StrategyConfigTab can render
+        // Use consistent values matching effectiveConfig defaults above
         setEditableConfig({
           trigger_threshold_up_pct: 3.0,
           trigger_threshold_down_pct: -3.0,
           min_stock_pct: 20.0,
           max_stock_pct: 60.0,
           max_trade_pct_of_position: 10.0,
-          commission_rate: 0.1,
-          market_hours_policy: 'market-open-only',
-        });
-        setEditableConfig({
-          trigger_threshold_up_pct: 3.0,
-          trigger_threshold_down_pct: -3.0,
-          min_stock_pct: 25.0,
-          max_stock_pct: 75.0,
-          max_trade_pct_of_position: 50.0,
           commission_rate: 0.1,
           market_hours_policy: 'market-open-only',
         });
@@ -810,6 +802,7 @@ export default function PositionsAndConfigPage() {
                   throw err;
                 }
               }}
+              onReload={loadData}
               onCopyTraceId={setCopiedTraceId}
               copiedTraceId={copiedTraceId}
             />

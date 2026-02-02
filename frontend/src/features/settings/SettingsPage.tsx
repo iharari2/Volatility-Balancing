@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 
 export default function SettingsPage() {
@@ -9,7 +11,16 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
+        <div>
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-primary-600 mb-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Workspace
+          </Link>
+          <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
+        </div>
       </div>
 
       {/* Tenant Defaults */}

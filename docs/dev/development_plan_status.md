@@ -521,6 +521,80 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
 
 ---
 
+## 🐛 **Reported Issues & Work Items**
+
+**Date Added**: February 2, 2026
+
+### **Current Portfolio Issues**
+
+| ID  | Issue                                               | Priority | Status  |
+| --- | --------------------------------------------------- | -------- | ------- |
+| CP-1 | Strategy values do not seem persistent             | High     | Fixed   |
+| CP-2 | Current Effective Settings differ from what I save | High     | Fixed   |
+| CP-3 | Navigation: How to go back to other screens (home, prev) | Medium | Fixed |
+
+### **Simulation Enhancements**
+
+| ID  | Issue                                                    | Priority | Status  |
+| --- | -------------------------------------------------------- | -------- | ------- |
+| SIM-1 | Add markers to simulation for Actions (B/S) in charts | Medium   | Open    |
+| SIM-2 | Add dividends to simulation                            | Medium   | Open    |
+| SIM-3 | Add comparison of Ticker performance on the same time  | Medium   | Open    |
+| SIM-4 | Export to Excel does not work                          | High     | Open    |
+
+### **Detailed Issue Descriptions**
+
+#### **CP-1: Strategy values do not seem persistent** ✅ FIXED
+- **Description**: Strategy configuration values are not being saved/loaded correctly between sessions
+- **Impact**: Users lose their strategy settings when navigating away or restarting
+- **Root Cause**: StrategyConfigForm component had no state management or API integration
+- **Fix Applied**:
+  - Rewrote StrategyConfigForm with proper state, API calls, and save functionality
+  - Fixed duplicate setEditableConfig call in PositionsAndConfigPage that was overwriting config
+
+#### **CP-2: Current Effective Settings differ from what I save** ✅ FIXED
+- **Description**: The displayed "Current Effective Settings" do not match the values that were saved
+- **Impact**: Confusion about which settings are actually active
+- **Root Cause**:
+  1. Duplicate setEditableConfig initialization with inconsistent values
+  2. effectiveConfig not being reloaded after save
+- **Fix Applied**:
+  - Removed duplicate setEditableConfig call with conflicting values
+  - Added onReload callback to StrategyConfigTab to refresh data after save
+  - Added effectiveConfig reload in StrategyTab (workspace) after save
+
+#### **CP-3: Navigation back to other screens** ✅ FIXED
+- **Description**: No clear way to navigate back to home or previous screens
+- **Impact**: Poor user experience, users feel "trapped" in certain views
+- **Fix Applied**:
+  - Added Home button with VB logo to WorkspaceTopBar that deselects position and navigates home
+  - Added breadcrumb showing Portfolio > Position in WorkspaceTopBar
+  - Added position header with close (X) button in RightPanel to deselect position
+  - Added "Back to Workspace" link in SimulationLabPage header
+  - Added "Back to Workspace" link in SettingsPage header
+
+#### **SIM-1: Add Buy/Sell markers to simulation charts**
+- **Description**: Simulation charts should show visual markers for buy and sell actions
+- **Impact**: Difficult to correlate price movements with trading decisions
+- **Suggested Fix**: Add chart annotations/markers at trade execution points
+
+#### **SIM-2: Add dividends to simulation**
+- **Description**: Simulation does not account for dividend payments
+- **Impact**: Inaccurate simulation results for dividend-paying stocks
+- **Suggested Fix**: Integrate dividend data and include in P&L calculations
+
+#### **SIM-3: Ticker performance comparison**
+- **Description**: Add ability to compare multiple ticker performances on same timeframe
+- **Impact**: Cannot benchmark strategy performance against alternatives
+- **Suggested Fix**: Add overlay chart or comparison view for multiple tickers
+
+#### **SIM-4: Export to Excel does not work**
+- **Description**: Excel export functionality from simulation is broken
+- **Impact**: Cannot export simulation results for further analysis
+- **Suggested Fix**: Debug export endpoint and file generation
+
+---
+
 ## 🎨 **Phase 1.5: Analysis Screens & Chart Design Improvements (Weeks 12-16)**
 
 ### **Phase 1.5: Advanced Analytics & Visualization Enhancement**
