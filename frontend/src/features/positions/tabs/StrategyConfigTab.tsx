@@ -20,6 +20,7 @@ interface StrategyConfigTabProps {
   onConfigChange: (config: PortfolioConfig) => void;
   onSave: (config: PortfolioConfig) => Promise<void>;
   onReload?: () => Promise<void>; // Optional: callback to reload data after save
+  onEffectiveConfigUpdate?: (config: EffectiveConfig) => void; // Optional: callback to update effectiveConfig display after position save
   onCopyTraceId: (traceId: string) => void;
   copiedTraceId: string | null;
 }
@@ -35,6 +36,7 @@ export default function StrategyConfigTab({
   onConfigChange,
   onSave,
   onReload,
+  onEffectiveConfigUpdate,
   onCopyTraceId,
   copiedTraceId,
 }: StrategyConfigTabProps) {
@@ -184,8 +186,21 @@ export default function StrategyConfigTab({
         });
         setIsPositionSpecific(true);
         toast.success('Position strategy saved successfully');
-        // Reload data to refresh effectiveConfig display
-        if (onReload) {
+        // Update effectiveConfig display with the saved values (not portfolio-level config)
+        if (onEffectiveConfigUpdate) {
+          onEffectiveConfigUpdate({
+            trigger_threshold_up_pct: config.trigger_threshold_up_pct,
+            trigger_threshold_down_pct: config.trigger_threshold_down_pct,
+            min_stock_pct: config.min_stock_pct,
+            max_stock_pct: config.max_stock_pct,
+            max_trade_pct_of_position: config.max_trade_pct_of_position,
+            commission_rate: config.commission_rate,
+            market_hours_policy: config.market_hours_policy,
+            last_updated: new Date().toISOString(),
+            version: (effectiveConfig?.version || 0) + 1,
+          });
+        } else if (onReload) {
+          // Fallback to reload if no specific update callback provided
           await onReload();
         }
       } else {

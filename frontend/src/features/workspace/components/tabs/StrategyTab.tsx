@@ -38,29 +38,39 @@ export default function StrategyTab() {
         const marketState = await marketHoursService.getMarketState();
         setMarketStatus(marketState.status);
 
-        // Load effective config
-        const effective = await portfolioScopedApi.getEffectiveConfig(tenantId, portfolioId);
-        setEffectiveConfig(effective);
-
-        // Load position-specific config
+        // Load position-specific config (includes fallback to portfolio config)
         try {
           const posConfig = await portfolioScopedApi.getPositionConfig(
             tenantId,
             portfolioId,
             selectedPosition.position_id
           );
-          setConfig({
+
+          // The position config endpoint returns the effective config for this position
+          // (position-specific if set, otherwise portfolio defaults)
+          const configValues: PortfolioConfig = {
             trigger_threshold_up_pct: posConfig.trigger_threshold_up_pct,
             trigger_threshold_down_pct: posConfig.trigger_threshold_down_pct,
             min_stock_pct: posConfig.min_stock_pct,
             max_stock_pct: posConfig.max_stock_pct,
             max_trade_pct_of_position: posConfig.max_trade_pct_of_position,
             commission_rate: posConfig.commission_rate,
-            market_hours_policy: 'market-open-only',
-          });
+            market_hours_policy: 'market-open-only' as const,
+          };
+
+          setConfig(configValues);
           setIsPositionSpecific(posConfig.is_position_specific);
+
+          // Use position config as effective config (this is what the engine actually uses)
+          setEffectiveConfig({
+            ...configValues,
+            last_updated: new Date().toISOString(),
+            version: 1,
+          });
         } catch (error) {
-          // Fall back to effective config
+          // Fall back to portfolio-level effective config
+          const effective = await portfolioScopedApi.getEffectiveConfig(tenantId, portfolioId);
+          setEffectiveConfig(effective);
           setConfig({
             trigger_threshold_up_pct: effective.trigger_threshold_up_pct,
             trigger_threshold_down_pct: effective.trigger_threshold_down_pct,
@@ -154,13 +164,19 @@ export default function StrategyTab() {
       );
       setIsPositionSpecific(true);
 
-      // Reload effective config to show updated values in the "Current Effective Settings" panel
-      try {
-        const effective = await portfolioScopedApi.getEffectiveConfig(tenantId, portfolioId);
-        setEffectiveConfig(effective);
-      } catch (reloadError) {
-        console.warn('Failed to reload effective config after save:', reloadError);
-      }
+      // Update effective config to show the saved values
+      // Use the saved config values directly since they are now the effective settings for this position
+      setEffectiveConfig({
+        trigger_threshold_up_pct: config.trigger_threshold_up_pct,
+        trigger_threshold_down_pct: config.trigger_threshold_down_pct,
+        min_stock_pct: config.min_stock_pct,
+        max_stock_pct: config.max_stock_pct,
+        max_trade_pct_of_position: config.max_trade_pct_of_position,
+        commission_rate: config.commission_rate,
+        market_hours_policy: config.market_hours_policy,
+        last_updated: new Date().toISOString(),
+        version: (effectiveConfig?.version || 0) + 1,
+      });
 
       toast.success('Strategy saved successfully');
     } catch (error: any) {

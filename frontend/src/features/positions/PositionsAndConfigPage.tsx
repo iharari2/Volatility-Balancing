@@ -803,6 +803,20 @@ export default function PositionsAndConfigPage() {
                 }
               }}
               onReload={loadData}
+              onEffectiveConfigUpdate={(config) => {
+                // Update effectiveConfig state with the new position-specific values
+                setEffectiveConfig({
+                  trigger_up: config.trigger_threshold_up_pct,
+                  trigger_down: config.trigger_threshold_down_pct,
+                  min_stock_pct: config.min_stock_pct,
+                  max_stock_pct: config.max_stock_pct,
+                  max_trade_pct_of_position: config.max_trade_pct_of_position,
+                  commission_base_rate: config.commission_rate,
+                  commission_overrides_count: 0,
+                  market_hours_policy: config.market_hours_policy,
+                  last_updated: config.last_updated,
+                });
+              }}
               onCopyTraceId={setCopiedTraceId}
               copiedTraceId={copiedTraceId}
             />

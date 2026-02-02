@@ -566,21 +566,27 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
 #### **CP-1: Strategy values do not seem persistent** ✅ FIXED
 - **Description**: Strategy configuration values are not being saved/loaded correctly between sessions
 - **Impact**: Users lose their strategy settings when navigating away or restarting
-- **Root Cause**: StrategyConfigForm component had no state management or API integration
+- **Root Cause**:
+  1. StrategyConfigForm component had no state management or API integration
+  2. On initial load, `getEffectiveConfig()` returned portfolio-level config ignoring position-specific settings
 - **Fix Applied**:
   - Rewrote StrategyConfigForm with proper state, API calls, and save functionality
   - Fixed duplicate setEditableConfig call in PositionsAndConfigPage that was overwriting config
+  - StrategyTab now loads position config via `getPositionConfig()` instead of portfolio-level `getEffectiveConfig()`
 
 #### **CP-2: Current Effective Settings differ from what I save** ✅ FIXED
 - **Description**: The displayed "Current Effective Settings" do not match the values that were saved
 - **Impact**: Confusion about which settings are actually active
 - **Root Cause**:
   1. Duplicate setEditableConfig initialization with inconsistent values
-  2. effectiveConfig not being reloaded after save
+  2. After save, `onReload` callback loaded portfolio-level config instead of position-specific values
+  3. `getEffectiveConfig()` returns portfolio defaults, not position overrides
 - **Fix Applied**:
   - Removed duplicate setEditableConfig call with conflicting values
-  - Added onReload callback to StrategyConfigTab to refresh data after save
-  - Added effectiveConfig reload in StrategyTab (workspace) after save
+  - Added `onEffectiveConfigUpdate` callback to update displayed config directly with saved values
+  - StrategyTab directly sets effectiveConfig from saved values instead of reloading
+  - StrategyConfigTab now passes saved config to parent via callback instead of reloading portfolio config
+  - PositionsAndConfigPage updates effectiveConfig state when position config is saved
 
 #### **CP-3: Navigation back to other screens** ✅ FIXED
 - **Description**: No clear way to navigate back to home or previous screens
