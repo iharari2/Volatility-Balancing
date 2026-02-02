@@ -11,6 +11,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import { BarChart3 } from 'lucide-react';
 import { Position } from '../../contexts/PortfolioContext';
 
 interface AnalyticsChartsProps {
@@ -131,6 +132,26 @@ export default function AnalyticsCharts({ positions, analyticsData }: AnalyticsC
 
     return weeklyReturns.sort((a, b) => a.date.localeCompare(b.date));
   }, [analyticsData, portfolioValueData]);
+
+  // Check if we have any data to display
+  const hasData = portfolioValueData.length > 0;
+
+  if (!hasData) {
+    return (
+      <div className="card p-8 text-center">
+        <BarChart3 className="h-12 w-12 mx-auto text-gray-300 mb-4" />
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">No Analytics Data Available</h3>
+        <p className="text-sm text-gray-500 max-w-md mx-auto mb-4">
+          Analytics data is generated from trading activity. Run simulations or execute trades to see performance metrics and charts.
+        </p>
+        <div className="text-xs text-gray-400 space-y-1">
+          <p>• Run a simulation to see projected performance</p>
+          <p>• Execute trades to build trading history</p>
+          <p>• Enable continuous trading for automated data collection</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

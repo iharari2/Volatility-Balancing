@@ -614,12 +614,13 @@ def get_portfolio_summary(
 def get_portfolio_analytics(
     tenant_id: str,
     portfolio_id: str,
+    days: int = Query(30, description="Number of days of analytics data"),
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
 ) -> Dict[str, Any]:
     """Get detailed portfolio analytics."""
     try:
         analytics = portfolio_service.get_portfolio_analytics(
-            tenant_id=tenant_id, portfolio_id=portfolio_id
+            tenant_id=tenant_id, portfolio_id=portfolio_id, days=days
         )
         if not analytics:
             raise HTTPException(status_code=404, detail="Portfolio not found")

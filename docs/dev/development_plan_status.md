@@ -553,7 +553,7 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
 
 | ID  | Issue                                                    | Priority | Status  |
 | --- | -------------------------------------------------------- | -------- | ------- |
-| ANA-1 | Analytics & Reports does not show any data              | High     | Open    |
+| ANA-1 | Analytics & Reports does not show any data              | High     | Fixed   |
 
 ### **Feature Requests**
 
@@ -632,10 +632,17 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
   - Menu closes when clicking outside
   - Active page is highlighted in the dropdown
 
-#### **ANA-1: Analytics & Reports does not show any data**
+#### **ANA-1: Analytics & Reports does not show any data** ✅ FIXED
 - **Description**: The Analytics & Reports page displays no data
 - **Impact**: Users cannot view analytics or reports for their trading activity
-- **Suggested Fix**: Investigate data fetching, API endpoints, and component rendering
+- **Root Cause**:
+  1. Backend route missing `days` query parameter extraction
+  2. No user feedback when evaluation timeline data is empty
+- **Fix Applied**:
+  - Fixed backend route to accept and pass `days` query parameter
+  - Added empty state UI for charts when no time_series data exists
+  - Added warning banner in KPIs when limited data is available
+  - Users now see helpful guidance on how to generate analytics data
 
 #### **FEAT-1: Add dividend tracker**
 - **Description**: Add a dedicated dividend tracking feature for positions
