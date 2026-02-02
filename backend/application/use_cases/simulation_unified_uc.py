@@ -203,6 +203,10 @@ class SimulationUnifiedUC:
         fetch_start = start_date - timedelta(days=1)  # Get one extra day for context
         fetch_end = end_date + timedelta(days=1)
 
+        # Cap fetch_end at current time to avoid requesting future data
+        if fetch_end > now:
+            fetch_end = now
+
         report_progress(f"Fetching historical data for {ticker}...", 10.0)
         print(f"Fetching historical data for {ticker} from {fetch_start} to {fetch_end}")
         try:

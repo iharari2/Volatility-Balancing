@@ -101,22 +101,29 @@ export default function SimulationResults({ result }: SimulationResultsProps) {
     URL.revokeObjectURL(url);
   };
 
-  // Mock equity curve data if not provided
-  const equityData =
-    result.equityCurve ||
-    Array.from({ length: 30 }, (_, i) => ({
-      date: new Date(Date.now() - (30 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      value: 100000 + (result.return || 0) * 1000 * (i / 30),
-    }));
+  // Build equity curve from time_series_data if available
+  const equityData = result.equityCurve || (timelineEvents.length > 0
+    ? timelineEvents.map((event) => ({
+        date: event.date,
+        value: event.total_value,
+      }))
+    : Array.from({ length: 30 }, (_, i) => ({
+        date: new Date(Date.now() - (30 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        value: 100000 + (result.return || 0) * 1000 * (i / 30),
+      })));
 
-  // Mock price data with triggers if not provided
-  const priceData =
-    result.priceData ||
-    Array.from({ length: 30 }, (_, i) => ({
-      date: new Date(Date.now() - (30 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      price: 200 + Math.sin(i / 5) * 10,
-      trigger: i % 10 === 0 ? (i % 20 === 0 ? 'BUY' : 'SELL') : undefined,
-    }));
+  // Build price data from time_series_data if available
+  const priceData = result.priceData || (timelineEvents.length > 0
+    ? timelineEvents.map((event) => ({
+        date: event.date,
+        price: event.price,
+        trigger: event.triggered ? event.side : undefined,
+      }))
+    : Array.from({ length: 30 }, (_, i) => ({
+        date: new Date(Date.now() - (30 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        price: 200 + Math.sin(i / 5) * 10,
+        trigger: i % 10 === 0 ? (i % 20 === 0 ? 'BUY' : 'SELL') : undefined,
+      })));
 
   return (
     <div className="card space-y-8">
