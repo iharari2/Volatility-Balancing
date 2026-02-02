@@ -521,6 +521,66 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
 
 ---
 
+## 🐛 **Reported Issues & Work Items**
+
+**Date Added**: February 2, 2026
+
+### **Current Portfolio Issues**
+
+| ID  | Issue                                               | Priority | Status  |
+| --- | --------------------------------------------------- | -------- | ------- |
+| CP-1 | Strategy values do not seem persistent             | High     | Open    |
+| CP-2 | Current Effective Settings differ from what I save | High     | Open    |
+| CP-3 | Navigation: How to go back to other screens (home, prev) | Medium | Open |
+
+### **Simulation Enhancements**
+
+| ID  | Issue                                                    | Priority | Status  |
+| --- | -------------------------------------------------------- | -------- | ------- |
+| SIM-1 | Add markers to simulation for Actions (B/S) in charts | Medium   | Open    |
+| SIM-2 | Add dividends to simulation                            | Medium   | Open    |
+| SIM-3 | Add comparison of Ticker performance on the same time  | Medium   | Open    |
+| SIM-4 | Export to Excel does not work                          | High     | Open    |
+
+### **Detailed Issue Descriptions**
+
+#### **CP-1: Strategy values do not seem persistent**
+- **Description**: Strategy configuration values are not being saved/loaded correctly between sessions
+- **Impact**: Users lose their strategy settings when navigating away or restarting
+- **Suggested Fix**: Review strategy persistence layer and database storage
+
+#### **CP-2: Current Effective Settings differ from what I save**
+- **Description**: The displayed "Current Effective Settings" do not match the values that were saved
+- **Impact**: Confusion about which settings are actually active
+- **Suggested Fix**: Verify settings save/load flow and UI refresh after save
+
+#### **CP-3: Navigation back to other screens**
+- **Description**: No clear way to navigate back to home or previous screens
+- **Impact**: Poor user experience, users feel "trapped" in certain views
+- **Suggested Fix**: Add breadcrumb navigation or back button to header
+
+#### **SIM-1: Add Buy/Sell markers to simulation charts**
+- **Description**: Simulation charts should show visual markers for buy and sell actions
+- **Impact**: Difficult to correlate price movements with trading decisions
+- **Suggested Fix**: Add chart annotations/markers at trade execution points
+
+#### **SIM-2: Add dividends to simulation**
+- **Description**: Simulation does not account for dividend payments
+- **Impact**: Inaccurate simulation results for dividend-paying stocks
+- **Suggested Fix**: Integrate dividend data and include in P&L calculations
+
+#### **SIM-3: Ticker performance comparison**
+- **Description**: Add ability to compare multiple ticker performances on same timeframe
+- **Impact**: Cannot benchmark strategy performance against alternatives
+- **Suggested Fix**: Add overlay chart or comparison view for multiple tickers
+
+#### **SIM-4: Export to Excel does not work**
+- **Description**: Excel export functionality from simulation is broken
+- **Impact**: Cannot export simulation results for further analysis
+- **Suggested Fix**: Debug export endpoint and file generation
+
+---
+
 ## 🎨 **Phase 1.5: Analysis Screens & Chart Design Improvements (Weeks 12-16)**
 
 ### **Phase 1.5: Advanced Analytics & Visualization Enhancement**
