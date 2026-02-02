@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Download, Play, Filter, Clock, TrendingUp, TrendingDown } from 'lucide-react';
 import {
-  LineChart,
+  ComposedChart,
   Line,
   XAxis,
   YAxis,
@@ -9,6 +9,8 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  Scatter,
+  Cell,
 } from 'recharts';
 
 interface TimelineEvent {
@@ -125,6 +127,36 @@ export default function SimulationResults({ result }: SimulationResultsProps) {
         trigger: i % 10 === 0 ? (i % 20 === 0 ? 'BUY' : 'SELL') : undefined,
       })));
 
+  // Build price chart data with buy/sell markers
+  const priceChartData = timelineEvents.length > 0
+    ? timelineEvents.map((event) => ({
+        date: event.date,
+        price: event.price,
+        buyMarker: event.triggered && event.side === 'BUY' ? event.price : null,
+        sellMarker: event.triggered && event.side === 'SELL' ? event.price : null,
+        tradeQty: event.trade_qty,
+        side: event.side,
+      }))
+    : priceData.map((d) => ({
+        ...d,
+        buyMarker: d.trigger === 'BUY' ? d.price : null,
+        sellMarker: d.trigger === 'SELL' ? d.price : null,
+      }));
+
+  // Build equity chart data with trade markers
+  const equityChartData = timelineEvents.length > 0
+    ? timelineEvents.map((event) => ({
+        date: event.date,
+        value: event.total_value,
+        buyMarker: event.triggered && event.side === 'BUY' ? event.total_value : null,
+        sellMarker: event.triggered && event.side === 'SELL' ? event.total_value : null,
+      }))
+    : equityData.map((d) => ({
+        ...d,
+        buyMarker: null,
+        sellMarker: null,
+      }));
+
   return (
     <div className="card space-y-8">
       <div className="flex items-center justify-between pb-4 border-b border-gray-100">
@@ -199,7 +231,7 @@ export default function SimulationResults({ result }: SimulationResultsProps) {
             Equity Curve
           </h3>
           <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={equityData}>
+            <ComposedChart data={equityChartData}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
               <XAxis
                 dataKey="date"
@@ -214,19 +246,46 @@ export default function SimulationResults({ result }: SimulationResultsProps) {
                   border: 'none',
                   boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
                 }}
+                formatter={(value: number, name: string) => {
+                  if (name === 'buyMarker') return [`$${value?.toLocaleString()}`, '🟢 BUY'];
+                  if (name === 'sellMarker') return [`$${value?.toLocaleString()}`, '🔴 SELL'];
+                  return [`$${value?.toLocaleString()}`, 'Portfolio Value'];
+                }}
               />
-              <Line type="monotone" dataKey="value" stroke="#2563eb" strokeWidth={3} dot={false} />
-            </LineChart>
+              <Line type="monotone" dataKey="value" stroke="#2563eb" strokeWidth={3} dot={false} name="value" />
+              <Scatter dataKey="buyMarker" fill="#22c55e" shape="triangle" name="buyMarker">
+                {equityChartData.map((entry, index) => (
+                  <Cell key={`buy-${index}`} fill={entry.buyMarker ? '#22c55e' : 'transparent'} />
+                ))}
+              </Scatter>
+              <Scatter dataKey="sellMarker" fill="#ef4444" shape="triangle" name="sellMarker">
+                {equityChartData.map((entry, index) => (
+                  <Cell key={`sell-${index}`} fill={entry.sellMarker ? '#ef4444' : 'transparent'} />
+                ))}
+              </Scatter>
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
 
         {/* Price Chart */}
         <div className="p-4 bg-white rounded-xl border border-gray-100 shadow-inner">
-          <h3 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wider">
-            Asset Price & Triggers
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+              Asset Price & Triggers
+            </h3>
+            <div className="flex items-center gap-4 text-xs">
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 bg-green-500 rounded-full inline-block"></span>
+                BUY
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 bg-red-500 rounded-full inline-block"></span>
+                SELL
+              </span>
+            </div>
+          </div>
           <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={priceData}>
+            <ComposedChart data={priceChartData}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
               <XAxis
                 dataKey="date"
@@ -234,16 +293,37 @@ export default function SimulationResults({ result }: SimulationResultsProps) {
                 axisLine={false}
                 tickLine={false}
               />
-              <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} domain={['auto', 'auto']} />
               <Tooltip
                 contentStyle={{
                   borderRadius: '8px',
                   border: 'none',
                   boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
                 }}
+                formatter={(value: number, name: string, props: { payload?: { tradeQty?: number } }) => {
+                  if (name === 'buyMarker') {
+                    const qty = props.payload?.tradeQty;
+                    return [`$${value?.toFixed(2)}${qty ? ` (${qty.toFixed(2)} shares)` : ''}`, '🟢 BUY'];
+                  }
+                  if (name === 'sellMarker') {
+                    const qty = props.payload?.tradeQty;
+                    return [`$${value?.toFixed(2)}${qty ? ` (${qty.toFixed(2)} shares)` : ''}`, '🔴 SELL'];
+                  }
+                  return [`$${value?.toFixed(2)}`, 'Price'];
+                }}
               />
-              <Line type="monotone" dataKey="price" stroke="#10b981" strokeWidth={2} dot={false} />
-            </LineChart>
+              <Line type="monotone" dataKey="price" stroke="#10b981" strokeWidth={2} dot={false} name="price" />
+              <Scatter dataKey="buyMarker" fill="#22c55e" name="buyMarker">
+                {priceChartData.map((entry, index) => (
+                  <Cell key={`buy-${index}`} fill={entry.buyMarker ? '#22c55e' : 'transparent'} />
+                ))}
+              </Scatter>
+              <Scatter dataKey="sellMarker" fill="#ef4444" name="sellMarker">
+                {priceChartData.map((entry, index) => (
+                  <Cell key={`sell-${index}`} fill={entry.sellMarker ? '#ef4444' : 'transparent'} />
+                ))}
+              </Scatter>
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       </div>

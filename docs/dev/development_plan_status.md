@@ -462,29 +462,30 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
 - **Missing**: Checkbox to filter "all events" vs "successful transactions only"
 - **Missing**: Export frequency based on data granularity (6 min intervals)
 
-#### **2. Real-time Data Integration** ❌ **PARTIALLY IMPLEMENTED**
-
-- **Missing**: Yahoo Finance integration (currently using mock data)
-- **Missing**: Configurable data source selection
-- **Missing**: Multiple sampling frequencies per day
-
-#### **3. Transaction Details & Event Tracking** ❌ **NOT IMPLEMENTED**
+#### **2. Transaction Details & Event Tracking** ❌ **NOT IMPLEMENTED**
 
 - **Missing**: Detailed transaction tracking per position
 - **Missing**: Open orders tracking (market price, bid/asks)
 - **Missing**: Key events (ex-dividend, market open/close) per position
 - **Missing**: "Reason for action" field in position monitoring
 
-#### **4. Heat Map Visualization** ❌ **NOT IMPLEMENTED**
+#### **3. Heat Map Visualization** ❌ **NOT IMPLEMENTED**
 
 - **Missing**: Actual heat map visualization component
 - **Missing**: Parameter sensitivity analysis display
 - **Missing**: Return vs parameter value visualization
 
-#### **5. Position Change Logging** ❌ **NOT IMPLEMENTED**
+#### **4. Position Change Logging** ❌ **NOT IMPLEMENTED**
 
 - **Missing**: Simple change logging system
 - **Missing**: Log entry creation on position changes
+
+#### **5. Real-time Data UI** ⏸️ **LOW PRIORITY**
+
+- **Backend**: Yahoo Finance adapter fully implemented ✅
+- **Missing**: UI for data source selection
+- **Missing**: Status indicators (live vs cached)
+- **Missing**: Configurable sampling frequencies UI
 
 ### **📊 PROGRESS SUMMARY**
 
@@ -497,9 +498,9 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
 | **Excel Export**                | ✅ Complete        | 100%       |
 | **Refresh Configuration**       | ✅ Complete        | 100%       |
 | **Optimization Infrastructure** | 🟡 Partial         | 70%        |
-| **Real-time Data**              | ❌ Missing         | 20%        |
 | **Event Tracking**              | ❌ Missing         | 10%        |
 | **Heat Map Visualization**      | ❌ Missing         | 30%        |
+| **Real-time Data UI**           | ⏸️ Low Priority    | 20%        |
 
 ### **🎯 REMAINING PRIORITY TASKS**
 
@@ -511,11 +512,11 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
 
 2. **MEDIUM PRIORITY:**
 
-   - Integrate Yahoo Finance data source
    - Implement position change logging
-   - Add configurable data sampling frequencies
 
 3. **LOW PRIORITY:**
+   - Yahoo Finance UI integration (data source selector, status indicators)
+   - Configurable data sampling frequencies
    - Advanced position management features
    - Enhanced real-time data capabilities
 
@@ -537,10 +538,16 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
 
 | ID  | Issue                                                    | Priority | Status  |
 | --- | -------------------------------------------------------- | -------- | ------- |
-| SIM-1 | Add markers to simulation for Actions (B/S) in charts | Medium   | Open    |
+| SIM-1 | Add markers to simulation for Actions (B/S) in charts | Medium   | Fixed   |
 | SIM-2 | Add dividends to simulation                            | Medium   | Open    |
 | SIM-3 | Add comparison of Ticker performance on the same time  | Medium   | Open    |
 | SIM-4 | Export to Excel does not work                          | High     | Open    |
+
+### **Navigation Issues**
+
+| ID  | Issue                                                    | Priority | Status  |
+| --- | -------------------------------------------------------- | -------- | ------- |
+| NAV-1 | Navigation menu can only be accessed from simulation menu | Medium | Fixed   |
 
 ### **Detailed Issue Descriptions**
 
@@ -573,10 +580,15 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
   - Added "Back to Workspace" link in SimulationLabPage header
   - Added "Back to Workspace" link in SettingsPage header
 
-#### **SIM-1: Add Buy/Sell markers to simulation charts**
+#### **SIM-1: Add Buy/Sell markers to simulation charts** ✅ FIXED
 - **Description**: Simulation charts should show visual markers for buy and sell actions
 - **Impact**: Difficult to correlate price movements with trading decisions
-- **Suggested Fix**: Add chart annotations/markers at trade execution points
+- **Fix Applied**:
+  - Added Scatter plot markers to both Equity Curve and Price charts
+  - Green circle markers for BUY triggers
+  - Red circle markers for SELL triggers
+  - Tooltips show trade details (price, quantity)
+  - Added legend showing BUY/SELL marker colors
 
 #### **SIM-2: Add dividends to simulation**
 - **Description**: Simulation does not account for dividend payments
@@ -592,6 +604,16 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
 - **Description**: Excel export functionality from simulation is broken
 - **Impact**: Cannot export simulation results for further analysis
 - **Suggested Fix**: Debug export endpoint and file generation
+
+#### **NAV-1: Navigation menu only accessible from simulation menu** ✅ FIXED
+- **Description**: The navigation menu can only be accessed from the simulation menu
+- **Impact**: Poor discoverability, users may not find navigation options in other screens
+- **Fix Applied**:
+  - Added hamburger menu button to Workspace topbar with full navigation dropdown
+  - Menu includes: Workspace, Portfolios, Simulation Lab, Analytics & Reports, Settings
+  - Added Portfolios and Analytics quick links to topbar (visible on larger screens)
+  - Menu closes when clicking outside
+  - Active page is highlighted in the dropdown
 
 ---
 

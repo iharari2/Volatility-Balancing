@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Settings, PlaySquare, HelpCircle, Home, ChevronRight } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Settings, PlaySquare, HelpCircle, Home, ChevronRight, Menu, Briefcase, BarChart3, X } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import MasterDetailLayout from '../../layouts/MasterDetailLayout';
 import { WorkspaceProvider, useWorkspace } from './WorkspaceContext';
@@ -14,6 +14,8 @@ function WorkspaceTopBar() {
   const navigate = useNavigate();
   const [marketStatus, setMarketStatus] = useState<MarketStatus>('CLOSED');
   const [mode] = useState<'Live' | 'Simulation' | 'Sandbox'>('Live');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const updateMarketStatus = async () => {
@@ -26,14 +28,72 @@ function WorkspaceTopBar() {
     return () => clearInterval(interval);
   }, []);
 
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    if (isMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isMenuOpen]);
+
   const handleHomeClick = () => {
     setSelectedPositionId(null);
     navigate('/');
   };
 
+  const navigationItems = [
+    { name: 'Workspace', href: '/', icon: Home },
+    { name: 'Portfolios', href: '/portfolios', icon: Briefcase },
+    { name: 'Simulation Lab', href: '/simulation', icon: PlaySquare },
+    { name: 'Analytics & Reports', href: '/analytics', icon: BarChart3 },
+    { name: 'Settings', href: '/settings', icon: Settings },
+  ];
+
   return (
     <div className="flex-1 flex items-center justify-between">
       <div className="flex items-center gap-4">
+        {/* Menu Button */}
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="flex items-center gap-2 px-2 py-1.5 text-gray-700 hover:text-primary-600 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Navigation Menu"
+          >
+            {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+
+          {/* Dropdown Menu */}
+          {isMenuOpen && (
+            <div className="absolute top-full left-0 mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+              {navigationItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = window.location.pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    to={item.href}
+                    onClick={() => setIsMenuOpen(false)}
+                    className={`flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                      isActive
+                        ? 'bg-primary-50 text-primary-700 font-medium'
+                        : 'text-gray-700 hover:bg-gray-50 hover:text-primary-600'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {item.name}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Home Button */}
         <button
           onClick={handleHomeClick}
@@ -87,13 +147,29 @@ function WorkspaceTopBar() {
       </div>
 
       <div className="flex items-center gap-2">
-        {/* Quick Links */}
+        {/* Quick Links - visible on larger screens */}
+        <Link
+          to="/portfolios"
+          className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-primary-600 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          <Briefcase className="h-4 w-4" />
+          <span>Portfolios</span>
+        </Link>
+
         <Link
           to="/simulation"
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-primary-600 hover:bg-gray-100 rounded-lg transition-colors"
         >
           <PlaySquare className="h-4 w-4" />
           <span className="hidden sm:inline">Sim Lab</span>
+        </Link>
+
+        <Link
+          to="/analytics"
+          className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-primary-600 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          <BarChart3 className="h-4 w-4" />
+          <span>Analytics</span>
         </Link>
 
         <Link
