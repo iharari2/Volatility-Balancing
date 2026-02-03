@@ -49,44 +49,37 @@ export default function AnalyticsCharts({ positions, analyticsData }: AnalyticsC
     return [];
   }, [analyticsData]);
 
+  // Normalized performance comparison (percentage returns from start)
   const buyHoldData = useMemo(() => {
     if (!analyticsData?.time_series?.length || portfolioValueData.length === 0) {
       return [];
     }
 
-    // Calculate buy & hold from initial stock value and price changes
-    // For single position, we can track stock price changes
-    // For portfolio, we'd need individual stock prices which we don't have in time series
-    // So we'll show portfolio value vs a simple buy & hold of the initial stock allocation
     const timeSeries = analyticsData.time_series;
     const initialPoint = timeSeries[0];
     const initialStockValue = initialPoint.stock || 0;
-    const initialCash = initialPoint.cash || 0;
     const initialValue = initialPoint.value || 0;
 
-    if (initialValue === 0) return [];
+    if (initialValue === 0 || initialStockValue === 0) return [];
 
-    // Calculate buy & hold: assume we hold initial stock allocation and it grows with market
-    // Since we don't have individual stock prices, we'll use the stock value ratio
+    // Calculate normalized returns (percentage change from start)
     return portfolioValueData.map((point: { date: string; value: number }, i: number) => {
       const currentPoint = timeSeries[i];
-      if (!currentPoint) return { date: point.date, portfolio: point.value, buyHold: initialValue };
+      if (!currentPoint) return { date: point.date, portfolioReturn: 0, stockReturn: 0 };
 
-      // Buy & hold: initial stock value grows proportionally to portfolio stock value
-      // This is a simplified approximation
-      const stockGrowthRatio =
-        initialStockValue > 0 && currentPoint.stock > 0
-          ? currentPoint.stock / initialStockValue
-          : 1.0;
-      const buyHoldValue = initialStockValue * stockGrowthRatio + initialCash;
+      // Portfolio return: percentage change from initial total value
+      const portfolioReturn = ((point.value - initialValue) / initialValue) * 100;
+
+      // Stock/Buy-hold return: percentage change in stock value (represents holding stock only)
+      const stockReturn = ((currentPoint.stock - initialStockValue) / initialStockValue) * 100;
 
       return {
         date: point.date,
-        portfolio: point.value,
-        buyHold: buyHoldValue,
+        portfolioReturn: Math.round(portfolioReturn * 100) / 100,
+        stockReturn: Math.round(stockReturn * 100) / 100,
       };
     });
-  }, [portfolioValueData, analyticsData, isSinglePosition]);
+  }, [portfolioValueData, analyticsData]);
 
   const rollingReturnsData = useMemo(() => {
     if (!analyticsData?.time_series?.length || portfolioValueData.length < 2) {
@@ -249,31 +242,37 @@ export default function AnalyticsCharts({ positions, analyticsData }: AnalyticsC
               axisLine={false}
               tickLine={false}
             />
-            <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+            <YAxis
+              tick={{ fontSize: 10, fill: '#9ca3af' }}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={(value) => `${value}%`}
+            />
             <Tooltip
               contentStyle={{
                 borderRadius: '8px',
                 border: 'none',
                 boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
               }}
+              formatter={(value: number) => [`${value.toFixed(2)}%`, '']}
             />
             <Legend verticalAlign="top" align="right" height={36} />
             <Line
               type="monotone"
-              dataKey="portfolio"
+              dataKey="portfolioReturn"
               stroke="#2563eb"
               strokeWidth={3}
               dot={false}
-              name={isSinglePosition ? 'Managed' : 'Portfolio'}
+              name={isSinglePosition ? 'Managed Strategy' : 'Portfolio'}
             />
             <Line
               type="monotone"
-              dataKey="buyHold"
-              stroke="#9ca3af"
+              dataKey="stockReturn"
+              stroke="#10b981"
               strokeWidth={2}
               strokeDasharray="5 5"
               dot={false}
-              name="Buy & Hold"
+              name="Stock Only (Buy & Hold)"
             />
           </LineChart>
         </ResponsiveContainer>

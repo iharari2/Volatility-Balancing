@@ -327,9 +327,11 @@ class PortfolioScopedApi {
 
   /**
    * Get portfolio analytics
+   * @param positionId - Optional position ID to filter analytics to a single position
    */
-  async getAnalytics(tenantId: string, portfolioId: string, days: number = 30): Promise<any> {
-    return request<any>(`/tenants/${tenantId}/portfolios/${portfolioId}/analytics?days=${days}`);
+  async getAnalytics(tenantId: string, portfolioId: string, days: number = 30, positionId?: string): Promise<any> {
+    const positionParam = positionId && positionId !== 'all' ? `&position_id=${positionId}` : '';
+    return request<any>(`/tenants/${tenantId}/portfolios/${portfolioId}/analytics?days=${days}${positionParam}`);
   }
 
   /**

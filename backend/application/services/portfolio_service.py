@@ -578,14 +578,26 @@ class PortfolioService:
         return config
 
     def get_portfolio_analytics(
-        self, tenant_id: str, portfolio_id: str, days: int = 30
+        self, tenant_id: str, portfolio_id: str, days: int = 30, position_id: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
-        """Get detailed portfolio analytics with historical time series."""
+        """Get detailed portfolio analytics with historical time series.
+
+        Args:
+            position_id: Optional position ID to filter analytics to a single position.
+        """
         summary = self.get_portfolio_summary(tenant_id=tenant_id, portfolio_id=portfolio_id)
         if not summary:
             return None
 
-        positions = self.get_portfolio_positions(tenant_id=tenant_id, portfolio_id=portfolio_id)
+        all_positions = self.get_portfolio_positions(tenant_id=tenant_id, portfolio_id=portfolio_id)
+
+        # Filter positions if position_id is specified
+        if position_id:
+            positions = [p for p in all_positions if p.id == position_id]
+            if not positions:
+                return None  # Position not found
+        else:
+            positions = all_positions
 
         # 1. Allocation percentages
         total_value = summary["total_value"]
@@ -636,6 +648,13 @@ class PortfolioService:
                     limit=5000,  # Increased limit for more data points
                 )
 
+                # Filter rows by position_id if specified
+                if position_id:
+                    rows = [r for r in rows if r.get("position_id") == position_id]
+
+                print(f"📊 Analytics: Found {len(rows)} timeline rows for portfolio {portfolio_id} (last {days} days)" +
+                      (f", filtered to position {position_id}" if position_id else ""))
+
                 # Group by day and position, taking the latest evaluation per position per day
                 # Structure: {day: {position_id: {timestamp, values...}}}
                 daily_position_data: Dict[str, Dict[str, Dict[str, Any]]] = defaultdict(dict)
@@ -652,11 +671,22 @@ class PortfolioService:
                     # Keep only the latest evaluation per position per day
                     existing = daily_position_data[day_key].get(position_id)
                     if existing is None or dt > existing.get("timestamp", dt):
+                        # Use "after" values if available, fallback to "before" values
+                        total_val = row.get("position_total_value_after")
+                        if total_val is None or total_val == 0:
+                            total_val = row.get("position_total_value_before") or 0.0
+                        stock_val = row.get("position_stock_value_after")
+                        if stock_val is None:
+                            stock_val = row.get("position_stock_value_before") or 0.0
+                        cash_val = row.get("position_cash_after")
+                        if cash_val is None:
+                            cash_val = row.get("position_cash_before") or 0.0
+
                         daily_position_data[day_key][position_id] = {
                             "timestamp": dt,
-                            "total_value": row.get("position_total_value_after") or 0.0,
-                            "stock_value": row.get("position_stock_value_after") or 0.0,
-                            "cash": row.get("position_cash_after") or 0.0,
+                            "total_value": total_val,
+                            "stock_value": stock_val,
+                            "cash": cash_val,
                         }
 
                 # Aggregate across positions for each day
@@ -666,24 +696,20 @@ class PortfolioService:
                     stock_value = sum(p["stock_value"] for p in positions_data.values())
                     cash_value = sum(p["cash"] for p in positions_data.values())
 
-                    time_series.append(
-                        {
-                            "date": day,
-                            "value": total_value,
-                            "stock": stock_value,
-                            "cash": cash_value,
-                            "stock_pct": (
-                                (stock_value / total_value * 100)
-                                if total_value > 0
-                                else 0.0
-                            ),
-                            "cash_pct": (
-                                (cash_value / total_value * 100)
-                                if total_value > 0
-                                else 0.0
-                            ),
-                        }
-                    )
+                    # Only include days with valid data (total_value > 0)
+                    if total_value > 0:
+                        time_series.append(
+                            {
+                                "date": day,
+                                "value": total_value,
+                                "stock": stock_value,
+                                "cash": cash_value,
+                                "stock_pct": (stock_value / total_value * 100),
+                                "cash_pct": (cash_value / total_value * 100),
+                            }
+                        )
+
+                print(f"   Aggregated to {len(time_series)} valid daily data points")
 
         except Exception as e:
             print(f"Warning: Failed to fetch historical time series for analytics: {e}")
@@ -762,9 +788,13 @@ class PortfolioService:
             getattr(p, "total_dividends_received", 0.0) or 0.0 for p in positions
         )
 
-        # 5. Calculate return percentage (from overview KPIs if available)
-        overview = self.get_portfolio_overview(tenant_id=tenant_id, portfolio_id=portfolio_id)
-        pnl_pct = overview.get("kpis", {}).get("pnl_pct", 0.0) if overview else 0.0
+        # 5. Calculate return percentage from time_series if available
+        pnl_pct = 0.0
+        if time_series and len(time_series) >= 2:
+            first_value = time_series[0].get("value", 0)
+            last_value = time_series[-1].get("value", 0)
+            if first_value > 0:
+                pnl_pct = ((last_value - first_value) / first_value) * 100
 
         # Set defaults for metrics that couldn't be calculated
         kpis.setdefault("volatility", 0.0)

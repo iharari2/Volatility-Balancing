@@ -25,7 +25,9 @@ export default function AnalyticsPage() {
       setAnalyticsError(null);
       try {
         const { portfolioScopedApi } = await import('../../services/portfolioScopedApi');
-        const data = await portfolioScopedApi.getAnalytics(selectedTenantId, selectedPortfolioId);
+        // Pass selectedPositionId to filter analytics by position
+        const positionFilter = selectedPositionId !== 'all' ? selectedPositionId : undefined;
+        const data = await portfolioScopedApi.getAnalytics(selectedTenantId, selectedPortfolioId, 30, positionFilter);
         setAnalyticsData(data);
       } catch (error: any) {
         console.error('Error fetching analytics:', error);
@@ -42,7 +44,7 @@ export default function AnalyticsPage() {
     };
 
     fetchAnalytics();
-  }, [selectedTenantId, selectedPortfolioId]);
+  }, [selectedTenantId, selectedPortfolioId, selectedPositionId]);
 
   const filteredPositions = useMemo(() => {
     if (selectedPositionId === 'all') return positions;
