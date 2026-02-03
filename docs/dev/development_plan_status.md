@@ -554,12 +554,25 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
 | ID  | Issue                                                    | Priority | Status  |
 | --- | -------------------------------------------------------- | -------- | ------- |
 | ANA-1 | Analytics & Reports does not show any data              | High     | Fixed   |
+| ANA-2 | Portfolio Value Over Time - show stacked view + events  | Medium   | Open    |
+| ANA-3 | Portfolio Allocation Trend - show guardrail bands       | Medium   | Open    |
+| ANA-4 | Benchmark Comparison - show events + performance metrics | Medium   | Open    |
+| ANA-5 | Performance Volatility - chart data unclear, needs review | Medium  | Open    |
+| ANA-6 | Analytics enhancements - market indexes, timeline adjust | Low      | Open    |
+
+### **Visualization Issues**
+
+| ID  | Issue                                                    | Priority | Status  |
+| --- | -------------------------------------------------------- | -------- | ------- |
+| VIS-1 | Guardrail Allocation Band visual does not represent the real config values | Medium | Open |
 
 ### **Feature Requests**
 
 | ID  | Issue                                                    | Priority | Status  |
 | --- | -------------------------------------------------------- | -------- | ------- |
-| FEAT-1 | Add dividend tracker                                   | Medium   | Open    |
+| FEAT-1 | Add dividend tracker (view + export)                   | Medium   | Open    |
+| FEAT-2 | Wire Audit Trail API to UI                             | Medium   | Open    |
+| FEAT-3 | Wire Dividends API to UI + add export                  | Medium   | Open    |
 
 ### **Detailed Issue Descriptions**
 
@@ -652,7 +665,52 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
   - Added traceback logging for better error diagnosis
   - Frontend already has empty state UI for charts and warning banner in KPIs
 
-#### **FEAT-1: Add dividend tracker**
+#### **ANA-2: Portfolio Value Over Time - stacked view + events**
+- **Description**: Enhance the Portfolio Value Over Time chart
+- **Current State**: Shows only total portfolio value
+- **Requested Changes**:
+  1. Show stacked view of portfolio components (stock value vs cash)
+  2. Highlight key events (trades, dividends, rebalances) on the chart
+- **Status**: Needs mockup review before implementation
+
+#### **ANA-3: Portfolio Allocation Trend - guardrail bands**
+- **Description**: Enhance the Portfolio Allocation Trend chart
+- **Requested Changes**:
+  1. Display guardrail bands (min_stock_pct, max_stock_pct) as shaded regions
+  2. Visual indication when allocation is within/outside guardrails
+- **Status**: Needs mockup review before implementation
+
+#### **ANA-4: Benchmark Comparison - events + performance metrics**
+- **Description**: Enhance the Benchmark Comparison chart
+- **Requested Changes**:
+  1. Show key events on the comparison chart
+  2. Add quantification metrics for under/over performance (alpha, relative %)
+  3. Display performance delta in chart title or legend
+- **Status**: Needs mockup review before implementation
+
+#### **ANA-5: Performance Volatility - chart review needed**
+- **Description**: The Performance Volatility chart data seems unclear
+- **Issue**: Current visualization may not effectively communicate volatility metrics
+- **Action Required**: Discussion needed to clarify:
+  1. What data should be displayed
+  2. What time periods to use
+  3. How to visualize rolling volatility vs point-in-time
+- **Status**: Needs discussion and mockup before implementation
+
+#### **ANA-6: Analytics enhancements - market indexes, timeline**
+- **Description**: Additional analytics improvements to consider
+- **Items to Discuss**:
+  1. Market index references (S&P 500, sector ETFs) for comparison
+  2. Timeline adjustment controls (zoom, pan, custom date ranges)
+  3. Unified event overlay across all charts
+- **Status**: Low priority - discuss and finalize mockup before implementing
+
+#### **VIS-1: Guardrail Allocation Band visual does not match config**
+- **Description**: The visual representation of the Guardrail Allocation Band does not accurately reflect the actual configuration values (min_stock_pct, max_stock_pct)
+- **Impact**: Users may be misled by the visual display not matching their configured guardrail limits
+- **Suggested Fix**: Update the visualization component to correctly read and display the guardrail allocation band values from the position/portfolio configuration
+
+#### **FEAT-1: Add dividend tracker (view + export)**
 - **Description**: Add a dedicated dividend tracking feature for positions
 - **Impact**: Users need visibility into upcoming and received dividends across their portfolio
 - **Suggested Features**:
@@ -661,6 +719,34 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
   - Dividend yield calculations per position
   - Total dividend income tracking
   - Dividend calendar view
+  - **Export**: Excel/CSV export of dividend history
+- **Note**: DividendsTab UI component exists but needs API integration (see FEAT-3)
+
+#### **FEAT-2: Wire Audit Trail API to UI**
+- **Description**: Connect the existing Audit Trail UI to backend API
+- **Current State**:
+  - AuditTrailPage UI exists with filtering (asset, date range, event type, source, trace ID)
+  - Backend `/v1/audit/traces` endpoint exists
+  - UI currently shows "under migration to real-time logs"
+- **Work Required**:
+  1. Wire AuditTrailPage to fetch from `/v1/audit/traces` API
+  2. Implement trace list pagination
+  3. Enable trace detail expansion with full event payloads
+  4. Verify JSON export per trace works end-to-end
+- **Files**: `frontend/src/features/audit/AuditTrailPage.tsx`, `backend/app/routes/audit.py`
+
+#### **FEAT-3: Wire Dividends API to UI + add export**
+- **Description**: Connect DividendsTab to backend and add export functionality
+- **Current State**:
+  - DividendsTab UI exists with upcoming/history sections
+  - Returns empty mock data (TODO comment indicates API fetch needed)
+  - No backend dividend endpoint exists
+- **Work Required**:
+  1. Create backend `/v1/positions/{id}/dividends` endpoint
+  2. Query dividend events from position_evaluation_timeline or create dividends table
+  3. Wire DividendsTab to fetch from API
+  4. Add Excel/CSV export button for dividend history
+- **Files**: `frontend/src/features/positions/DividendsTab.tsx`, new `backend/app/routes/dividends.py`
 
 ---
 
