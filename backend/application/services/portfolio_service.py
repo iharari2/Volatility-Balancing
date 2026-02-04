@@ -851,13 +851,17 @@ class PortfolioService:
                         tenant_id=tenant_id,
                         portfolio_id=portfolio_id,
                         position_id=pos.id,
+                        mode="LIVE",  # Match workspace Events tab which uses mode=LIVE
                         start_date=start_date,
                         end_date=end_date,
                         limit=500,
                     )
+                    print(f"📊 Analytics: Found {len(timeline_rows)} timeline rows for position {pos.id}")
                     for row in timeline_rows:
                         action = row.get("action")
-                        if action in ("BUY", "SELL"):
+                        # Handle case-insensitive action matching
+                        action_upper = action.upper() if isinstance(action, str) else None
+                        if action_upper in ("BUY", "SELL"):
                             # Handle both timestamp column names
                             row_ts = row.get("timestamp") or row.get("evaluated_at")
                             if row_ts:
@@ -867,21 +871,22 @@ class PortfolioService:
                                 qty_before = row.get("position_qty_before") or 0
                                 qty_after = row.get("position_qty_after") or 0
                                 qty_change = abs(qty_after - qty_before)
-                                if qty_change > 0:
-                                    trade_key = f"{row_ts.strftime('%Y-%m-%d')}_{pos.id}_{action}_{qty_change}"
-                                    # Only add if not already seen from trades table
-                                    if trade_key not in seen_trade_keys:
-                                        seen_trade_keys.add(trade_key)
-                                        events.append({
-                                            "date": row_ts.strftime("%Y-%m-%d"),
-                                            "type": "TRADE",
-                                            "side": action,
-                                            "qty": qty_change,
-                                            "price": row.get("effective_price") or row.get("close") or 0.0,
-                                            "commission": row.get("commission") or 0.0,
-                                            "position_id": pos.id,
-                                            "asset_symbol": pos.asset_symbol,
-                                        })
+                                # Include event even if qty_change is 0 (might be recorded differently)
+                                trade_key = f"{row_ts.strftime('%Y-%m-%d')}_{pos.id}_{action_upper}_{qty_change}"
+                                # Only add if not already seen from trades table
+                                if trade_key not in seen_trade_keys:
+                                    seen_trade_keys.add(trade_key)
+                                    print(f"   Adding timeline event: {action_upper} {qty_change} @ {row_ts.strftime('%Y-%m-%d')}")
+                                    events.append({
+                                        "date": row_ts.strftime("%Y-%m-%d"),
+                                        "type": "TRADE",
+                                        "side": action_upper,
+                                        "qty": qty_change if qty_change > 0 else row.get("qty") or 0,
+                                        "price": row.get("effective_price") or row.get("close") or row.get("market_price_raw") or 0.0,
+                                        "commission": row.get("commission") or 0.0,
+                                        "position_id": pos.id,
+                                        "asset_symbol": pos.asset_symbol,
+                                    })
 
             # Fetch dividends for each position
             for pos in positions:
