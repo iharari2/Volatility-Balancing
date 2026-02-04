@@ -182,12 +182,13 @@ class EvaluationTimelineRepoSQL(EvaluationTimelineRepo):
                         position_stock_value_before_value
                     )
 
-                # Build defaults dict - all 18 NOT NULL fields from schema validation
+                # Build defaults dict - all NOT NULL fields from schema validation
                 # Based on: python scripts/validate_timeline_schema.py output
                 required_defaults = {
                     "action_taken": action_taken_value,  # NOT NULL, CHECK: IN ('NO_ACTION', 'ORDER_PROPOSED', 'ORDER_SUBMITTED', 'ORDER_EXECUTED')
                     "allow_after_hours": filtered_data.get("allow_after_hours", True),
                     "anchor_reset_occurred": filtered_data.get("anchor_reset_occurred", False),
+                    "dividend_declared": filtered_data.get("dividend_declared", False),  # NOT NULL - required field
                     "evaluated_at": filtered_data.get(
                         "evaluated_at", filtered_data.get("timestamp", current_time)
                     ),
@@ -406,6 +407,7 @@ class EvaluationTimelineRepoSQL(EvaluationTimelineRepo):
                             "is_inline": True,
                             "allow_after_hours": True,
                             "anchor_reset_occurred": False,
+                            "dividend_declared": False,  # NOT NULL - required field
                             "trigger_detected": False,
                             "action_taken": action_taken_minimal,  # Must be: NO_ACTION, ORDER_PROPOSED, ORDER_SUBMITTED, or ORDER_EXECUTED
                         }
