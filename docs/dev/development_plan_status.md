@@ -533,6 +533,7 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
 | CP-1 | Strategy values do not seem persistent             | High     | Fixed   |
 | CP-2 | Current Effective Settings differ from what I save | High     | Fixed   |
 | CP-3 | Navigation: How to go back to other screens (home, prev) | Medium | Fixed |
+| CP-4 | Market Hours Policy is not persistent              | High     | Fixed   |
 
 ### **Simulation Enhancements**
 
@@ -540,8 +541,8 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
 | --- | -------------------------------------------------------- | -------- | ------- |
 | SIM-1 | Add markers to simulation for Actions (B/S) in charts | Medium   | Fixed   |
 | SIM-2 | Add dividends to simulation                            | Medium   | Fixed   |
-| SIM-3 | Add comparison of Ticker performance on the same time  | Medium   | Open    |
-| SIM-4 | Export to Excel does not work                          | High     | Open    |
+| SIM-3 | Add comparison of Ticker performance on the same time  | Medium   | Fixed   |
+| SIM-4 | Export to Excel does not work                          | High     | Fixed   |
 
 ### **Navigation Issues**
 
@@ -559,6 +560,7 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
 | ANA-4 | Benchmark Comparison - show events + performance metrics | Medium   | Fixed   |
 | ANA-5 | Performance Volatility - chart data unclear, needs review | Medium  | Fixed   |
 | ANA-6 | Analytics enhancements - market indexes, timeline adjust | Low      | Fixed   |
+| ANA-7 | Add event tables (Buy/Sell + Dividends) to Analytics     | Medium   | Open    |
 
 ### **Visualization Issues**
 
@@ -617,6 +619,17 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
   - Added "Back to Workspace" link in SimulationLabPage header
   - Added "Back to Workspace" link in SettingsPage header
 
+#### **CP-4: Market Hours Policy is not persistent** ✅ FIXED
+- **Description**: The Market Hours Policy setting was not being saved/loaded correctly
+- **Impact**: Users change the setting to "Market + After Hours" but it reverts to "Market Open Only" on page refresh
+- **Root Cause**:
+  1. Frontend `StrategyTab.tsx` was hardcoding `market_hours_policy` to `'market-open-only'` instead of reading from API
+  2. Backend position config endpoint was defaulting `allow_after_hours` to `True` instead of falling back to portfolio's `trading_hours_policy`
+- **Fix Applied** (2026-02-04):
+  - Fixed `StrategyTab.tsx` to read `market_hours_policy` from `posConfig.allow_after_hours`
+  - Fixed `positions_cockpit.py` to fall back to portfolio's `trading_hours_policy` when no position-specific config exists
+  - Now properly persists: Portfolio setting → Position fallback → UI display
+
 #### **SIM-1: Add Buy/Sell markers to simulation charts** ✅ FIXED
 - **Description**: Simulation charts should show visual markers for buy and sell actions
 - **Impact**: Difficult to correlate price movements with trading decisions
@@ -637,15 +650,26 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
   - Added detailed dividend events table (ex-date, shares, DPS, amounts, anchor adjustment)
   - Dividends are processed on ex-dividend dates with 25% withholding tax
 
-#### **SIM-3: Ticker performance comparison**
+#### **SIM-3: Ticker performance comparison** ✅ FIXED
 - **Description**: Add ability to compare multiple ticker performances on same timeframe
 - **Impact**: Cannot benchmark strategy performance against alternatives
-- **Suggested Fix**: Add overlay chart or comparison view for multiple tickers
+- **Fix Applied** (2026-02-04):
+  - Added "Compare With" optional ticker input to SimulationSetup
+  - Common benchmark suggestions: SPY, QQQ, VOO, IWM, DIA, VTI
+  - Added normalized "Performance Comparison" chart to SimulationResults
+  - Chart shows three lines: Strategy return, Buy & Hold return, Comparison ticker return
+  - All returns normalized to percentage from start date
+  - Summary metrics below chart: Strategy Return, Buy & Hold Return, Comparison/Alpha
+  - Fetches comparison ticker data via market historical API
 
-#### **SIM-4: Export to Excel does not work**
+#### **SIM-4: Export to Excel does not work** ✅ FIXED
 - **Description**: Excel export functionality from simulation is broken
 - **Impact**: Cannot export simulation results for further analysis
-- **Suggested Fix**: Debug export endpoint and file generation
+- **Root Cause**: Excel export button called endpoint without simulation_id parameter
+- **Fix Applied** (2026-02-04):
+  - Fixed `handleExportExcel` to pass `simulation_id` and `ticker` from result
+  - Added validation to show alert if no simulation_id is available
+  - Export URL now correctly calls `/api/v1/excel/simulation/{simulation_id}/export?format=xlsx&ticker={ticker}`
 
 #### **NAV-1: Navigation menu only accessible from simulation menu** ✅ FIXED
 - **Description**: The navigation menu can only be accessed from the simulation menu
@@ -721,6 +745,34 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
     - Dynamic `days` parameter passed to API based on selection
     - Default is 30 days
   - Event overlay already implemented in ANA-2/3/4
+
+#### **ANA-7: Add event tables (Buy/Sell + Dividends) to Analytics**
+- **Description**: Add data tables to Analytics & Reports page showing detailed event history
+- **Impact**: Users need to see tabular data alongside charts for detailed analysis and record-keeping
+- **Requested Features**:
+  1. **Events Table (Buy/Sell)**:
+     - Date/time of trade
+     - Action type (Buy/Sell)
+     - Ticker symbol
+     - Quantity traded
+     - Price per share
+     - Total value
+     - Commission
+     - Reason for trade (trigger type)
+  2. **Dividends Table**:
+     - Ex-dividend date
+     - Payment date
+     - Ticker symbol
+     - Shares held
+     - Dividend per share
+     - Gross amount
+     - Withholding tax
+     - Net amount received
+- **Suggested Implementation**:
+  - Add tabbed section below charts with "Events" and "Dividends" tabs
+  - Include sorting and filtering capabilities
+  - Add export button for each table (CSV/Excel)
+  - Pagination for large datasets
 
 #### **VIS-1: Guardrail Allocation Band visual does not match config**
 - **Description**: The visual representation of the Guardrail Allocation Band does not accurately reflect the actual configuration values (min_stock_pct, max_stock_pct)

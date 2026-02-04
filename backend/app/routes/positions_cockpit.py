@@ -245,6 +245,7 @@ class PositionConfigRequest(BaseModel):
     max_stock_pct: Optional[float] = None
     max_trade_pct_of_position: Optional[float] = None
     commission_rate: Optional[float] = None
+    allow_after_hours: Optional[bool] = None
 
 
 @router.get("/config")
@@ -281,6 +282,18 @@ def get_position_config(
         # Return position config if exists, otherwise portfolio config
         # TriggerConfig stores percentages as Decimal (e.g., 3.0 for 3%)
         # PortfolioConfig stores as float (e.g., 3.0 for 3%)
+
+        # Get order policy config for allow_after_hours
+        order_policy_config = config_repo.get_order_policy_config(position_id)
+
+        # Get portfolio to read trading_hours_policy as fallback for allow_after_hours
+        portfolio = portfolio_service.get_portfolio(tenant_id=tenant_id, portfolio_id=portfolio_id)
+        portfolio_allow_after_hours = (
+            portfolio.trading_hours_policy == "OPEN_PLUS_AFTER_HOURS"
+            if portfolio
+            else False  # Default to market hours only
+        )
+
         return {
             "trigger_threshold_up_pct": (
                 float(trigger_config.up_threshold_pct)
@@ -317,7 +330,12 @@ def get_position_config(
                 if position
                 else (portfolio_config.commission_rate_pct if portfolio_config else 0.1)
             ),
-            "is_position_specific": trigger_config is not None or guardrail_config is not None,
+            "allow_after_hours": (
+                order_policy_config.allow_after_hours
+                if order_policy_config
+                else portfolio_allow_after_hours  # Fall back to portfolio setting
+            ),
+            "is_position_specific": trigger_config is not None or guardrail_config is not None or order_policy_config is not None,
         }
     except HTTPException:
         raise
@@ -482,6 +500,32 @@ def update_position_config(
                 tenant_id=tenant_id,
                 asset_id=position.asset_symbol,
             )
+
+        # Update allow_after_hours if provided
+        if request.allow_after_hours is not None:
+            from domain.value_objects.configs import OrderPolicyConfig
+            from decimal import Decimal
+
+            order_policy_config = config_repo.get_order_policy_config(position_id)
+            if order_policy_config:
+                # Update existing config
+                new_order_policy_config = OrderPolicyConfig(
+                    min_qty=order_policy_config.min_qty,
+                    min_notional=order_policy_config.min_notional,
+                    lot_size=order_policy_config.lot_size,
+                    qty_step=order_policy_config.qty_step,
+                    action_below_min=order_policy_config.action_below_min,
+                    rebalance_ratio=order_policy_config.rebalance_ratio,
+                    order_sizing_strategy=order_policy_config.order_sizing_strategy,
+                    allow_after_hours=request.allow_after_hours,
+                    commission_rate=order_policy_config.commission_rate,
+                )
+            else:
+                # Create new config with defaults
+                new_order_policy_config = OrderPolicyConfig(
+                    allow_after_hours=request.allow_after_hours,
+                )
+            config_repo.set_order_policy_config(position_id, new_order_policy_config)
 
         return {
             "message": "Position configuration updated successfully",

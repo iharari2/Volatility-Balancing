@@ -19,6 +19,8 @@ interface SimulationConfig {
   // Trigger thresholds (as percentages, e.g., 3 = 3%)
   triggerThresholdPct: number;
   initialCash: number;
+  // Comparison ticker for SIM-3
+  comparisonTicker: string;
 }
 
 export default function SimulationSetup({ onRun, isRunning }: SimulationSetupProps) {
@@ -33,6 +35,7 @@ export default function SimulationSetup({ onRun, isRunning }: SimulationSetupPro
     allowAfterHours: true,
     triggerThresholdPct: 3,
     initialCash: 10000,
+    comparisonTicker: '',
   });
 
   const handleRun = () => {
@@ -74,6 +77,31 @@ export default function SimulationSetup({ onRun, isRunning }: SimulationSetupPro
           </div>
           <p className="text-xs text-gray-500 mt-1">
             Type any ticker symbol available on Yahoo Finance
+          </p>
+        </div>
+
+        <div>
+          <label className="label">Compare With (Optional)</label>
+          <div className="relative">
+            <input
+              type="text"
+              list="comparison-ticker-suggestions"
+              value={config.comparisonTicker}
+              onChange={(e) => setConfig({ ...config, comparisonTicker: e.target.value.toUpperCase() })}
+              placeholder="e.g., SPY, QQQ, or leave empty"
+              className="input"
+            />
+            <datalist id="comparison-ticker-suggestions">
+              <option value="SPY">S&P 500 ETF</option>
+              <option value="QQQ">Nasdaq 100 ETF</option>
+              <option value="VOO">Vanguard S&P 500</option>
+              <option value="IWM">Russell 2000</option>
+              <option value="DIA">Dow Jones ETF</option>
+              <option value="VTI">Total Stock Market</option>
+            </datalist>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Compare strategy performance against another ticker (e.g., SPY for market benchmark)
           </p>
         </div>
 

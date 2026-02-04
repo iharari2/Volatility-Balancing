@@ -238,11 +238,36 @@ export default function SimulationLabPage() {
         include_after_hours: config.allowAfterHours ?? false,
         intraday_interval_minutes: intradayIntervalMinutes,
         position_config: positionConfig,
+        comparison_ticker: config.comparisonTicker?.toUpperCase().trim() || null,
       };
 
       console.log('Running simulation with config:', request);
       const result = await simulationApi.runSimulation(request);
       console.log('Simulation completed:', result);
+
+      // If comparison ticker is specified but not returned by backend, fetch it separately
+      if (config.comparisonTicker && !result.comparison_data) {
+        try {
+          const comparisonResponse = await fetch(
+            `/api/v1/market/historical/${config.comparisonTicker.toUpperCase().trim()}?start_date=${startDateISO}&end_date=${endDateISO}`
+          );
+          if (comparisonResponse.ok) {
+            const comparisonData = await comparisonResponse.json();
+            if (comparisonData.price_data && comparisonData.price_data.length > 0) {
+              const firstPrice = comparisonData.price_data[0].price;
+              result.comparison_ticker = config.comparisonTicker.toUpperCase().trim();
+              result.comparison_data = comparisonData.price_data.map((d: any) => ({
+                date: d.timestamp.split('T')[0],
+                price: d.price,
+                normalized_return: ((d.price - firstPrice) / firstPrice) * 100,
+              }));
+            }
+          }
+        } catch (err) {
+          console.warn('Could not fetch comparison ticker data:', err);
+        }
+      }
+
       setSimulationResult(result);
       setIsRunning(false);
     } catch (error: any) {

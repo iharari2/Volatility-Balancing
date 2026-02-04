@@ -46,6 +46,8 @@ interface DividendEvent {
 
 interface SimulationResultsProps {
   result: {
+    simulation_id?: string;
+    ticker?: string;
     finalValue?: number;
     return?: number;
     maxDrawdown?: number;
@@ -80,6 +82,16 @@ interface SimulationResultsProps {
       dividend_count?: number;
       withholding_tax_total?: number;
     };
+    // Buy & hold comparison data
+    buy_hold_return_pct?: number;
+    buy_hold_pnl?: number;
+    // Comparison ticker data (for SIM-3)
+    comparison_ticker?: string;
+    comparison_data?: Array<{
+      date: string;
+      price: number;
+      normalized_return: number;
+    }>;
   } | null;
 }
 
@@ -109,7 +121,12 @@ export default function SimulationResults({ result }: SimulationResultsProps) {
   const triggeredCount = timelineEvents.filter((e) => e.triggered).length;
 
   const handleExportExcel = () => {
-    window.open('/api/v1/excel/simulation/export?format=xlsx', '_blank');
+    if (!result?.simulation_id) {
+      alert('No simulation ID available. Please run a simulation first.');
+      return;
+    }
+    const ticker = result.ticker || '';
+    window.open(`/api/v1/excel/simulation/${result.simulation_id}/export?format=xlsx&ticker=${ticker}`, '_blank');
   };
 
   const handleExportJSON = () => {
@@ -162,6 +179,30 @@ export default function SimulationResults({ result }: SimulationResultsProps) {
         buyMarker: d.trigger === 'BUY' ? d.price : null,
         sellMarker: d.trigger === 'SELL' ? d.price : null,
       }));
+
+  // Build normalized comparison chart data (strategy return vs comparison ticker vs buy & hold)
+  const comparisonChartData = (() => {
+    if (timelineEvents.length === 0) return [];
+
+    const initialValue = timelineEvents[0]?.total_value || 10000;
+    const initialPrice = timelineEvents[0]?.price || 100;
+    const comparisonMap = new Map(
+      (result.comparison_data || []).map((d) => [d.date, d.normalized_return])
+    );
+
+    return timelineEvents.map((event) => {
+      const strategyReturn = ((event.total_value - initialValue) / initialValue) * 100;
+      const buyHoldReturn = ((event.price - initialPrice) / initialPrice) * 100;
+      const comparisonReturn = comparisonMap.get(event.date) ?? null;
+
+      return {
+        date: event.date,
+        strategy: strategyReturn,
+        buyHold: buyHoldReturn,
+        comparison: comparisonReturn,
+      };
+    });
+  })();
 
   // Build equity chart data with trade markers
   const equityChartData = timelineEvents.length > 0
@@ -359,6 +400,124 @@ export default function SimulationResults({ result }: SimulationResultsProps) {
             </ComposedChart>
           </ResponsiveContainer>
         </div>
+
+        {/* Performance Comparison Chart */}
+        {comparisonChartData.length > 0 && (
+          <div className="p-4 bg-white rounded-xl border border-gray-100 shadow-inner">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+                Performance Comparison (Normalized Returns)
+              </h3>
+              <div className="flex items-center gap-4 text-xs">
+                <span className="flex items-center gap-1">
+                  <span className="w-3 h-0.5 bg-blue-600 inline-block"></span>
+                  Strategy
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-3 h-0.5 bg-gray-400 inline-block"></span>
+                  Buy & Hold ({result.ticker || 'Asset'})
+                </span>
+                {result.comparison_ticker && (
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-0.5 bg-orange-500 inline-block"></span>
+                    {result.comparison_ticker}
+                  </span>
+                )}
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={250}>
+              <ComposedChart data={comparisonChartData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 10, fill: '#9ca3af' }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fill: '#9ca3af' }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(value) => `${value.toFixed(0)}%`}
+                />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: '8px',
+                    border: 'none',
+                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                  }}
+                  formatter={(value: number, name: string) => {
+                    const label = name === 'strategy'
+                      ? 'Strategy'
+                      : name === 'buyHold'
+                        ? `Buy & Hold (${result.ticker || 'Asset'})`
+                        : result.comparison_ticker || 'Comparison';
+                    return [`${value?.toFixed(2)}%`, label];
+                  }}
+                />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="strategy"
+                  stroke="#2563eb"
+                  strokeWidth={2}
+                  dot={false}
+                  name="Strategy"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="buyHold"
+                  stroke="#9ca3af"
+                  strokeWidth={2}
+                  dot={false}
+                  strokeDasharray="5 5"
+                  name={`Buy & Hold (${result.ticker || 'Asset'})`}
+                />
+                {result.comparison_ticker && (
+                  <Line
+                    type="monotone"
+                    dataKey="comparison"
+                    stroke="#f97316"
+                    strokeWidth={2}
+                    dot={false}
+                    name={result.comparison_ticker}
+                  />
+                )}
+              </ComposedChart>
+            </ResponsiveContainer>
+            {/* Summary metrics */}
+            <div className="mt-4 grid grid-cols-3 gap-4 pt-4 border-t border-gray-100">
+              <div className="text-center">
+                <p className="text-xs text-gray-500 uppercase tracking-wider">Strategy Return</p>
+                <p className={`text-lg font-bold ${(result.algorithm_return_pct || 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                  {(result.algorithm_return_pct || 0) >= 0 ? '+' : ''}{(result.algorithm_return_pct || 0).toFixed(2)}%
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-gray-500 uppercase tracking-wider">Buy & Hold Return</p>
+                <p className={`text-lg font-bold ${(result.buy_hold_return_pct || 0) >= 0 ? 'text-gray-600' : 'text-red-600'}`}>
+                  {(result.buy_hold_return_pct || 0) >= 0 ? '+' : ''}{(result.buy_hold_return_pct || 0).toFixed(2)}%
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-gray-500 uppercase tracking-wider">
+                  {result.comparison_ticker ? `${result.comparison_ticker} Return` : 'Alpha'}
+                </p>
+                {result.comparison_ticker && result.comparison_data && result.comparison_data.length > 0 ? (
+                  <p className={`text-lg font-bold ${result.comparison_data[result.comparison_data.length - 1]?.normalized_return >= 0 ? 'text-orange-600' : 'text-red-600'}`}>
+                    {result.comparison_data[result.comparison_data.length - 1]?.normalized_return >= 0 ? '+' : ''}
+                    {result.comparison_data[result.comparison_data.length - 1]?.normalized_return.toFixed(2)}%
+                  </p>
+                ) : (
+                  <p className={`text-lg font-bold ${((result.algorithm_return_pct || 0) - (result.buy_hold_return_pct || 0)) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {((result.algorithm_return_pct || 0) - (result.buy_hold_return_pct || 0)) >= 0 ? '+' : ''}
+                    {((result.algorithm_return_pct || 0) - (result.buy_hold_return_pct || 0)).toFixed(2)}%
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Tab Navigation */}
