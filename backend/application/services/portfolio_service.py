@@ -845,18 +845,25 @@ class PortfolioService:
 
             # Also fetch BUY/SELL actions from evaluation_timeline (for consistency with workspace Events tab)
             # This catches trades that may only be recorded in timeline but not in trades table
+            # NOTE: Don't pass start_date/end_date to timeline query (like workspace Events tab)
+            # to avoid timezone mismatches - filter in Python instead
             if hasattr(container, "evaluation_timeline"):
                 for pos in positions:
+                    print(f"📊 Analytics: Querying timeline for position {pos.id} ({pos.asset_symbol})")
+                    print(f"   tenant_id={tenant_id}, portfolio_id={portfolio_id}")
+                    print(f"   date range for filtering: {start_date} to {end_date}")
                     timeline_rows = container.evaluation_timeline.list_by_position(
                         tenant_id=tenant_id,
                         portfolio_id=portfolio_id,
                         position_id=pos.id,
                         mode="LIVE",  # Match workspace Events tab which uses mode=LIVE
-                        start_date=start_date,
-                        end_date=end_date,
+                        # Don't pass start_date/end_date here - filter in Python below
                         limit=500,
                     )
                     print(f"📊 Analytics: Found {len(timeline_rows)} timeline rows for position {pos.id}")
+                    # Debug: show first few rows and their actions
+                    for i, row in enumerate(timeline_rows[:5]):
+                        print(f"   Row {i}: action={row.get('action')}, ts={row.get('timestamp') or row.get('evaluated_at')}, mode={row.get('mode')}")
                     for row in timeline_rows:
                         action = row.get("action")
                         # Handle case-insensitive action matching
@@ -867,6 +874,13 @@ class PortfolioService:
                             if row_ts:
                                 if isinstance(row_ts, str):
                                     row_ts = datetime.fromisoformat(row_ts.replace("Z", "+00:00"))
+                                # Make timezone-aware if naive
+                                if row_ts.tzinfo is None:
+                                    row_ts = row_ts.replace(tzinfo=timezone.utc)
+                                # Filter by date range in Python (to avoid SQL timezone issues)
+                                if not (start_date <= row_ts <= end_date):
+                                    print(f"   Skipping event outside date range: {row_ts}")
+                                    continue
                                 # Calculate qty from the change
                                 qty_before = row.get("position_qty_before") or 0
                                 qty_after = row.get("position_qty_after") or 0
@@ -876,7 +890,7 @@ class PortfolioService:
                                 # Only add if not already seen from trades table
                                 if trade_key not in seen_trade_keys:
                                     seen_trade_keys.add(trade_key)
-                                    print(f"   Adding timeline event: {action_upper} {qty_change} @ {row_ts.strftime('%Y-%m-%d')}")
+                                    print(f"   Adding timeline event: {action_upper} {qty_change} @ {row_ts.strftime('%Y-%m-%d %H:%M:%S')}")
                                     events.append({
                                         "date": row_ts.strftime("%Y-%m-%d"),
                                         "type": "TRADE",
