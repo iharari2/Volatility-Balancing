@@ -29,7 +29,11 @@ _WINDOW_RE = re.compile(r"^(?P<value>\d+)(?P<unit>[smhdw])$")
 def _parse_window(window: str) -> Optional[timedelta]:
     if not window:
         return None
-    match = _WINDOW_RE.match(window.strip().lower())
+    window_lower = window.strip().lower()
+    # Handle "all" as no time filter
+    if window_lower == "all":
+        return None
+    match = _WINDOW_RE.match(window_lower)
     if not match:
         return None
     value = int(match.group("value"))

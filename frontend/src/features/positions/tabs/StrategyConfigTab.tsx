@@ -80,7 +80,7 @@ export default function StrategyConfigTab({
             max_stock_pct: positionConfig.max_stock_pct,
             max_trade_pct_of_position: positionConfig.max_trade_pct_of_position,
             commission_rate: positionConfig.commission_rate,
-            market_hours_policy: 'market-open-only', // Position config doesn't include market hours
+            market_hours_policy: positionConfig.allow_after_hours ? 'market-plus-after-hours' : 'market-open-only',
           };
           setConfig(posConfig);
           setIsPositionSpecific(positionConfig.is_position_specific);

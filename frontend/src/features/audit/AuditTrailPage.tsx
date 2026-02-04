@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Copy, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
+import { Copy, ExternalLink, ChevronDown, ChevronRight, Filter, X } from 'lucide-react';
 import { usePortfolio } from '../../contexts/PortfolioContext';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
+import DateRangeFilter, { DateRange } from '../../components/shared/DateRangeFilter';
+import EventTypeFilter from '../../components/shared/EventTypeFilter';
 
 interface TraceEvent {
   event_type: string;
@@ -19,6 +21,19 @@ interface Trace {
   events?: TraceEvent[];
 }
 
+// Event types available in audit trail
+const auditEventTypes = [
+  { value: 'position_created', label: 'Position Created', category: 'Position' },
+  { value: 'anchor_set', label: 'Anchor Set', category: 'Position' },
+  { value: 'trigger_detected', label: 'Trigger Detected', category: 'Trigger' },
+  { value: 'order_submitted', label: 'Order Submitted', category: 'Order' },
+  { value: 'order_filled', label: 'Order Filled', category: 'Order' },
+  { value: 'order_cancelled', label: 'Order Cancelled', category: 'Order' },
+  { value: 'order_rejected', label: 'Order Rejected', category: 'Order' },
+  { value: 'evaluation', label: 'Evaluation', category: 'Evaluation' },
+  { value: 'error', label: 'Error', category: 'Other' },
+];
+
 export default function AuditTrailPage() {
   const { selectedPortfolio } = useTenantPortfolio();
   const { positions } = usePortfolio();
@@ -28,12 +43,33 @@ export default function AuditTrailPage() {
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
 
-  // Filter state
+  // Filter state - using new components
   const [assetFilter, setAssetFilter] = useState(searchParams.get('asset') || '');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [dateRange, setDateRange] = useState<DateRange>({ startDate: null, endDate: null });
+  const [selectedEventTypes, setSelectedEventTypes] = useState<string[]>([]);
   const [sourceFilter, setSourceFilter] = useState<string>('any');
   const [traceIdFilter, setTraceIdFilter] = useState(searchParams.get('trace_id') || '');
+
+  // Computed: check if filters are active
+  const hasActiveFilters = useMemo(() => {
+    return (
+      assetFilter !== '' ||
+      dateRange.startDate !== null ||
+      dateRange.endDate !== null ||
+      selectedEventTypes.length > 0 ||
+      sourceFilter !== 'any' ||
+      traceIdFilter !== ''
+    );
+  }, [assetFilter, dateRange, selectedEventTypes, sourceFilter, traceIdFilter]);
+
+  const handleClearFilters = () => {
+    setAssetFilter('');
+    setDateRange({ startDate: null, endDate: null });
+    setSelectedEventTypes([]);
+    setSourceFilter('any');
+    setTraceIdFilter('');
+    setSearchParams({});
+  };
 
   useEffect(() => {
     if (traceIdFilter) {
@@ -42,7 +78,7 @@ export default function AuditTrailPage() {
     } else {
       loadTraces();
     }
-  }, [traceIdFilter, assetFilter, startDate, endDate, sourceFilter]);
+  }, [traceIdFilter, assetFilter, dateRange, selectedEventTypes, sourceFilter]);
 
   const loadTraces = async () => {
     setLoading(true);
@@ -127,7 +163,18 @@ export default function AuditTrailPage() {
         {/* Left Panel - Filters */}
         <div className="lg:col-span-1 space-y-6">
           <div className="card">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Filters</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Filters</h2>
+              {hasActiveFilters && (
+                <button
+                  onClick={handleClearFilters}
+                  className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+                >
+                  <X className="h-3 w-3" />
+                  Clear all
+                </button>
+              )}
+            </div>
             <div className="space-y-4">
               <div>
                 <label className="label">Asset</label>
@@ -147,20 +194,22 @@ export default function AuditTrailPage() {
 
               <div>
                 <label className="label">Date Range</label>
-                <div className="space-y-2">
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="input"
-                  />
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="input"
-                  />
-                </div>
+                <DateRangeFilter
+                  value={dateRange}
+                  onChange={setDateRange}
+                  showPresets={false}
+                />
+              </div>
+
+              <div>
+                <label className="label">Event Type</label>
+                <EventTypeFilter
+                  selectedTypes={selectedEventTypes}
+                  onChange={setSelectedEventTypes}
+                  availableTypes={auditEventTypes}
+                  compact
+                  placeholder="All Types"
+                />
               </div>
 
               <div>

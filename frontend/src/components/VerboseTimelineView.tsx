@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
-import { Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Download, ChevronLeft, ChevronRight, Filter, X } from 'lucide-react';
 import { simulationApi } from '../lib/api';
+import DateRangeFilter, { DateRange } from './shared/DateRangeFilter';
+import EventTypeFilter from './shared/EventTypeFilter';
 
 interface VerboseTimelineViewProps {
   simulationId: string;
@@ -49,12 +51,25 @@ interface TimelineRow {
 
 const ROWS_PER_PAGE = 50;
 
+// Action types available in verbose timeline
+const actionTypes = [
+  { value: 'BUY', label: 'Buy' },
+  { value: 'SELL', label: 'Sell' },
+  { value: 'HOLD', label: 'Hold' },
+  { value: 'SKIP', label: 'Skip' },
+];
+
 export default function VerboseTimelineView({ simulationId, ticker }: VerboseTimelineViewProps) {
   const [rows, setRows] = useState<TimelineRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [exporting, setExporting] = useState(false);
+
+  // Filter state
+  const [showFilters, setShowFilters] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange>({ startDate: null, endDate: null });
+  const [selectedActions, setSelectedActions] = useState<string[]>([]);
 
   useEffect(() => {
     if (simulationId) {
@@ -159,10 +174,49 @@ export default function VerboseTimelineView({ simulationId, ticker }: VerboseTim
     }
   };
 
-  const totalPages = Math.ceil(rows.length / ROWS_PER_PAGE);
+  // Apply filters
+  const filteredRows = useMemo(() => {
+    let result = rows;
+
+    // Apply date range filter
+    if (dateRange.startDate || dateRange.endDate) {
+      result = result.filter((row) => {
+        if (!row.DateTime) return true;
+        const rowDate = new Date(row.DateTime);
+        if (dateRange.startDate && rowDate < new Date(dateRange.startDate)) return false;
+        if (dateRange.endDate && rowDate > new Date(dateRange.endDate)) return false;
+        return true;
+      });
+    }
+
+    // Apply action filter
+    if (selectedActions.length > 0) {
+      result = result.filter((row) => {
+        const action = (row.Action || '').toUpperCase();
+        return selectedActions.includes(action);
+      });
+    }
+
+    return result;
+  }, [rows, dateRange, selectedActions]);
+
+  const hasActiveFilters = dateRange.startDate || dateRange.endDate || selectedActions.length > 0;
+
+  const handleClearFilters = () => {
+    setDateRange({ startDate: null, endDate: null });
+    setSelectedActions([]);
+    setCurrentPage(1);
+  };
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [dateRange, selectedActions]);
+
+  const totalPages = Math.ceil(filteredRows.length / ROWS_PER_PAGE);
   const startIndex = (currentPage - 1) * ROWS_PER_PAGE;
   const endIndex = startIndex + ROWS_PER_PAGE;
-  const paginatedRows = rows.slice(startIndex, endIndex);
+  const paginatedRows = filteredRows.slice(startIndex, endIndex);
 
   // Column definitions
   const columns = [
@@ -266,24 +320,82 @@ export default function VerboseTimelineView({ simulationId, ticker }: VerboseTim
 
   return (
     <div className="space-y-4">
-      {/* Header with export button */}
+      {/* Header with filters and export button */}
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold text-gray-900">Verbose Timeline</h3>
           <p className="text-sm text-gray-500">
-            {rows.length} rows • Showing {startIndex + 1}-{Math.min(endIndex, rows.length)} of{' '}
-            {rows.length}
+            {hasActiveFilters ? (
+              <>
+                {filteredRows.length} of {rows.length} rows • Showing {startIndex + 1}-
+                {Math.min(endIndex, filteredRows.length)}
+              </>
+            ) : (
+              <>
+                {rows.length} rows • Showing {startIndex + 1}-{Math.min(endIndex, rows.length)} of{' '}
+                {rows.length}
+              </>
+            )}
           </p>
         </div>
-        <button
-          onClick={handleExport}
-          disabled={exporting}
-          className="flex items-center px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700 disabled:opacity-50"
-        >
-          <Download className="w-4 h-4 mr-2" />
-          {exporting ? 'Exporting...' : 'Export to Excel'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`flex items-center gap-1.5 px-3 py-2 text-sm rounded border transition-colors ${
+              showFilters || hasActiveFilters
+                ? 'bg-primary-50 border-primary-300 text-primary-700'
+                : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <Filter className="w-4 h-4" />
+            Filters
+            {hasActiveFilters && (
+              <span className="bg-primary-600 text-white px-1.5 py-0.5 rounded-full text-xs">
+                {(dateRange.startDate || dateRange.endDate ? 1 : 0) + (selectedActions.length > 0 ? 1 : 0)}
+              </span>
+            )}
+          </button>
+          {hasActiveFilters && (
+            <button
+              onClick={handleClearFilters}
+              className="flex items-center gap-1 px-2 py-2 text-sm text-gray-500 hover:text-gray-700"
+            >
+              <X className="w-3 h-3" />
+              Clear
+            </button>
+          )}
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700 disabled:opacity-50"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            {exporting ? 'Exporting...' : 'Export to Excel'}
+          </button>
+        </div>
       </div>
+
+      {/* Filter panel */}
+      {showFilters && (
+        <div className="p-4 bg-gray-50 rounded-lg space-y-4">
+          <div className="flex flex-wrap items-start gap-6">
+            <div className="flex-1 min-w-[300px]">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
+              <DateRangeFilter value={dateRange} onChange={setDateRange} compact />
+            </div>
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Action</label>
+              <EventTypeFilter
+                selectedTypes={selectedActions}
+                onChange={setSelectedActions}
+                availableTypes={actionTypes}
+                compact
+                placeholder="All Actions"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Table container with horizontal scroll */}
       <div className="card overflow-x-auto">

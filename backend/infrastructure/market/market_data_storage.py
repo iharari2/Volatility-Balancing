@@ -48,6 +48,45 @@ class MarketDataStorage:
         else:
             self.price_cache.clear()
 
+    def get_price(self, ticker: str, force_refresh: bool = False) -> Optional[PriceData]:
+        """Get the most recent price data for a ticker from cache.
+
+        This implements the MarketDataRepo interface for simulation use.
+        In simulation, data is pre-loaded via store_price_data().
+        """
+        return self.price_cache.get(ticker)
+
+    def get_reference_price(self, ticker: str) -> Optional[PriceData]:
+        """Get reference price - same as get_price for simulation."""
+        return self.get_price(ticker)
+
+    def validate_price(
+        self, price_data: PriceData, allow_after_hours: bool = False
+    ) -> dict:
+        """Validate price data for trading decisions.
+
+        For simulation, we always return valid since we're using historical data.
+        """
+        validation_result = {"valid": True, "warnings": [], "rejections": []}
+
+        # Basic validation - reject invalid prices
+        if price_data.price <= 0:
+            validation_result["valid"] = False
+            validation_result["rejections"].append("Invalid price (≤0)")
+
+        # In simulation, we allow after-hours by default since we control the data
+        # Only reject if explicitly not allowed AND price is marked as after-hours
+        if not price_data.is_market_hours and not allow_after_hours:
+            # For simulation, just add a warning but don't reject
+            validation_result["warnings"].append("After-hours price point")
+
+        return validation_result
+
+    def get_market_status(self):
+        """Get market status - for simulation, market is always open."""
+        from domain.ports.market_data import MarketStatus
+        return MarketStatus(is_open=True)
+
     def get_historical_data(
         self,
         ticker: str,

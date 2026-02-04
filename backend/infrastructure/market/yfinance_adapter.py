@@ -872,13 +872,24 @@ class YFinanceAdapter(MarketDataRepo):
             start_str = start_date.strftime("%Y-%m-%d")
             end_str = end_date.strftime("%Y-%m-%d")
 
-            # Use 1-minute data for simulation to enable realistic intraday trading
-            # yfinance supports 1m data for up to 7 days, so we'll fetch in chunks if needed
+            # yfinance only provides minute data for ~30 days
+            # For older data, we must use daily data with synthetic intraday points
+            now = datetime.now(timezone.utc)
+            days_ago = (now - start_date).days
+
+            if days_ago > 30:
+                # Historical data beyond 30 days - use daily data with synthetic intraday
+                print(f"Historical period ({days_ago} days ago) - using daily data with synthetic intraday points")
+                return self._fetch_daily_with_synthetic_intraday(
+                    ticker, start_date, end_date, intraday_interval_minutes
+                )
+
+            # Recent data - try minute data
             days_diff = (end_date - start_date).days
             if days_diff <= 7:
-                interval = "1m"  # 1-minute data for short periods (max 7 days)
+                interval = "1m"  # 1-minute data for short periods
             else:
-                # For longer periods, use chunked minute-by-minute data to maintain high resolution
+                # For longer recent periods, use chunked minute data
                 return self._fetch_chunked_minute_data(
                     ticker, start_date, end_date, intraday_interval_minutes
                 )
@@ -1097,16 +1108,22 @@ class YFinanceAdapter(MarketDataRepo):
         end_date: datetime,
         intraday_interval_minutes: int = 30,
     ) -> List[PriceData]:
-        """Fetch a single chunk of minute-by-minute data."""
+        """Fetch a single chunk of data - tries minute data first, falls back to daily."""
         start_str = start_date.strftime("%Y-%m-%d")
         end_str = end_date.strftime("%Y-%m-%d")
 
-        # Fetch minute data for this chunk
         stock = yf.Ticker(ticker)
+
+        # Try minute data first (only available for last ~7 days)
         hist = stock.history(start=start_str, end=end_str, interval="1m")
 
+        # If minute data is empty, fall back to daily data with synthetic intraday points
         if hist.empty:
-            return []
+            print(f"  No 1m data for {start_str} to {end_str}, falling back to daily data")
+            hist = stock.history(start=start_str, end=end_str, interval="1d")
+            if hist.empty:
+                return []
+            return self._generate_intraday_from_daily(ticker, hist, intraday_interval_minutes)
 
         price_data_list = []
 
@@ -1148,6 +1165,131 @@ class YFinanceAdapter(MarketDataRepo):
             price_data_list.append(price_data)
             self.storage.store_price_data(ticker, price_data)
 
+        return price_data_list
+
+    def _fetch_daily_with_synthetic_intraday(
+        self,
+        ticker: str,
+        start_date: datetime,
+        end_date: datetime,
+        intraday_interval_minutes: int = 30,
+    ) -> List[PriceData]:
+        """Fetch daily data and generate synthetic intraday points for historical simulations."""
+        start_str = start_date.strftime("%Y-%m-%d")
+        end_str = end_date.strftime("%Y-%m-%d")
+
+        print(f"Fetching daily data for {ticker} from {start_str} to {end_str}")
+
+        stock = yf.Ticker(ticker)
+        hist = stock.history(start=start_str, end=end_str, interval="1d")
+
+        if hist.empty:
+            print(f"Warning: No daily data returned for {ticker}")
+            return []
+
+        print(f"Got {len(hist)} daily bars, generating synthetic intraday points...")
+        return self._generate_intraday_from_daily(ticker, hist, intraday_interval_minutes)
+
+    def _generate_intraday_from_daily(
+        self,
+        ticker: str,
+        daily_hist,
+        intraday_interval_minutes: int = 30,
+    ) -> List[PriceData]:
+        """Generate synthetic intraday data points from daily OHLC data.
+
+        This creates realistic intraday price movements by interpolating between
+        Open, High, Low, and Close prices throughout the trading day.
+        """
+        price_data_list = []
+
+        # Generate intraday times (9:30 AM to 4:00 PM ET)
+        intraday_times = []
+        current_hour, current_minute = 9, 30
+        while current_hour < 16 or (current_hour == 16 and current_minute == 0):
+            intraday_times.append((current_hour, current_minute))
+            current_minute += intraday_interval_minutes
+            if current_minute >= 60:
+                current_hour += 1
+                current_minute -= 60
+
+        for timestamp, row in daily_hist.iterrows():
+            # Get OHLC for the day
+            open_price = row["Open"]
+            high_price = row["High"]
+            low_price = row["Low"]
+            close_price = row["Close"]
+            volume = int(row["Volume"]) if not pd.isna(row["Volume"]) else 0
+
+            # Convert timestamp to timezone-aware
+            if timestamp.tzinfo is None:
+                day_date = timestamp.replace(tzinfo=self.tz_utc)
+            else:
+                day_date = timestamp.astimezone(self.tz_utc)
+
+            # Skip weekends
+            if day_date.weekday() >= 5:
+                continue
+
+            # Generate intraday points with realistic price movement
+            # Pattern: Open -> High -> Low -> Close (simplified but realistic)
+            num_points = len(intraday_times)
+            volume_per_point = volume // num_points if num_points > 0 else 0
+
+            for i, (hour, minute) in enumerate(intraday_times):
+                # Create timestamp in Eastern time, then convert to UTC
+                et_timestamp = day_date.astimezone(self.tz_eastern)
+                intraday_timestamp = et_timestamp.replace(
+                    hour=hour, minute=minute, second=0, microsecond=0
+                )
+                intraday_timestamp = intraday_timestamp.astimezone(self.tz_utc)
+
+                # Calculate interpolated price based on position in day
+                # First quarter: Open to High
+                # Second quarter: High
+                # Third quarter: High to Low
+                # Fourth quarter: Low to Close
+                progress = i / max(num_points - 1, 1)
+
+                if progress < 0.25:
+                    # Open to High
+                    t = progress / 0.25
+                    price = open_price + t * (high_price - open_price)
+                elif progress < 0.5:
+                    # Around High
+                    t = (progress - 0.25) / 0.25
+                    price = high_price - t * (high_price - low_price) * 0.3
+                elif progress < 0.75:
+                    # High to Low
+                    t = (progress - 0.5) / 0.25
+                    price = high_price - t * (high_price - low_price)
+                else:
+                    # Low to Close
+                    t = (progress - 0.75) / 0.25
+                    price = low_price + t * (close_price - low_price)
+
+                price_data = PriceData(
+                    ticker=ticker,
+                    price=price,
+                    source=PriceSource.LAST_TRADE,
+                    timestamp=intraday_timestamp,
+                    bid=price,
+                    ask=price,
+                    volume=volume_per_point,
+                    last_trade_price=price,
+                    last_trade_time=intraday_timestamp,
+                    is_market_hours=True,
+                    is_fresh=True,
+                    is_inline=True,
+                    open=open_price,
+                    high=high_price,
+                    low=low_price,
+                    close=close_price,
+                )
+                price_data_list.append(price_data)
+                self.storage.store_price_data(ticker, price_data)
+
+        print(f"  Generated {len(price_data_list)} synthetic intraday points from {len(daily_hist)} daily bars")
         return price_data_list
 
     def _get_next_trading_day(self, date) -> datetime:

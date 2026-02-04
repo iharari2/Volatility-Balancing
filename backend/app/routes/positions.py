@@ -290,6 +290,7 @@ def _tick_position_sync(position_id: str) -> Dict[str, Any]:
                 clock=container.clock,
                 guardrail_config_provider=container.guardrail_config_provider,
                 order_policy_config_provider=container.order_policy_config_provider,
+                evaluation_timeline_repo=container.evaluation_timeline,
             )
 
             order_request = CreateOrderRequest(

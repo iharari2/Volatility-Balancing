@@ -396,6 +396,7 @@ class _Container:
             trades=self.trades,
             events=self.events,
             clock=self.clock,
+            evaluation_timeline_repo=self.evaluation_timeline,
         )
 
         # Create BrokerIntegrationService

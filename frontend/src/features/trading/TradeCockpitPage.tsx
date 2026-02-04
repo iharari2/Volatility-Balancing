@@ -9,8 +9,28 @@ import {
 } from '../../api/cockpit';
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
 import EmptyState from '../../components/shared/EmptyState';
-import { Briefcase, TrendingUp } from 'lucide-react';
+import DateRangeFilter, { DateRange } from '../../components/shared/DateRangeFilter';
+import EventTypeFilter from '../../components/shared/EventTypeFilter';
+import { Briefcase, TrendingUp, Filter, X, Clock } from 'lucide-react';
 import { useParams } from 'react-router-dom';
+
+// Time window options for timeline/snapshot data
+const timeWindowOptions = [
+  { value: '1d', label: '1 Day' },
+  { value: '7d', label: '7 Days' },
+  { value: '30d', label: '30 Days' },
+  { value: '90d', label: '90 Days' },
+  { value: 'all', label: 'All Time' },
+];
+
+// Action types for filtering
+const actionFilterTypes = [
+  { value: 'BUY', label: 'Buy' },
+  { value: 'SELL', label: 'Sell' },
+  { value: 'HOLD', label: 'Hold' },
+  { value: 'SKIP', label: 'Skip' },
+  { value: '_EMPTY_', label: 'No Action' },
+];
 
 const formatCurrency = (value?: number | null) => {
   if (value === null || value === undefined) return '-';
@@ -48,6 +68,14 @@ export default function TradeCockpitPage() {
   const [loadingPortfolios, setLoadingPortfolios] = useState(true);
   const [loadingPositions, setLoadingPositions] = useState(false);
   const [loadingCockpit, setLoadingCockpit] = useState(false);
+
+  // Time window for data fetching
+  const [timeWindow, setTimeWindow] = useState('7d');
+
+  // Timeline filter state
+  const [showFilters, setShowFilters] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange>({ startDate: null, endDate: null });
+  const [selectedActions, setSelectedActions] = useState<string[]>([]);
 
   useEffect(() => {
     const loadPortfolios = async () => {
@@ -102,7 +130,7 @@ export default function TradeCockpitPage() {
     const loadCockpit = async () => {
       try {
         setLoadingCockpit(true);
-        const data = await getPositionCockpit(selectedPortfolioId, selectedPositionId);
+        const data = await getPositionCockpit(selectedPortfolioId, selectedPositionId, timeWindow);
         setCockpitData(data);
       } catch (error) {
         console.error('Error loading cockpit:', error);
@@ -112,7 +140,7 @@ export default function TradeCockpitPage() {
     };
 
     loadCockpit();
-  }, [selectedPortfolioId, selectedPositionId]);
+  }, [selectedPortfolioId, selectedPositionId, timeWindow]);
 
   const selectedPosition = useMemo(
     () => positions.find((pos) => pos.position_id === selectedPositionId) || null,
@@ -127,6 +155,49 @@ export default function TradeCockpitPage() {
   const bandEnd = maxBand !== null ? Math.max(0, Math.min(100, maxBand)) : 0;
   const bandWidth = Math.max(0, bandEnd - bandStart);
   const bandMarker = allocationPct !== null ? Math.max(0, Math.min(100, allocationPct)) : null;
+
+  // Filter timeline rows
+  const hasActiveFilters = dateRange.startDate !== null || dateRange.endDate !== null || selectedActions.length > 0;
+
+  // Get unique actions from timeline for display
+  const uniqueActions = useMemo(() => {
+    if (!cockpitData?.timeline_rows) return new Set<string>();
+    const actions = new Set<string>();
+    cockpitData.timeline_rows.forEach((row) => {
+      const action = (row.action || '').toUpperCase().trim();
+      actions.add(action || '_EMPTY_');
+    });
+    return actions;
+  }, [cockpitData?.timeline_rows]);
+
+  const filteredTimelineRows = useMemo(() => {
+    if (!cockpitData?.timeline_rows) return [];
+
+    return cockpitData.timeline_rows.filter((row) => {
+      // Date range filter
+      if (dateRange.startDate || dateRange.endDate) {
+        const rowDate = row.timestamp ? new Date(row.timestamp) : null;
+        if (rowDate) {
+          if (dateRange.startDate && rowDate < new Date(dateRange.startDate)) return false;
+          if (dateRange.endDate && rowDate > new Date(dateRange.endDate)) return false;
+        }
+      }
+
+      // Action filter
+      if (selectedActions.length > 0) {
+        const action = (row.action || '').toUpperCase().trim();
+        const actionKey = action || '_EMPTY_';
+        if (!selectedActions.includes(actionKey)) return false;
+      }
+
+      return true;
+    });
+  }, [cockpitData?.timeline_rows, dateRange, selectedActions]);
+
+  const handleClearFilters = () => {
+    setDateRange({ startDate: null, endDate: null });
+    setSelectedActions([]);
+  };
 
   if (loadingPortfolios) {
     return <LoadingSpinner message="Loading portfolios..." />;
@@ -226,6 +297,29 @@ export default function TradeCockpitPage() {
             <LoadingSpinner message="Loading cockpit..." />
           ) : cockpitData ? (
             <>
+              {/* Time Window Selector */}
+              <div className="bg-white border border-gray-200 rounded-lg p-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-gray-500" />
+                  <span className="text-sm font-medium text-gray-700">Data Window:</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {timeWindowOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => setTimeWindow(option.value)}
+                      className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
+                        timeWindow === option.value
+                          ? 'bg-primary-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
                 {[
                   { label: 'Quantity', value: formatNumber(cockpitData.position_summary.qty, 2) },
@@ -317,9 +411,82 @@ export default function TradeCockpitPage() {
                 </div>
 
                 <div className="bg-white border border-gray-200 rounded-lg p-5 lg:col-span-2">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-3">Timeline / Events</h3>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-sm font-semibold text-gray-900">Timeline / Events</h3>
+                      {hasActiveFilters && (
+                        <span className="text-xs text-primary-600">
+                          Showing {filteredTimelineRows.length} of {cockpitData.timeline_rows.length}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setShowFilters(!showFilters)}
+                        className={`flex items-center gap-1.5 px-2 py-1 text-xs rounded border transition-colors ${
+                          showFilters || hasActiveFilters
+                            ? 'bg-primary-50 border-primary-300 text-primary-700'
+                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Filter className="h-3 w-3" />
+                        Filters
+                        {hasActiveFilters && (
+                          <span className="bg-primary-600 text-white px-1 py-0.5 rounded-full text-[10px]">
+                            {(dateRange.startDate || dateRange.endDate ? 1 : 0) + (selectedActions.length > 0 ? 1 : 0)}
+                          </span>
+                        )}
+                      </button>
+                      {hasActiveFilters && (
+                        <button
+                          onClick={handleClearFilters}
+                          className="flex items-center gap-1 px-1 py-1 text-xs text-gray-500 hover:text-gray-700"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {showFilters && (
+                    <div className="mb-4 p-3 bg-gray-50 rounded-lg space-y-3">
+                      <div className="flex flex-wrap items-start gap-4">
+                        <div className="flex-1 min-w-[200px]">
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Date Range</label>
+                          <DateRangeFilter value={dateRange} onChange={setDateRange} compact />
+                        </div>
+                        <div className="min-w-[140px]">
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Action</label>
+                          <EventTypeFilter
+                            selectedTypes={selectedActions}
+                            onChange={setSelectedActions}
+                            availableTypes={actionFilterTypes}
+                            compact
+                            placeholder="All Actions"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {cockpitData.timeline_rows.length === 0 ? (
                     <p className="text-sm text-gray-500">No timeline rows available.</p>
+                  ) : filteredTimelineRows.length === 0 ? (
+                    <div className="text-sm text-gray-500 space-y-2">
+                      <p>No events match your filters.</p>
+                      <p className="text-xs">
+                        Actions in data:{' '}
+                        {Array.from(uniqueActions)
+                          .map((a) => (a === '_EMPTY_' ? 'No Action' : a))
+                          .join(', ') || 'None'}
+                      </p>
+                      {selectedActions.length > 0 && !selectedActions.some(a => uniqueActions.has(a)) && (
+                        <p className="text-xs text-amber-600">
+                          Tip: The actions you selected don't exist in this timeline.
+                          This position may not have had any BUY/SELL triggers yet.
+                        </p>
+                      )}
+                    </div>
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="min-w-full text-xs text-gray-700">
@@ -344,7 +511,7 @@ export default function TradeCockpitPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {cockpitData.timeline_rows.map((row, index) => (
+                          {filteredTimelineRows.map((row, index) => (
                             <tr key={`${row.id || row.timestamp || index}`} className="border-b border-gray-100">
                               <td className="px-2 py-2 whitespace-nowrap">{row.timestamp || '-'}</td>
                               <td className="px-2 py-2">{formatCurrency(row.effective_price)}</td>

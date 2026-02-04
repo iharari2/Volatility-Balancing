@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -14,6 +14,7 @@ import {
   DollarSign,
   Anchor,
   BarChart3,
+  X,
 } from 'lucide-react';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import { portfolioScopedApi, PortfolioPosition } from '../../services/portfolioScopedApi';
@@ -26,7 +27,26 @@ import {
 import PositionActions from '../positions/PositionActions';
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
 import EmptyState from '../../components/shared/EmptyState';
+import DateRangeFilter, { DateRange } from '../../components/shared/DateRangeFilter';
+import EventTypeFilter from '../../components/shared/EventTypeFilter';
 import toast from 'react-hot-toast';
+
+// Action types for filtering
+const actionFilterTypes = [
+  { value: 'BUY', label: 'Buy' },
+  { value: 'SELL', label: 'Sell' },
+  { value: 'HOLD', label: 'Hold' },
+  { value: 'SKIP', label: 'Skip' },
+];
+
+// Evaluation types for filtering
+const evaluationFilterTypes = [
+  { value: 'DAILY_CHECK', label: 'Daily Check' },
+  { value: 'PRICE_UPDATE', label: 'Price Update' },
+  { value: 'TRIGGER_EVALUATED', label: 'Trigger Evaluated' },
+  { value: 'EXECUTION', label: 'Execution' },
+  { value: 'DIVIDEND', label: 'Dividend' },
+];
 
 interface MarketDataPoint {
   timestamp: string;
@@ -81,6 +101,10 @@ export default function PositionCockpitPage() {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [eventFilter, setEventFilter] = useState<string>('all');
   const [verboseMode, setVerboseMode] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange>({ startDate: null, endDate: null });
+  const [selectedActions, setSelectedActions] = useState<string[]>([]);
+  const [selectedEvalTypes, setSelectedEvalTypes] = useState<string[]>([]);
   const [marketDataTab, setMarketDataTab] = useState<'latest' | 'recent'>('latest');
   const [mode] = useState<'LIVE' | 'SIM'>('LIVE'); // TODO: Get from context/config
   const [lastUpdateTime, setLastUpdateTime] = useState<Date>(new Date());
@@ -470,30 +494,66 @@ export default function PositionCockpitPage() {
     .filter((e) => e.action && ['BUY', 'SELL'].includes(e.action))
     .slice(0, 5);
 
-  const filteredEvents = events.filter((event) => {
-    // Filter by event type
-    if (eventFilter === 'actions_only') {
-      const action = event.action || '';
-      if (!['BUY', 'SELL'].includes(action)) {
+  // Check if advanced filters are active
+  const hasAdvancedFilters = useMemo(() => {
+    return dateRange.startDate !== null ||
+           dateRange.endDate !== null ||
+           selectedActions.length > 0 ||
+           selectedEvalTypes.length > 0;
+  }, [dateRange, selectedActions, selectedEvalTypes]);
+
+  const handleClearAllFilters = () => {
+    setEventFilter('all');
+    setDateRange({ startDate: null, endDate: null });
+    setSelectedActions([]);
+    setSelectedEvalTypes([]);
+  };
+
+  const filteredEvents = useMemo(() => {
+    return events.filter((event) => {
+      // Apply date range filter
+      if (dateRange.startDate || dateRange.endDate) {
+        const eventDate = new Date(event.timestamp);
+        if (dateRange.startDate && eventDate < new Date(dateRange.startDate)) return false;
+        if (dateRange.endDate && eventDate > new Date(dateRange.endDate)) return false;
+      }
+
+      // Apply action filter (multi-select)
+      if (selectedActions.length > 0) {
+        const action = (event.action || '').toUpperCase();
+        if (!selectedActions.includes(action)) return false;
+      }
+
+      // Apply evaluation type filter (multi-select)
+      if (selectedEvalTypes.length > 0) {
+        const evalType = (event.evaluation_type || '').toUpperCase();
+        if (!selectedEvalTypes.includes(evalType)) return false;
+      }
+
+      // Apply quick filter dropdown
+      if (eventFilter === 'actions_only') {
+        const action = event.action || '';
+        if (!['BUY', 'SELL'].includes(action)) {
+          return false;
+        }
+      } else if (eventFilter === 'blocked_only') {
+        if (!event.guardrail_block_reason && event.action !== 'SKIP') {
+          return false;
+        }
+      } else if (eventFilter === 'dividends_only') {
+        if (event.evaluation_type !== 'DIVIDEND' && !event.dividend_applied) {
+          return false;
+        }
+      } else if (eventFilter === 'extended_hours_only') {
+        if (event.market_session !== 'EXTENDED') {
+          return false;
+        }
+      } else if (eventFilter !== 'all' && event.evaluation_type !== eventFilter) {
         return false;
       }
-    } else if (eventFilter === 'blocked_only') {
-      if (!event.guardrail_block_reason && event.action !== 'SKIP') {
-        return false;
-      }
-    } else if (eventFilter === 'dividends_only') {
-      if (event.evaluation_type !== 'DIVIDEND' && !event.dividend_applied) {
-        return false;
-      }
-    } else if (eventFilter === 'extended_hours_only') {
-      if (event.market_session !== 'EXTENDED') {
-        return false;
-      }
-    } else if (eventFilter !== 'all' && event.evaluation_type !== eventFilter) {
-      return false;
-    }
-    return true;
-  });
+      return true;
+    });
+  }, [events, dateRange, selectedActions, selectedEvalTypes, eventFilter]);
 
   return (
     <div className="bg-gray-50 min-h-screen">
@@ -1160,10 +1220,17 @@ export default function PositionCockpitPage() {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
           <div className="border-b border-gray-200 p-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Event Timeline</h2>
-              <span className="text-xs text-gray-500">
-                Auto-refreshing every 3s • Last: {formatRelativeTime(lastUpdateTime.toISOString())}
-              </span>
+              <div className="flex items-center gap-4">
+                <h2 className="text-lg font-semibold text-gray-900">Event Timeline</h2>
+                <span className="text-xs text-gray-500">
+                  Auto-refreshing every 3s • Last: {formatRelativeTime(lastUpdateTime.toISOString())}
+                </span>
+                {(hasAdvancedFilters || eventFilter !== 'all') && (
+                  <span className="text-xs text-primary-600 font-medium">
+                    Showing {filteredEvents.length} of {events.length} events
+                  </span>
+                )}
+              </div>
               <div className="flex items-center space-x-4">
                 <div className="relative">
                   <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -1183,6 +1250,33 @@ export default function PositionCockpitPage() {
                     <option value="EXECUTION">Execution</option>
                   </select>
                 </div>
+                <button
+                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                  className={`flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border transition-colors ${
+                    showAdvancedFilters || hasAdvancedFilters
+                      ? 'bg-primary-50 border-primary-300 text-primary-700'
+                      : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  <Filter className="h-4 w-4" />
+                  Advanced
+                  {hasAdvancedFilters && (
+                    <span className="bg-primary-600 text-white px-1.5 py-0.5 rounded-full text-xs">
+                      {(dateRange.startDate || dateRange.endDate ? 1 : 0) +
+                        (selectedActions.length > 0 ? 1 : 0) +
+                        (selectedEvalTypes.length > 0 ? 1 : 0)}
+                    </span>
+                  )}
+                </button>
+                {(hasAdvancedFilters || eventFilter !== 'all') && (
+                  <button
+                    onClick={handleClearAllFilters}
+                    className="flex items-center gap-1 px-2 py-2 text-sm text-gray-500 hover:text-gray-700"
+                  >
+                    <X className="h-3 w-3" />
+                    Clear
+                  </button>
+                )}
                 <label className="flex items-center space-x-2 text-sm">
                   <input
                     type="checkbox"
@@ -1202,6 +1296,38 @@ export default function PositionCockpitPage() {
               </div>
             </div>
           </div>
+
+          {/* Advanced Filter Panel */}
+          {showAdvancedFilters && (
+            <div className="p-4 bg-gray-50 border-b border-gray-200">
+              <div className="flex flex-wrap items-start gap-6">
+                <div className="flex-1 min-w-[300px]">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
+                  <DateRangeFilter value={dateRange} onChange={setDateRange} compact />
+                </div>
+                <div className="min-w-[180px]">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Action</label>
+                  <EventTypeFilter
+                    selectedTypes={selectedActions}
+                    onChange={setSelectedActions}
+                    availableTypes={actionFilterTypes}
+                    compact
+                    placeholder="All Actions"
+                  />
+                </div>
+                <div className="min-w-[200px]">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Evaluation Type</label>
+                  <EventTypeFilter
+                    selectedTypes={selectedEvalTypes}
+                    onChange={setSelectedEvalTypes}
+                    availableTypes={evaluationFilterTypes}
+                    compact
+                    placeholder="All Types"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">

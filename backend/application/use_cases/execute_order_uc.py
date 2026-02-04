@@ -1,7 +1,8 @@
 # backend/application/use_cases/execute_order_uc.py
 from __future__ import annotations
 
-from typing import Optional, Callable
+import logging
+from typing import Optional, Callable, Any, Dict
 from decimal import Decimal
 from uuid import uuid4
 
@@ -12,6 +13,7 @@ from domain.ports.events_repo import EventsRepo
 from domain.ports.orders_repo import OrdersRepo
 from domain.ports.positions_repo import PositionsRepo
 from domain.ports.trades_repo import TradesRepo
+from domain.ports.evaluation_timeline_repo import EvaluationTimelineRepo
 from domain.services.guardrail_evaluator import GuardrailEvaluator
 from domain.value_objects.configs import GuardrailConfig, OrderPolicyConfig
 from infrastructure.time.clock import Clock
@@ -38,6 +40,8 @@ class ExecuteOrderUC:
     * On success: updates position, marks order filled, appends 'order_filled' event.
     """
 
+    _logger = logging.getLogger(__name__)
+
     def __init__(
         self,
         positions: PositionsRepo,
@@ -47,6 +51,7 @@ class ExecuteOrderUC:
         clock: Optional[Clock] = None,
         guardrail_config_provider: Optional[Callable[[str, str, str], GuardrailConfig]] = None,
         order_policy_config_provider: Optional[Callable[[str, str, str], OrderPolicyConfig]] = None,
+        evaluation_timeline_repo: Optional[EvaluationTimelineRepo] = None,
     ) -> None:
         self.positions = positions
         self.orders = orders
@@ -56,6 +61,7 @@ class ExecuteOrderUC:
         # Config providers - if None, will fall back to extracting from Position entity (backward compat)
         self.guardrail_config_provider = guardrail_config_provider
         self.order_policy_config_provider = order_policy_config_provider
+        self.evaluation_timeline_repo = evaluation_timeline_repo
 
     def execute(self, order_id: str, request: FillOrderRequest) -> FillOrderResponse:
         order = self.orders.get(order_id)
@@ -344,6 +350,128 @@ class ExecuteOrderUC:
                 )
             )
 
+        # Write to evaluation timeline so trade appears in cockpit
+        self._write_execution_to_timeline(
+            tenant_id=order.tenant_id,
+            portfolio_id=order.portfolio_id,
+            position=pos,
+            order=order,
+            trade=trade,
+            fill_price=request.price,
+            fill_qty=q_req,
+            commission=commission,
+            old_anchor=old_anchor,
+            pre_trade_qty=pre_trade_qty,
+            pre_trade_cash=pre_trade_cash,
+            post_trade_qty=pos.qty,
+            post_trade_cash=pos.cash,
+            timestamp=now,
+        )
+
         return FillOrderResponse(
             order_id=order.id, status="filled", filled_qty=q_req, trade_id=trade.id
         )
+
+    def _write_execution_to_timeline(
+        self,
+        tenant_id: str,
+        portfolio_id: str,
+        position,
+        order,
+        trade,
+        fill_price: float,
+        fill_qty: float,
+        commission: float,
+        old_anchor: Optional[float],
+        pre_trade_qty: float,
+        pre_trade_cash: float,
+        post_trade_qty: float,
+        post_trade_cash: float,
+        timestamp,
+    ) -> Optional[str]:
+        """Write order execution to evaluation timeline for cockpit visibility."""
+        if not self.evaluation_timeline_repo:
+            return None
+
+        try:
+            # Calculate values
+            post_trade_stock_value = post_trade_qty * fill_price
+            post_trade_total_value = post_trade_cash + post_trade_stock_value
+            post_trade_stock_pct = (
+                (post_trade_stock_value / post_trade_total_value * 100)
+                if post_trade_total_value > 0
+                else 0
+            )
+
+            pre_trade_stock_value = pre_trade_qty * fill_price
+            pre_trade_total_value = pre_trade_cash + pre_trade_stock_value
+            pre_trade_stock_pct = (
+                (pre_trade_stock_value / pre_trade_total_value * 100)
+                if pre_trade_total_value > 0
+                else 0
+            )
+
+            # Build timeline row dict
+            timeline_row: Dict[str, Any] = {
+                "id": f"tl_{uuid4().hex[:12]}",
+                "mode": "LIVE",
+                "tenant_id": tenant_id,
+                "portfolio_id": portfolio_id,
+                "position_id": position.id,
+                "symbol": position.asset_symbol,
+                "timestamp": timestamp,
+                "source": "order_execution",
+                "evaluation_type": "EXECUTION",
+                # Price data
+                "effective_price": fill_price,
+                "price_policy_effective": "FILL_PRICE",
+                # Position before
+                "position_qty_before": pre_trade_qty,
+                "position_cash_before": pre_trade_cash,
+                "position_stock_value_before": pre_trade_stock_value,
+                "position_total_value_before": pre_trade_total_value,
+                "position_stock_pct_before": pre_trade_stock_pct,
+                # Position after
+                "position_qty_after": post_trade_qty,
+                "position_cash_after": post_trade_cash,
+                "position_stock_value_after": post_trade_stock_value,
+                "position_total_value_after": post_trade_total_value,
+                "position_stock_pct_after": post_trade_stock_pct,
+                # Anchor
+                "anchor_price": fill_price,  # New anchor after trade
+                "anchor_price_before": old_anchor,
+                # Trigger info (trade was triggered)
+                "trigger_detected": True,
+                "trigger_direction": order.side,
+                "trigger_reason": f"Order {order.id} filled",
+                # Guardrail (passed since we executed)
+                "guardrail_allowed": True,
+                "guardrail_block_reason": None,
+                # Action
+                "action": order.side,  # BUY or SELL
+                "action_reason": f"Order filled: {order.side} {fill_qty:.4f} @ ${fill_price:.2f}",
+                # Trade details
+                "order_id": order.id,
+                "trade_id": trade.id,
+                "trade_side": order.side,
+                "trade_qty": fill_qty,
+                "trade_price": fill_price,
+                "trade_notional": fill_qty * fill_price,
+                "trade_commission": commission,
+            }
+
+            record_id = self.evaluation_timeline_repo.save(timeline_row)
+            self._logger.info(
+                "Wrote execution to timeline: position=%s, action=%s, trade_id=%s, record_id=%s",
+                position.id,
+                order.side,
+                trade.id,
+                record_id,
+            )
+            return record_id
+
+        except Exception as e:
+            self._logger.warning(
+                "Failed to write execution to timeline: %s", e, exc_info=True
+            )
+            return None

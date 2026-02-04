@@ -145,10 +145,18 @@ class EvaluatePositionUC:
         # Log event
         self._log_evaluation_event(tenant_id, portfolio_id, position, current_price, trigger_result)
 
+        # Calculate delta_pct for debugging/display
+        delta_pct = 0.0
+        if position.anchor_price and float(position.anchor_price) > 0:
+            anchor_float = float(position.anchor_price)
+            current_price_float = float(current_price)
+            delta_pct = ((current_price_float - anchor_float) / anchor_float) * 100
+
         result = {
             "position_id": position_id,
             "current_price": current_price,
             "anchor_price": position.anchor_price,
+            "delta_pct": delta_pct,
             "trigger_detected": trigger_result["triggered"],
             "trigger_type": trigger_result.get("side"),
             "order_proposal": order_proposal,
