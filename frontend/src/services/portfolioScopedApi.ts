@@ -103,6 +103,64 @@ export interface CashTransactionRequest {
   position_id?: string; // Optional: deposit/withdraw to/from specific position
 }
 
+// Analytics types for ANA-2 through ANA-5
+export interface AnalyticsEvent {
+  date: string;
+  type: 'TRADE' | 'DIVIDEND';
+  side?: 'BUY' | 'SELL';
+  qty?: number;
+  price?: number;
+  commission?: number;
+  gross_amount?: number;
+  net_amount?: number;
+  shares_held?: number;
+  dps?: number;
+  position_id?: string;
+  asset_symbol?: string;
+}
+
+export interface AnalyticsGuardrails {
+  min_stock_pct: number;
+  max_stock_pct: number;
+}
+
+export interface AnalyticsPerformance {
+  alpha: number;
+  portfolio_return_pct: number;
+  benchmark_return_pct: number;
+  spy_return_pct?: number;
+  spy_alpha?: number;
+}
+
+export interface AnalyticsTimeSeriesPoint {
+  date: string;
+  value: number;
+  stock: number;
+  cash: number;
+  stock_pct: number;
+  cash_pct: number;
+}
+
+export interface AnalyticsData {
+  time_series: AnalyticsTimeSeriesPoint[];
+  events: AnalyticsEvent[];
+  guardrails: AnalyticsGuardrails | null;
+  performance: AnalyticsPerformance;
+  kpis: {
+    volatility: number;
+    max_drawdown: number;
+    sharpe_like: number;
+    pnl_pct: number;
+    commission_total: number;
+    dividend_total: number;
+  };
+  allocation: Record<string, { value: number; percentage: number }>;
+  diversification: {
+    num_tickers: number;
+    num_positions: number;
+  };
+}
+
 class PortfolioScopedApi {
   /**
    * Load positions for a portfolio
@@ -295,6 +353,7 @@ class PortfolioScopedApi {
     max_stock_pct: number;
     max_trade_pct_of_position: number;
     commission_rate: number;
+    allow_after_hours: boolean;
     is_position_specific: boolean;
   }> {
     return request(`/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/config`);
@@ -329,9 +388,9 @@ class PortfolioScopedApi {
    * Get portfolio analytics
    * @param positionId - Optional position ID to filter analytics to a single position
    */
-  async getAnalytics(tenantId: string, portfolioId: string, days: number = 30, positionId?: string): Promise<any> {
+  async getAnalytics(tenantId: string, portfolioId: string, days: number = 30, positionId?: string): Promise<AnalyticsData> {
     const positionParam = positionId && positionId !== 'all' ? `&position_id=${positionId}` : '';
-    return request<any>(`/tenants/${tenantId}/portfolios/${portfolioId}/analytics?days=${days}${positionParam}`);
+    return request<AnalyticsData>(`/tenants/${tenantId}/portfolios/${portfolioId}/analytics?days=${days}${positionParam}`);
   }
 
   /**

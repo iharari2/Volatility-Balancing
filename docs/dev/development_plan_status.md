@@ -558,13 +558,19 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
 | ANA-3 | Portfolio Allocation Trend - show guardrail bands       | Medium   | Fixed   |
 | ANA-4 | Benchmark Comparison - show events + performance metrics | Medium   | Fixed   |
 | ANA-5 | Performance Volatility - chart data unclear, needs review | Medium  | Fixed   |
-| ANA-6 | Analytics enhancements - market indexes, timeline adjust | Low      | Open    |
+| ANA-6 | Analytics enhancements - market indexes, timeline adjust | Low      | Fixed   |
 
 ### **Visualization Issues**
 
 | ID  | Issue                                                    | Priority | Status  |
 | --- | -------------------------------------------------------- | -------- | ------- |
 | VIS-1 | Guardrail Allocation Band visual does not represent the real config values | Medium | Fixed |
+
+### **Settings Issues**
+
+| ID  | Issue                                                    | Priority | Status  |
+| --- | -------------------------------------------------------- | -------- | ------- |
+| SET-1 | Settings screen save buttons not working               | High     | Fixed   |
 
 ### **Feature Requests**
 
@@ -697,18 +703,41 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
   3. How to visualize rolling volatility vs point-in-time
 - **Status**: Implemented - 30-day rolling volatility (annualized) with clear labeling
 
-#### **ANA-6: Analytics enhancements - market indexes, timeline**
+#### **ANA-6: Analytics enhancements - market indexes, timeline** ✅ FIXED
 - **Description**: Additional analytics improvements to consider
 - **Items to Discuss**:
   1. Market index references (S&P 500, sector ETFs) for comparison
   2. Timeline adjustment controls (zoom, pan, custom date ranges)
   3. Unified event overlay across all charts
-- **Status**: Low priority - discuss and finalize mockup before implementing
+- **Status**: Implemented
+- **Fix Applied** (2026-02-04):
+  - Added SPY (S&P 500) benchmark comparison to analytics:
+    - Backend fetches SPY historical data for the same period
+    - Calculates `spy_return_pct` and `spy_alpha` (portfolio return vs S&P 500)
+    - Displays S&P 500 return as a reference line in Benchmark Comparison chart
+    - Shows "vs S&P" metric in chart header
+  - Added timeline adjustment controls:
+    - Added time period preset buttons (7D, 30D, 90D, 1Y, All) to Analytics header
+    - Dynamic `days` parameter passed to API based on selection
+    - Default is 30 days
+  - Event overlay already implemented in ANA-2/3/4
 
 #### **VIS-1: Guardrail Allocation Band visual does not match config**
 - **Description**: The visual representation of the Guardrail Allocation Band does not accurately reflect the actual configuration values (min_stock_pct, max_stock_pct)
 - **Impact**: Users may be misled by the visual display not matching their configured guardrail limits
 - **Suggested Fix**: Update the visualization component to correctly read and display the guardrail allocation band values from the position/portfolio configuration
+
+#### **SET-1: Settings screen save buttons not working** ✅ FIXED
+- **Description**: In the Settings screen, "Save Tenant Defaults" and "Save System Settings" buttons don't work
+- **Impact**: Users cannot save their configuration preferences
+- **Root Cause**: Buttons had no `onClick` handlers and inputs used `defaultValue` instead of controlled state
+- **Fix Applied** (2026-02-04):
+  - Converted all inputs to controlled components with useState
+  - Added localStorage persistence for settings
+  - Added save handlers with success/error feedback
+  - Settings now load on mount and persist across sessions
+  - Tenant Defaults: trigger thresholds, guardrails, commission rate
+  - System Settings: theme preference, data refresh interval
 
 #### **FEAT-1: Add dividend tracker (view + export)**
 - **Description**: Add a dedicated dividend tracking feature for positions

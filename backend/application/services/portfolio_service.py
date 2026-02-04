@@ -584,6 +584,14 @@ class PortfolioService:
 
         Args:
             position_id: Optional position ID to filter analytics to a single position.
+
+        Returns:
+            Analytics data including:
+            - time_series: Daily snapshots of value, stock, cash, percentages
+            - kpis: Volatility, max drawdown, sharpe-like ratio, returns
+            - events: List of trades and dividends in the period
+            - guardrails: min_stock_pct and max_stock_pct from config
+            - performance: Alpha and return comparison vs buy-hold
         """
         summary = self.get_portfolio_summary(tenant_id=tenant_id, portfolio_id=portfolio_id)
         if not summary:
@@ -666,10 +674,10 @@ class PortfolioService:
                     if isinstance(dt, str):
                         dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
                     day_key = dt.strftime("%Y-%m-%d")
-                    position_id = row.get("position_id", "unknown")
+                    row_position_id = row.get("position_id", "unknown")
 
                     # Keep only the latest evaluation per position per day
-                    existing = daily_position_data[day_key].get(position_id)
+                    existing = daily_position_data[day_key].get(row_position_id)
                     if existing is None or dt > existing.get("timestamp", dt):
                         # Use "after" values if available, fallback to "before" values
                         total_val = row.get("position_total_value_after")
@@ -682,7 +690,7 @@ class PortfolioService:
                         if cash_val is None:
                             cash_val = row.get("position_cash_before") or 0.0
 
-                        daily_position_data[day_key][position_id] = {
+                        daily_position_data[day_key][row_position_id] = {
                             "timestamp": dt,
                             "total_value": total_val,
                             "stock_value": stock_val,
@@ -804,6 +812,176 @@ class PortfolioService:
         kpis["commission_total"] = total_commission_paid
         kpis["dividend_total"] = total_dividends_received
 
+        # 6. Fetch events (trades and dividends) for the period
+        events: List[Dict[str, Any]] = []
+        end_date = datetime.now(timezone.utc)
+        start_date = end_date - timedelta(days=days)
+
+        try:
+            from app.di import container
+
+            # Fetch trades for each position
+            for pos in positions:
+                trades = container.trades.list_for_position(pos.id, limit=500)
+                for trade in trades:
+                    trade_date = trade.executed_at
+                    if trade_date and start_date <= trade_date <= end_date:
+                        events.append({
+                            "date": trade_date.strftime("%Y-%m-%d"),
+                            "type": "TRADE",
+                            "side": trade.side,
+                            "qty": trade.qty,
+                            "price": trade.price,
+                            "commission": trade.commission,
+                            "position_id": pos.id,
+                            "asset_symbol": pos.asset_symbol,
+                        })
+
+            # Fetch dividends for each position
+            for pos in positions:
+                receivables = container.dividend_receivable.get_receivables_by_position(pos.id)
+                for recv in receivables:
+                    # Use ex_date for the event date
+                    ex_date = getattr(recv, "ex_date", None)
+                    if ex_date:
+                        if isinstance(ex_date, str):
+                            ex_date = datetime.fromisoformat(ex_date.replace("Z", "+00:00"))
+                        if start_date <= ex_date <= end_date:
+                            events.append({
+                                "date": ex_date.strftime("%Y-%m-%d"),
+                                "type": "DIVIDEND",
+                                "gross_amount": getattr(recv, "gross_amount", 0.0),
+                                "net_amount": getattr(recv, "net_amount", 0.0),
+                                "shares_held": getattr(recv, "shares_held", 0.0),
+                                "dps": getattr(recv, "dps", 0.0),
+                                "position_id": pos.id,
+                                "asset_symbol": pos.asset_symbol,
+                            })
+
+            # Sort events by date
+            events.sort(key=lambda e: e["date"])
+        except Exception as e:
+            print(f"Warning: Failed to fetch events for analytics: {e}")
+
+        # 7. Get guardrails - position-specific config first, then portfolio config
+        guardrails: Optional[Dict[str, float]] = None
+        try:
+            from app.di import container
+
+            # If position_id is specified, check for position-specific guardrail config
+            if position_id and len(positions) == 1:
+                guardrail_config = container.config.get_guardrail_config(position_id)
+                if guardrail_config:
+                    # GuardrailConfig stores values as decimals (0.25 = 25%), convert to percentage
+                    guardrails = {
+                        "min_stock_pct": float(guardrail_config.min_stock_pct) * 100,
+                        "max_stock_pct": float(guardrail_config.max_stock_pct) * 100,
+                    }
+
+            # Fall back to portfolio config if no position-specific config
+            if guardrails is None:
+                portfolio_config = self._portfolio_config_repo.get(
+                    tenant_id=tenant_id, portfolio_id=portfolio_id
+                )
+                if portfolio_config:
+                    # Portfolio config already stores as percentages
+                    guardrails = {
+                        "min_stock_pct": portfolio_config.min_stock_pct,
+                        "max_stock_pct": portfolio_config.max_stock_pct,
+                    }
+        except Exception as e:
+            print(f"Warning: Failed to fetch guardrails for analytics: {e}")
+
+        # 8. Calculate performance metrics (alpha = portfolio return - buy-hold return)
+        performance: Dict[str, float] = {
+            "alpha": 0.0,
+            "portfolio_return_pct": 0.0,
+            "benchmark_return_pct": 0.0,
+        }
+        if time_series and len(time_series) >= 2:
+            first_point = time_series[0]
+            last_point = time_series[-1]
+
+            # Portfolio return (total value change)
+            first_value = first_point.get("value", 0)
+            last_value = last_point.get("value", 0)
+            if first_value > 0:
+                portfolio_return = ((last_value - first_value) / first_value) * 100
+                performance["portfolio_return_pct"] = round(portfolio_return, 2)
+
+            # Benchmark return (stock-only / buy-hold)
+            # This represents what would have happened if we held stock without rebalancing
+            first_stock = first_point.get("stock", 0)
+            last_stock = last_point.get("stock", 0)
+            if first_stock > 0:
+                benchmark_return = ((last_stock - first_stock) / first_stock) * 100
+                performance["benchmark_return_pct"] = round(benchmark_return, 2)
+
+            # Alpha = portfolio return - benchmark return
+            performance["alpha"] = round(
+                performance["portfolio_return_pct"] - performance["benchmark_return_pct"], 2
+            )
+
+        # 9. Fetch SPY (S&P 500) data for market benchmark comparison
+        try:
+            if time_series and len(time_series) >= 2:
+                from app.di import container
+
+                first_date_str = time_series[0].get("date")
+                last_date_str = time_series[-1].get("date")
+
+                if first_date_str and last_date_str:
+                    # Parse dates and add buffer for market data availability
+                    spy_start = datetime.strptime(first_date_str, "%Y-%m-%d").replace(
+                        tzinfo=timezone.utc
+                    )
+                    spy_end = datetime.strptime(last_date_str, "%Y-%m-%d").replace(
+                        tzinfo=timezone.utc
+                    ) + timedelta(days=1)
+
+                    # Fetch SPY historical data
+                    spy_data = container.market_data.fetch_historical_data(
+                        "SPY", spy_start, spy_end, intraday_interval_minutes=1440
+                    )
+
+                    if spy_data and len(spy_data) >= 2:
+                        # Build a date -> price lookup for SPY
+                        spy_by_date: Dict[str, float] = {}
+                        for price_point in spy_data:
+                            date_key = price_point.timestamp.strftime("%Y-%m-%d")
+                            # Take the closing price for each day
+                            spy_by_date[date_key] = price_point.close or price_point.price
+
+                        # Find SPY prices matching our time series dates
+                        first_spy_price = spy_by_date.get(first_date_str)
+                        last_spy_price = spy_by_date.get(last_date_str)
+
+                        # If exact dates not found, use closest available
+                        if not first_spy_price and spy_data:
+                            first_spy_price = spy_data[0].close or spy_data[0].price
+                        if not last_spy_price and spy_data:
+                            last_spy_price = spy_data[-1].close or spy_data[-1].price
+
+                        if first_spy_price and last_spy_price and first_spy_price > 0:
+                            spy_return = (
+                                (last_spy_price - first_spy_price) / first_spy_price
+                            ) * 100
+                            performance["spy_return_pct"] = round(spy_return, 2)
+                            performance["spy_alpha"] = round(
+                                performance["portfolio_return_pct"] - spy_return, 2
+                            )
+                            print(
+                                f"📊 SPY benchmark: {first_spy_price:.2f} -> {last_spy_price:.2f}, "
+                                f"return={spy_return:.2f}%, alpha={performance['spy_alpha']:.2f}%"
+                            )
+                        else:
+                            print("⚠️ Could not calculate SPY return - missing price data")
+                    else:
+                        print(f"⚠️ No SPY data returned for period {first_date_str} to {last_date_str}")
+        except Exception as e:
+            print(f"⚠️ Failed to fetch SPY benchmark data: {e}")
+            # Continue without SPY data - it's optional
+
         return {
             **summary,
             "allocation": allocation,
@@ -813,6 +991,9 @@ class PortfolioService:
                 "num_tickers": len([k for k in allocation.keys() if k != "CASH"]),
                 "num_positions": len(positions),
             },
+            "events": events,
+            "guardrails": guardrails,
+            "performance": performance,
         }
 
     def get_portfolio_overview(self, tenant_id: str, portfolio_id: str) -> Optional[Dict[str, Any]]:
@@ -974,19 +1155,33 @@ class PortfolioService:
             if total_position_value > 0:
                 stock_allocation_pct = (stock_value / total_position_value) * 100
 
-        # Get guardrail configuration
+        # Get guardrail configuration - position-specific first, then portfolio
         guardrail_config = None
         min_stock_pct = None
         max_stock_pct = None
         try:
-            config = self._portfolio_config_repo.get(tenant_id=tenant_id, portfolio_id=portfolio_id)
-            if config:
-                min_stock_pct = config.min_stock_pct
-                max_stock_pct = config.max_stock_pct
+            from app.di import container
+
+            # Check for position-specific guardrail config first
+            pos_guardrail_config = container.config.get_guardrail_config(position_id)
+            if pos_guardrail_config:
+                # GuardrailConfig stores as decimal (0.25 = 25%), convert to percentage
+                min_stock_pct = float(pos_guardrail_config.min_stock_pct) * 100
+                max_stock_pct = float(pos_guardrail_config.max_stock_pct) * 100
                 guardrail_config = {
                     "min_stock_pct": min_stock_pct,
                     "max_stock_pct": max_stock_pct,
                 }
+            else:
+                # Fall back to portfolio config
+                config = self._portfolio_config_repo.get(tenant_id=tenant_id, portfolio_id=portfolio_id)
+                if config:
+                    min_stock_pct = config.min_stock_pct
+                    max_stock_pct = config.max_stock_pct
+                    guardrail_config = {
+                        "min_stock_pct": min_stock_pct,
+                        "max_stock_pct": max_stock_pct,
+                    }
         except Exception:
             pass
 

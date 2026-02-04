@@ -1,9 +1,20 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Download, Filter } from 'lucide-react';
+import { Download, Filter, Calendar } from 'lucide-react';
 import { usePortfolio } from '../../contexts/PortfolioContext';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import AnalyticsKPIs from './AnalyticsKPIs';
 import AnalyticsCharts from './AnalyticsCharts';
+
+// Analytics-specific time period presets
+type AnalyticsPreset = '7d' | '30d' | '90d' | '1y' | 'all';
+
+const analyticsPresets: { key: AnalyticsPreset; label: string; days: number | null }[] = [
+  { key: '7d', label: '7D', days: 7 },
+  { key: '30d', label: '30D', days: 30 },
+  { key: '90d', label: '90D', days: 90 },
+  { key: '1y', label: '1Y', days: 365 },
+  { key: 'all', label: 'All', days: null },
+];
 
 export default function AnalyticsPage() {
   const { positions, loading: portfolioLoading } = usePortfolio();
@@ -12,6 +23,13 @@ export default function AnalyticsPage() {
   const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const [selectedPreset, setSelectedPreset] = useState<AnalyticsPreset>('30d');
+
+  // Calculate days from preset
+  const days = useMemo(() => {
+    const preset = analyticsPresets.find((p) => p.key === selectedPreset);
+    return preset?.days ?? 365; // Default to 1 year for "all"
+  }, [selectedPreset]);
 
   useEffect(() => {
     const fetchAnalytics = async () => {
@@ -27,7 +45,7 @@ export default function AnalyticsPage() {
         const { portfolioScopedApi } = await import('../../services/portfolioScopedApi');
         // Pass selectedPositionId to filter analytics by position
         const positionFilter = selectedPositionId !== 'all' ? selectedPositionId : undefined;
-        const data = await portfolioScopedApi.getAnalytics(selectedTenantId, selectedPortfolioId, 30, positionFilter);
+        const data = await portfolioScopedApi.getAnalytics(selectedTenantId, selectedPortfolioId, days, positionFilter);
         setAnalyticsData(data);
       } catch (error: any) {
         console.error('Error fetching analytics:', error);
@@ -44,7 +62,7 @@ export default function AnalyticsPage() {
     };
 
     fetchAnalytics();
-  }, [selectedTenantId, selectedPortfolioId, selectedPositionId]);
+  }, [selectedTenantId, selectedPortfolioId, selectedPositionId, days]);
 
   const filteredPositions = useMemo(() => {
     if (selectedPositionId === 'all') return positions;
@@ -81,6 +99,25 @@ export default function AnalyticsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Time Period Selector */}
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            <Calendar className="h-4 w-4 text-gray-400 ml-2" />
+            {analyticsPresets.map((preset) => (
+              <button
+                key={preset.key}
+                onClick={() => setSelectedPreset(preset.key)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  selectedPreset === preset.key
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Position Filter */}
           <div className="relative">
             <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <select
