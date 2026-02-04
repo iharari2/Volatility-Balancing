@@ -554,17 +554,17 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
 | ID  | Issue                                                    | Priority | Status  |
 | --- | -------------------------------------------------------- | -------- | ------- |
 | ANA-1 | Analytics & Reports does not show any data              | High     | Fixed   |
-| ANA-2 | Portfolio Value Over Time - show stacked view + events  | Medium   | Open    |
-| ANA-3 | Portfolio Allocation Trend - show guardrail bands       | Medium   | Open    |
-| ANA-4 | Benchmark Comparison - show events + performance metrics | Medium   | Open    |
-| ANA-5 | Performance Volatility - chart data unclear, needs review | Medium  | Open    |
+| ANA-2 | Portfolio Value Over Time - show stacked view + events  | Medium   | Fixed   |
+| ANA-3 | Portfolio Allocation Trend - show guardrail bands       | Medium   | Fixed   |
+| ANA-4 | Benchmark Comparison - show events + performance metrics | Medium   | Fixed   |
+| ANA-5 | Performance Volatility - chart data unclear, needs review | Medium  | Fixed   |
 | ANA-6 | Analytics enhancements - market indexes, timeline adjust | Low      | Open    |
 
 ### **Visualization Issues**
 
 | ID  | Issue                                                    | Priority | Status  |
 | --- | -------------------------------------------------------- | -------- | ------- |
-| VIS-1 | Guardrail Allocation Band visual does not represent the real config values | Medium | Open |
+| VIS-1 | Guardrail Allocation Band visual does not represent the real config values | Medium | Fixed |
 
 ### **Feature Requests**
 
@@ -665,37 +665,37 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
   - Added traceback logging for better error diagnosis
   - Frontend already has empty state UI for charts and warning banner in KPIs
 
-#### **ANA-2: Portfolio Value Over Time - stacked view + events**
+#### **ANA-2: Portfolio Value Over Time - stacked view + events** ✅ FIXED
 - **Description**: Enhance the Portfolio Value Over Time chart
 - **Current State**: Shows only total portfolio value
 - **Requested Changes**:
   1. Show stacked view of portfolio components (stock value vs cash)
   2. Highlight key events (trades, dividends, rebalances) on the chart
-- **Status**: Needs mockup review before implementation
+- **Status**: Implemented - stacked areas (cash + stock) with BUY/SELL/DIVIDEND event markers
 
-#### **ANA-3: Portfolio Allocation Trend - guardrail bands**
+#### **ANA-3: Portfolio Allocation Trend - guardrail bands** ✅ FIXED
 - **Description**: Enhance the Portfolio Allocation Trend chart
 - **Requested Changes**:
   1. Display guardrail bands (min_stock_pct, max_stock_pct) as shaded regions
   2. Visual indication when allocation is within/outside guardrails
-- **Status**: Needs mockup review before implementation
+- **Status**: Implemented - green zone for within guardrails, red zones for outside
 
-#### **ANA-4: Benchmark Comparison - events + performance metrics**
+#### **ANA-4: Benchmark Comparison - events + performance metrics** ✅ FIXED
 - **Description**: Enhance the Benchmark Comparison chart
 - **Requested Changes**:
   1. Show key events on the comparison chart
   2. Add quantification metrics for under/over performance (alpha, relative %)
   3. Display performance delta in chart title or legend
-- **Status**: Needs mockup review before implementation
+- **Status**: Implemented - Alpha/Portfolio/Benchmark metrics in header, event markers on chart
 
-#### **ANA-5: Performance Volatility - chart review needed**
+#### **ANA-5: Performance Volatility - chart review needed** ✅ FIXED
 - **Description**: The Performance Volatility chart data seems unclear
 - **Issue**: Current visualization may not effectively communicate volatility metrics
 - **Action Required**: Discussion needed to clarify:
   1. What data should be displayed
   2. What time periods to use
   3. How to visualize rolling volatility vs point-in-time
-- **Status**: Needs discussion and mockup before implementation
+- **Status**: Implemented - 30-day rolling volatility (annualized) with clear labeling
 
 #### **ANA-6: Analytics enhancements - market indexes, timeline**
 - **Description**: Additional analytics improvements to consider
