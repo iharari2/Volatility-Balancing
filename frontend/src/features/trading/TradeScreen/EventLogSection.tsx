@@ -59,7 +59,7 @@ export default function EventLogSection({ position, tenantId, portfolioId }: Eve
   // Filter state
   const [showFilters, setShowFilters] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange>({ startDate: null, endDate: null });
-  const [selectedActions, setSelectedActions] = useState<string[]>([]);
+  const [selectedActions, setSelectedActions] = useState<string[]>(['BUY', 'SELL', 'SKIP']);
   const [selectedEventTypes, setSelectedEventTypes] = useState<string[]>([]);
 
   const loadTimeline = useCallback(async () => {
