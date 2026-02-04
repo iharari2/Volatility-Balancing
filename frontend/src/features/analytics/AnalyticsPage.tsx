@@ -4,6 +4,7 @@ import { usePortfolio } from '../../contexts/PortfolioContext';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import AnalyticsKPIs from './AnalyticsKPIs';
 import AnalyticsCharts from './AnalyticsCharts';
+import AnalyticsEventTables from './AnalyticsEventTables';
 
 // Analytics-specific time period presets
 type AnalyticsPreset = '7d' | '30d' | '90d' | '1y' | 'all';
@@ -169,6 +170,9 @@ export default function AnalyticsPage() {
 
       {/* Charts */}
       <AnalyticsCharts positions={filteredPositions} analyticsData={analyticsData} />
+
+      {/* Event Tables (ANA-7) */}
+      <AnalyticsEventTables events={analyticsData?.events || []} />
     </div>
   );
 }

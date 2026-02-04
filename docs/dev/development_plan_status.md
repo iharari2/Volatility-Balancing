@@ -560,7 +560,7 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
 | ANA-4 | Benchmark Comparison - show events + performance metrics | Medium   | Fixed   |
 | ANA-5 | Performance Volatility - chart data unclear, needs review | Medium  | Fixed   |
 | ANA-6 | Analytics enhancements - market indexes, timeline adjust | Low      | Fixed   |
-| ANA-7 | Add event tables (Buy/Sell + Dividends) to Analytics     | Medium   | Open    |
+| ANA-7 | Add event tables (Buy/Sell + Dividends) to Analytics     | Medium   | Fixed   |
 
 ### **Visualization Issues**
 
@@ -746,7 +746,7 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
     - Default is 30 days
   - Event overlay already implemented in ANA-2/3/4
 
-#### **ANA-7: Add event tables (Buy/Sell + Dividends) to Analytics**
+#### **ANA-7: Add event tables (Buy/Sell + Dividends) to Analytics** ✅ FIXED
 - **Description**: Add data tables to Analytics & Reports page showing detailed event history
 - **Impact**: Users need to see tabular data alongside charts for detailed analysis and record-keeping
 - **Requested Features**:
@@ -768,11 +768,16 @@ The Volatility Balancing System has successfully completed **Phase 1** of the un
      - Gross amount
      - Withholding tax
      - Net amount received
-- **Suggested Implementation**:
-  - Add tabbed section below charts with "Events" and "Dividends" tabs
-  - Include sorting and filtering capabilities
-  - Add export button for each table (CSV/Excel)
-  - Pagination for large datasets
+- **Fix Applied** (2026-02-04):
+  - Created `AnalyticsEventTables.tsx` component with tabbed interface
+  - **Trades Tab**: Shows all buy/sell events with sortable columns (date, symbol, action, qty, price, total, commission)
+  - **Dividends Tab**: Shows all dividend events with sortable columns (ex-date, symbol, shares held, DPS, gross, tax, net)
+  - Added summary stats at top of each tab (buy/sell counts, total volume, commission totals, etc.)
+  - Implemented CSV export for both tables
+  - Added sorting by clicking column headers (ascending/descending toggle)
+  - Empty states when no events in selected period
+  - Tables have max height with scroll for large datasets
+  - Integrated into AnalyticsPage below the charts section
 
 #### **VIS-1: Guardrail Allocation Band visual does not match config**
 - **Description**: The visual representation of the Guardrail Allocation Band does not accurately reflect the actual configuration values (min_stock_pct, max_stock_pct)
