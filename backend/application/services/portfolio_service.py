@@ -817,15 +817,21 @@ class PortfolioService:
         end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=days)
 
+        # Track seen trades to avoid duplicates
+        seen_trade_keys: set = set()
+
         try:
             from app.di import container
 
-            # Fetch trades for each position
+            # First, fetch trades from the trades table
             for pos in positions:
                 trades = container.trades.list_for_position(pos.id, limit=500)
                 for trade in trades:
                     trade_date = trade.executed_at
                     if trade_date and start_date <= trade_date <= end_date:
+                        # Create a unique key based on date, position, side for dedup
+                        trade_key = f"{trade_date.strftime('%Y-%m-%d')}_{pos.id}_{trade.side}_{trade.qty}"
+                        seen_trade_keys.add(trade_key)
                         events.append({
                             "date": trade_date.strftime("%Y-%m-%d"),
                             "type": "TRADE",
@@ -836,6 +842,46 @@ class PortfolioService:
                             "position_id": pos.id,
                             "asset_symbol": pos.asset_symbol,
                         })
+
+            # Also fetch BUY/SELL actions from evaluation_timeline (for consistency with workspace Events tab)
+            # This catches trades that may only be recorded in timeline but not in trades table
+            if hasattr(container, "evaluation_timeline"):
+                for pos in positions:
+                    timeline_rows = container.evaluation_timeline.list_by_position(
+                        tenant_id=tenant_id,
+                        portfolio_id=portfolio_id,
+                        position_id=pos.id,
+                        start_date=start_date,
+                        end_date=end_date,
+                        limit=500,
+                    )
+                    for row in timeline_rows:
+                        action = row.get("action")
+                        if action in ("BUY", "SELL"):
+                            # Handle both timestamp column names
+                            row_ts = row.get("timestamp") or row.get("evaluated_at")
+                            if row_ts:
+                                if isinstance(row_ts, str):
+                                    row_ts = datetime.fromisoformat(row_ts.replace("Z", "+00:00"))
+                                # Calculate qty from the change
+                                qty_before = row.get("position_qty_before") or 0
+                                qty_after = row.get("position_qty_after") or 0
+                                qty_change = abs(qty_after - qty_before)
+                                if qty_change > 0:
+                                    trade_key = f"{row_ts.strftime('%Y-%m-%d')}_{pos.id}_{action}_{qty_change}"
+                                    # Only add if not already seen from trades table
+                                    if trade_key not in seen_trade_keys:
+                                        seen_trade_keys.add(trade_key)
+                                        events.append({
+                                            "date": row_ts.strftime("%Y-%m-%d"),
+                                            "type": "TRADE",
+                                            "side": action,
+                                            "qty": qty_change,
+                                            "price": row.get("effective_price") or row.get("close") or 0.0,
+                                            "commission": row.get("commission") or 0.0,
+                                            "position_id": pos.id,
+                                            "asset_symbol": pos.asset_symbol,
+                                        })
 
             # Fetch dividends for each position
             for pos in positions:
@@ -862,6 +908,8 @@ class PortfolioService:
             events.sort(key=lambda e: e["date"])
         except Exception as e:
             print(f"Warning: Failed to fetch events for analytics: {e}")
+            import traceback
+            traceback.print_exc()
 
         # 7. Get guardrails - position-specific config first, then portfolio config
         guardrails: Optional[Dict[str, float]] = None
