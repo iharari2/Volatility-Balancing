@@ -80,8 +80,10 @@ class LiveOrderServiceAdapter(IOrderService):
 
         # If broker integration is configured, submit to broker
         if self.broker_integration:
+            logger.info(f"Broker integration configured, fetching order {response.order_id}")
             order = self.submit_order_uc.orders.get(response.order_id)
             if order:
+                logger.info(f"Order {order.id} found, submitting to broker")
                 try:
                     # Get symbol from position (we need to look it up)
                     position = self.submit_order_uc.positions.get(
@@ -90,6 +92,7 @@ class LiveOrderServiceAdapter(IOrderService):
                         position_id=position_id,
                     )
                     symbol = position.asset_symbol if position else "UNKNOWN"
+                    logger.info(f"Position found: {symbol}, calling broker.submit_order_to_broker")
 
                     broker_response = self.broker_integration.submit_order_to_broker(
                         order=order,
@@ -102,9 +105,11 @@ class LiveOrderServiceAdapter(IOrderService):
                         f"status={broker_response.status.value}"
                     )
                 except Exception as e:
-                    logger.error(f"Failed to submit order {order.id} to broker: {e}")
+                    logger.error(f"Failed to submit order {order.id} to broker: {e}", exc_info=True)
                     # Order is still in our system, broker submission failed
                     # The order status will be updated by broker_integration_service
+            else:
+                logger.error(f"Order {response.order_id} not found after creation - cannot submit to broker")
 
         return response.order_id
 

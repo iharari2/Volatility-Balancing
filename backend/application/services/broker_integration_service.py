@@ -86,6 +86,7 @@ class BrokerIntegrationService:
             - Updates order with broker tracking fields
             - For immediate fills, processes the fill and updates position
         """
+        logger.info(f"BrokerIntegrationService.submit_order_to_broker called for order {order.id}, symbol={symbol}, price={current_price}")
         # Create broker order request
         request = BrokerOrderRequest(
             client_order_id=order.id,

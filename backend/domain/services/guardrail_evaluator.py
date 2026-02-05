@@ -193,10 +193,17 @@ class GuardrailEvaluator:
         new_cash = position_state.cash + cash_delta
         effective_cash = new_cash + position_state.dividend_receivable
 
+        # Reject trades that would result in negative cash
+        if new_cash < 0:
+            return (
+                False,
+                f"Trade would result in negative cash (${float(new_cash):.2f}) - insufficient funds",
+            )
+
         # Calculate allocation (stock % = stock_value / total_value)
         # Total value = stock value + cash (cash lives in PositionCell)
         stock_val = max(new_qty, Decimal("0")) * price
-        total_val = stock_val + max(effective_cash, Decimal("0"))
+        total_val = stock_val + effective_cash
 
         # No capital → reject trade (cannot validate allocation without capital)
         if total_val <= 0:
