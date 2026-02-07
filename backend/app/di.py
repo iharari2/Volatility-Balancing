@@ -320,6 +320,7 @@ class _Container:
             config_repo=self.config,
             portfolio_repo=self.portfolio_repo,
             evaluation_timeline_repo=self.evaluation_timeline,
+            orders_repo=self.orders,
         )
 
         # Initialize simulation use case
@@ -526,6 +527,7 @@ class _Container:
             guardrail_config_provider=self.guardrail_config_provider,
             order_policy_config_provider=self.order_policy_config_provider,
             config_repo=self.config,
+            orders_repo=self.orders,
         )
 
     def reset(self) -> None:
@@ -575,6 +577,7 @@ def get_evaluate_position_uc():
         guardrail_config_provider=container.guardrail_config_provider,
         order_policy_config_provider=container.order_policy_config_provider,
         config_repo=container.config,
+        orders_repo=container.orders,
     )
 
 

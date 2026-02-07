@@ -13,6 +13,7 @@ from domain.ports.events_repo import EventsRepo
 from domain.ports.market_data import MarketDataRepo
 from domain.ports.evaluation_timeline_repo import EvaluationTimelineRepo
 from domain.ports.config_repo import ConfigRepo
+from domain.ports.orders_repo import OrdersRepo
 from domain.entities.event import Event
 from domain.services.price_trigger import PriceTrigger
 from domain.value_objects.configs import TriggerConfig, GuardrailConfig, OrderPolicyConfig
@@ -46,6 +47,7 @@ class EvaluatePositionUC:
         config_repo: Optional[ConfigRepo] = None,
         portfolio_repo: Optional[PortfolioRepo] = None,
         evaluation_timeline_repo: Optional[EvaluationTimelineRepo] = None,
+        orders_repo: Optional[OrdersRepo] = None,
     ) -> None:
         self.positions = positions
         self.events = events
@@ -58,6 +60,7 @@ class EvaluatePositionUC:
         self.config_repo = config_repo  # For getting commission_rate
         self.portfolio_repo = portfolio_repo
         self.evaluation_timeline_repo = evaluation_timeline_repo
+        self.orders_repo = orders_repo  # For checking pending orders
 
     @staticmethod
     def _derive_action_for_timeline(
@@ -996,18 +999,19 @@ class EvaluatePositionUC:
             else:
                 validation_result["warnings"].append("Trading after market hours")
 
-        # Check for duplicate orders (simplified - check if there's a recent order for this position)
+        # Check for pending orders - prevent new orders while one is in-flight
         if self._has_recent_order(position.id):
             validation_result["valid"] = False
             validation_result["rejections"].append(
-                "Duplicate order detected - recent order already exists for this position"
+                "Pending order exists - wait for current order to be filled/rejected/cancelled"
             )
 
         # Check daily order limit
-        if self._exceeds_daily_limit(position.id):
+        max_orders_per_day = position.guardrails.max_orders_per_day or 10
+        if self._exceeds_daily_limit(position.id, max_orders_per_day):
             validation_result["valid"] = False
             validation_result["rejections"].append(
-                f"Daily order limit exceeded (max {position.guardrails.max_orders_per_day} orders per day)"
+                f"Daily order limit exceeded (max {max_orders_per_day} orders per day)"
             )
 
         return validation_result
@@ -1033,15 +1037,49 @@ class EvaluatePositionUC:
         return True
 
     def _has_recent_order(self, position_id: str) -> bool:
-        """Check if there's a recent order for this position (simplified implementation)."""
-        # In a real implementation, this would check the orders repository
-        # For now, we'll return False to allow orders
+        """Check if there's a pending order for this position that hasn't been filled/rejected/cancelled."""
+        if not self.orders_repo:
+            return False
+
+        # Check for orders with status indicating they are still pending/in-flight
+        pending_statuses = {"created", "submitted", "pending", "working", "partial"}
+
+        try:
+            # Get recent orders for this position
+            orders = list(self.orders_repo.list_for_position(position_id, limit=10))
+            for order in orders:
+                if order.status in pending_statuses:
+                    self._logger.info(
+                        "Position %s has pending order %s with status %s - blocking new order",
+                        position_id, order.id, order.status
+                    )
+                    return True
+        except Exception as e:
+            self._logger.warning("Error checking for pending orders: %s", e)
+            # On error, allow the order to proceed (fail-open)
+            return False
+
         return False
 
-    def _exceeds_daily_limit(self, position_id: str) -> bool:
-        """Check if daily order limit has been exceeded (simplified implementation)."""
-        # In a real implementation, this would check the orders repository for today's orders
-        # For now, we'll return False to allow orders
+    def _exceeds_daily_limit(self, position_id: str, max_orders_per_day: int = 10) -> bool:
+        """Check if daily order limit has been exceeded."""
+        if not self.orders_repo:
+            return False
+
+        try:
+            today = self.clock.now().date()
+            count = self.orders_repo.count_for_position_on_day(position_id, today)
+            if count >= max_orders_per_day:
+                self._logger.info(
+                    "Position %s has %d orders today (limit: %d) - blocking new order",
+                    position_id, count, max_orders_per_day
+                )
+                return True
+        except Exception as e:
+            self._logger.warning("Error checking daily order limit: %s", e)
+            # On error, allow the order to proceed (fail-open)
+            return False
+
         return False
 
     def _calculate_post_trade_allocation(self, position, qty: float, price: float) -> float:
