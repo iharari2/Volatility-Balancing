@@ -80,6 +80,7 @@ from infrastructure.adapters.sim_position_repo_adapter import SimPositionRepoAda
 from domain.ports.broker_service import IBrokerService
 from infrastructure.adapters.stub_broker_adapter import StubBrokerAdapter
 from application.services.broker_integration_service import BrokerIntegrationService
+from application.services.order_status_worker import OrderStatusWorker
 
 # New clean architecture: Orchestrators
 from application.orchestrators.live_trading import LiveTradingOrchestrator
@@ -139,6 +140,7 @@ class _Container:
     # Broker integration (Phase 1)
     broker: IBrokerService
     broker_integration: BrokerIntegrationService
+    order_status_worker: OrderStatusWorker
 
     # Config providers (for backward compatibility with Position entities)
     trigger_config_provider: Callable[[str], TriggerConfig]
@@ -406,6 +408,12 @@ class _Container:
             orders_repo=self.orders,
             execute_order_uc=execute_order_uc,
             event_logger=unified_logger,
+        )
+
+        # Order status reconciliation worker
+        self.order_status_worker = OrderStatusWorker(
+            orders_repo=self.orders,
+            broker_integration=self.broker_integration,
         )
 
         # Update submit_order_uc with guardrail_config_provider after it's created

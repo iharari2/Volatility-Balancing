@@ -114,6 +114,7 @@ class OrderModel(Base):
         DateTime(timezone=True), nullable=True
     )
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    time_in_force: Mapped[str] = mapped_column(String(10), nullable=False, default="day")
 
     __table_args__ = (
         UniqueConstraint("position_id", "idempotency_key", name="uq_orders_pos_idempotency"),

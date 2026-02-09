@@ -46,6 +46,7 @@ class Order:
     total_commission: float = 0.0  # Cumulative commission paid
     last_broker_update: Optional[datetime] = None  # Last status update from broker
     rejection_reason: Optional[str] = None  # Reason for rejection (if rejected)
+    time_in_force: str = "day"  # "day", "gtc", "ioc", "fok"
 
     def __hash__(self):
         return hash((self.id, self.position_id, self.side, self.qty, self.status))

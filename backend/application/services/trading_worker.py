@@ -166,6 +166,15 @@ class TradingWorker:
             # Source is "worker" to distinguish from manual API calls
             orchestrator.run_cycle(source="worker")
 
+            # Order status reconciliation — sync pending orders with broker
+            try:
+                order_status_worker = container.order_status_worker
+                synced = order_status_worker.poll_now()
+                if synced > 0:
+                    logger.info(f"Order sync: reconciled {synced} order(s)")
+            except Exception as e:
+                logger.error(f"Error in order status sync: {e}", exc_info=True)
+
             duration = (datetime.now(timezone.utc) - start_time).total_seconds()
             logger.debug(f"✅ Trading cycle completed in {duration:.2f}s")
 

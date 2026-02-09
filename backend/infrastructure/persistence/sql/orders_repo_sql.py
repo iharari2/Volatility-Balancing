@@ -85,6 +85,7 @@ class SQLOrdersRepo(OrdersRepo):
                 total_commission=getattr(row, "total_commission", 0.0) or 0.0,
                 last_broker_update=getattr(row, "last_broker_update", None),
                 rejection_reason=getattr(row, "rejection_reason", None),
+                time_in_force=getattr(row, "time_in_force", "day") or "day",
             )
 
     def save(self, order: Order) -> None:
@@ -114,6 +115,7 @@ class SQLOrdersRepo(OrdersRepo):
                         total_commission=order.total_commission,
                         last_broker_update=order.last_broker_update,
                         rejection_reason=order.rejection_reason,
+                        time_in_force=order.time_in_force,
                     )
                 )
             else:
@@ -136,6 +138,7 @@ class SQLOrdersRepo(OrdersRepo):
                 obj.total_commission = order.total_commission
                 obj.last_broker_update = order.last_broker_update
                 obj.rejection_reason = order.rejection_reason
+                obj.time_in_force = order.time_in_force
             s.commit()
 
     def count_for_position_on_day(self, position_id: str, day: date) -> int:
@@ -188,6 +191,37 @@ class SQLOrdersRepo(OrdersRepo):
                     total_commission=getattr(r, "total_commission", 0.0) or 0.0,
                     last_broker_update=getattr(r, "last_broker_update", None),
                     rejection_reason=getattr(r, "rejection_reason", None),
+                    time_in_force=getattr(r, "time_in_force", "day") or "day",
+                )
+                for r in rows
+            ]
+
+    def list_all(self) -> Iterable[Order]:
+        with self._sf() as s:
+            rows: List[OrderModel] = s.query(OrderModel).all()
+            return [
+                Order(
+                    id=r.id,
+                    tenant_id=r.tenant_id,
+                    portfolio_id=r.portfolio_id,
+                    position_id=r.position_id,
+                    side=cast(OrderSide, r.side),
+                    qty=r.qty,
+                    status=cast(OrderStatus, r.status),
+                    idempotency_key=r.idempotency_key,
+                    commission_rate_snapshot=getattr(r, "commission_rate_snapshot", None),
+                    commission_estimated=getattr(r, "commission_estimated", None),
+                    created_at=r.created_at,
+                    updated_at=r.updated_at,
+                    broker_order_id=getattr(r, "broker_order_id", None),
+                    broker_status=getattr(r, "broker_status", None),
+                    submitted_to_broker_at=getattr(r, "submitted_to_broker_at", None),
+                    filled_qty=getattr(r, "filled_qty", 0.0) or 0.0,
+                    avg_fill_price=getattr(r, "avg_fill_price", None),
+                    total_commission=getattr(r, "total_commission", 0.0) or 0.0,
+                    last_broker_update=getattr(r, "last_broker_update", None),
+                    rejection_reason=getattr(r, "rejection_reason", None),
+                    time_in_force=getattr(r, "time_in_force", "day") or "day",
                 )
                 for r in rows
             ]

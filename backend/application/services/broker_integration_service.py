@@ -94,6 +94,7 @@ class BrokerIntegrationService:
             side="buy" if order.side == "BUY" else "sell",
             qty=Decimal(str(order.qty)),
             order_type="market",
+            time_in_force=order.time_in_force,
         )
 
         # Set current market price for stub broker (real brokers execute at market)

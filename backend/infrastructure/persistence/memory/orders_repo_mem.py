@@ -60,6 +60,9 @@ class InMemoryOrdersRepo(OrdersRepo):
         # newest first (we rely on created_at order of inserts)
         return list(reversed([self._items[i] for i in ids]))[:limit]
 
+    def list_all(self) -> Iterable[Order]:
+        return list(self._items.values())
+
     def clear(self) -> None:
         self._items.clear()
         self._count_index.clear()
