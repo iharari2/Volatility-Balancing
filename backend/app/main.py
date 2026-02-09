@@ -31,6 +31,8 @@ from app.routes.simulations import router as simulations_router
 from app.routes.sim import router as sim_router
 from app.routes.positions_cockpit import router as positions_cockpit_router
 from app.routes.portfolio_cockpit_api import router as portfolio_cockpit_router
+from app.routes.explainability import live_router as explainability_live_router
+from app.routes.explainability import simulation_router as explainability_sim_router
 from application.services.trading_worker import start_trading_worker, stop_trading_worker
 
 API_PREFIX = "/v1"
@@ -142,6 +144,8 @@ def create_app(enable_trading_worker: bool | None = None) -> FastAPI:
         positions_cockpit_router
     )  # positions_cockpit_router already has /v1/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id} prefix
     app.include_router(portfolio_cockpit_router)
+    app.include_router(explainability_live_router)
+    app.include_router(explainability_sim_router)
 
     def __sync_ping() -> dict[str, bool]:
         return {"ok": True}
