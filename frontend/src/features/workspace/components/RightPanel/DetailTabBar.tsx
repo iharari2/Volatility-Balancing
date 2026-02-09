@@ -1,4 +1,4 @@
-import { LayoutDashboard, Activity, Clock, Settings } from 'lucide-react';
+import { LayoutDashboard, Activity, Clock, Settings, Table2, ClipboardList } from 'lucide-react';
 import { useWorkspace, WorkspaceTab } from '../../WorkspaceContext';
 
 const tabs: { value: WorkspaceTab; label: string; icon: typeof LayoutDashboard }[] = [
@@ -6,6 +6,8 @@ const tabs: { value: WorkspaceTab; label: string; icon: typeof LayoutDashboard }
   { value: 'trading', label: 'Trading', icon: Activity },
   { value: 'events', label: 'Events', icon: Clock },
   { value: 'strategy', label: 'Strategy', icon: Settings },
+  { value: 'explainability', label: 'Explainability', icon: Table2 },
+  { value: 'orders', label: 'Orders', icon: ClipboardList },
 ];
 
 export default function DetailTabBar() {

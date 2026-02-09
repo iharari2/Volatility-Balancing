@@ -10,7 +10,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import { getPortfolioPositions, PositionSummaryItem } from '../../api/cockpit';
 
-export type WorkspaceTab = 'overview' | 'trading' | 'events' | 'strategy';
+export type WorkspaceTab = 'overview' | 'trading' | 'events' | 'strategy' | 'explainability' | 'orders';
 export type PositionFilter = 'all' | 'active' | 'paused';
 
 interface Position extends PositionSummaryItem {
@@ -175,7 +175,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     if (positionFromUrl) {
       setSelectedPositionIdState(positionFromUrl);
     }
-    if (tabFromUrl && ['overview', 'trading', 'events', 'strategy'].includes(tabFromUrl)) {
+    if (tabFromUrl && ['overview', 'trading', 'events', 'strategy', 'explainability', 'orders'].includes(tabFromUrl)) {
       setActiveTabState(tabFromUrl);
     }
     if (filterFromUrl && ['all', 'active', 'paused'].includes(filterFromUrl)) {

@@ -7,6 +7,8 @@ import {
   CreateOrderRequest,
   FillOrderRequest,
 } from '../types';
+import { ExplainabilityTimeline, ExplainabilityParams } from '../types/explainability';
+import { OrderRow, TradeRow } from '../types/orders';
 
 const API_BASE = '/api'; // This will use the Vite proxy
 // const API_BASE = 'http://localhost:8001/v1'; // Direct connection
@@ -154,6 +156,16 @@ export const ordersApi = {
       method: 'POST',
       headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {},
     }),
+
+  listOrders: (tenantId: string, portfolioId: string, positionId: string, limit = 200) =>
+    request<{ position_id: string; orders: OrderRow[] }>(
+      `/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/orders?limit=${limit}`,
+    ),
+
+  listTrades: (tenantId: string, portfolioId: string, positionId: string, limit = 200) =>
+    request<{ position_id: string; trades: TradeRow[] }>(
+      `/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/trades?limit=${limit}`,
+    ),
 };
 
 // Simulation API
@@ -830,6 +842,111 @@ export const simulationProgressApi = {
     request<{ message: string }>(`/simulation/progress/${simulationId}`, {
       method: 'DELETE',
     }),
+};
+
+// Explainability API
+export const explainabilityApi = {
+  /**
+   * Get explainability timeline for a live position.
+   */
+  getLiveTimeline: (
+    tenantId: string,
+    portfolioId: string,
+    positionId: string,
+    params?: ExplainabilityParams,
+  ) => {
+    const queryParams = new URLSearchParams();
+    if (params?.start_date) queryParams.append('start_date', params.start_date);
+    if (params?.end_date) queryParams.append('end_date', params.end_date);
+    if (params?.action) queryParams.append('action', params.action);
+    if (params?.aggregation) queryParams.append('aggregation', params.aggregation);
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+
+    const query = queryParams.toString();
+    return request<ExplainabilityTimeline>(
+      `/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/explainability${query ? `?${query}` : ''}`,
+    );
+  },
+
+  /**
+   * Export live position explainability to Excel.
+   */
+  exportLiveTimeline: async (
+    tenantId: string,
+    portfolioId: string,
+    positionId: string,
+    params?: ExplainabilityParams,
+  ) => {
+    const queryParams = new URLSearchParams();
+    if (params?.start_date) queryParams.append('start_date', params.start_date);
+    if (params?.end_date) queryParams.append('end_date', params.end_date);
+    if (params?.action) queryParams.append('action', params.action);
+    if (params?.aggregation) queryParams.append('aggregation', params.aggregation);
+
+    const query = queryParams.toString();
+    const url = `${API_BASE}/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/explainability/export${query ? `?${query}` : ''}`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new ApiError(response.status, 'Export failed');
+    }
+
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = `explainability_${positionId}_${new Date().toISOString().split('T')[0]}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(downloadUrl);
+    document.body.removeChild(a);
+  },
+
+  /**
+   * Get explainability timeline for a simulation.
+   */
+  getSimulationTimeline: (simulationId: string, params?: ExplainabilityParams) => {
+    const queryParams = new URLSearchParams();
+    if (params?.start_date) queryParams.append('start_date', params.start_date);
+    if (params?.end_date) queryParams.append('end_date', params.end_date);
+    if (params?.action) queryParams.append('action', params.action);
+    if (params?.aggregation) queryParams.append('aggregation', params.aggregation);
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+
+    const query = queryParams.toString();
+    return request<ExplainabilityTimeline>(
+      `/v1/simulations/${simulationId}/explainability${query ? `?${query}` : ''}`,
+    );
+  },
+
+  /**
+   * Export simulation explainability to Excel.
+   */
+  exportSimulationTimeline: async (simulationId: string, params?: ExplainabilityParams) => {
+    const queryParams = new URLSearchParams();
+    if (params?.start_date) queryParams.append('start_date', params.start_date);
+    if (params?.end_date) queryParams.append('end_date', params.end_date);
+    if (params?.action) queryParams.append('action', params.action);
+    if (params?.aggregation) queryParams.append('aggregation', params.aggregation);
+
+    const query = queryParams.toString();
+    const url = `${API_BASE}/v1/simulations/${simulationId}/explainability/export${query ? `?${query}` : ''}`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new ApiError(response.status, 'Export failed');
+    }
+
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = `explainability_sim_${simulationId}_${new Date().toISOString().split('T')[0]}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(downloadUrl);
+    document.body.removeChild(a);
+  },
 };
 
 export { ApiError, request };
