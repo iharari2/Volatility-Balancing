@@ -16,6 +16,7 @@ import {
   TableProperties,
   Filter,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 // ============== TYPE DEFINITIONS ==============
 
@@ -409,7 +410,7 @@ export default function DecisionHistoryTable({
       XLSX.writeFile(wb, filename);
     } catch (err) {
       console.error('Export failed:', err);
-      alert('Export failed. Make sure xlsx package is installed.');
+      toast.error('Export failed. Make sure xlsx package is installed.');
     } finally {
       setExporting(false);
     }

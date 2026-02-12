@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { Plus, Search, Filter } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { usePositions, useCreatePosition, useDeletePosition } from '../hooks/usePositions';
 import PositionCard from '../components/PositionCard';
 import CreatePositionForm from '../components/CreatePositionForm';
+import ConfirmDialog from '../components/shared/ConfirmDialog';
 import { CreatePositionRequest } from '../types';
 
 export default function Positions() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const { data: positions = [], isLoading } = usePositions();
   const createPosition = useCreatePosition();
@@ -23,15 +26,20 @@ export default function Positions() {
     }
   };
 
-  const handleDeletePosition = async (positionId: string) => {
-    if (
-      window.confirm('Are you sure you want to delete this position? This action cannot be undone.')
-    ) {
-      try {
-        await deletePosition.mutateAsync(positionId);
-      } catch (error) {
-        console.error('Failed to delete position:', error);
-      }
+  const handleDeletePosition = (positionId: string) => {
+    setDeleteConfirm(positionId);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm) return;
+    try {
+      await deletePosition.mutateAsync(deleteConfirm);
+      toast.success('Position deleted');
+    } catch (error) {
+      console.error('Failed to delete position:', error);
+      toast.error('Failed to delete position');
+    } finally {
+      setDeleteConfirm(null);
     }
   };
 
@@ -131,6 +139,16 @@ export default function Positions() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={!!deleteConfirm}
+        title="Delete Position"
+        message="Are you sure you want to delete this position? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirm(null)}
+      />
 
       {/* Create Position Modal */}
       {showCreateForm && (

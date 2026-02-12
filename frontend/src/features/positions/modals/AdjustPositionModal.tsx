@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { PortfolioPosition } from '../../../services/portfolioScopedApi';
 
 interface AdjustPositionModalProps {
@@ -29,15 +30,15 @@ export default function AdjustPositionModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!qty || parseFloat(qty) <= 0) {
-      alert('Quantity is required and must be > 0');
+      toast.error('Quantity is required and must be greater than 0');
       return;
     }
     if (!reason.trim()) {
-      alert('Reason is required');
+      toast.error('Reason is required');
       return;
     }
     if (!confirmManual) {
-      alert('Please confirm this is a manual correction');
+      toast.error('Please confirm this is a manual correction');
       return;
     }
 

@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useState } from 'react';
 import { Toaster } from 'react-hot-toast';
 import PageLayout from './components/layout/PageLayout';
+import ErrorBoundary from './components/shared/ErrorBoundary';
 import { ConfigurationProvider } from './contexts/ConfigurationContext';
 import { OptimizationProvider } from './contexts/OptimizationContext';
 import { PortfolioProvider } from './contexts/PortfolioContext';
@@ -38,6 +39,7 @@ function App() {
       <PortfolioProvider>
         <ConfigurationProvider>
           <OptimizationProvider>
+            <ErrorBoundary>
             <Routes>
               {/* NEW: Position Workspace (Master-Detail Layout) - Default route */}
               <Route path="/" element={<PositionWorkspacePage />} />
@@ -163,6 +165,7 @@ function App() {
               {/* 404 catch-all route */}
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </ErrorBoundary>
             <Toaster position="top-right" />
           </OptimizationProvider>
         </ConfigurationProvider>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { PortfolioPosition } from '../../../services/portfolioScopedApi';
 
 interface SetAnchorModalProps {
@@ -23,7 +24,7 @@ export default function SetAnchorModal({
     e.preventDefault();
     const price = parseFloat(anchorPrice);
     if (isNaN(price) || price <= 0) {
-      alert('Anchor price must be a positive number');
+      toast.error('Anchor price must be a positive number');
       return;
     }
     onSave(price);

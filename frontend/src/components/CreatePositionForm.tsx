@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { TrendingUp, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { CreatePositionRequest } from '../types';
 import { useMarketPrice } from '../hooks/useMarketData';
 import { useConfiguration } from '../contexts/ConfigurationContext';
@@ -36,22 +37,22 @@ export default function CreatePositionForm({
 
     // Validate form data
     if (!ticker.trim()) {
-      alert('Please enter a ticker symbol');
+      toast.error('Please enter a ticker symbol');
       return;
     }
 
     if (!currentPrice) {
-      alert('Unable to fetch current market price. Please try again.');
+      toast.error('Unable to fetch current market price. Please try again.');
       return;
     }
 
     if (investmentAmount <= 0) {
-      alert('Investment amount must be greater than 0');
+      toast.error('Investment amount must be greater than 0');
       return;
     }
 
     if (calculatedShares <= 0) {
-      alert('Unable to calculate shares. Please check the investment amount.');
+      toast.error('Unable to calculate shares. Please check the investment amount.');
       return;
     }
 
@@ -85,7 +86,7 @@ export default function CreatePositionForm({
       await onSubmit(formData);
     } catch (error) {
       console.error('Failed to create position:', error);
-      alert('Failed to create position. Please try again.');
+      toast.error('Failed to create position. Please try again.');
     } finally {
       setIsValidating(false);
     }

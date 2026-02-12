@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Play, Settings, Download, Target, Eye, X } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { marketDataService } from '../services/marketDataService';
 
 interface SimulationConfig {
@@ -193,9 +194,7 @@ const Simulation: React.FC = () => {
 
       // Show user-friendly error message
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      alert(
-        `Simulation failed: ${errorMessage}\n\nPlease check your internet connection and try again.`,
-      );
+      toast.error(`Simulation failed: ${errorMessage}`);
     }
   };
 
@@ -409,9 +408,7 @@ const Simulation: React.FC = () => {
 
       // Show user-friendly error message
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      alert(
-        `Export failed: ${errorMessage}\n\nPlease check your internet connection and try again.`,
-      );
+      toast.error(`Export failed: ${errorMessage}`);
     }
   };
 
@@ -424,7 +421,7 @@ const Simulation: React.FC = () => {
         '_blank',
       );
     } else {
-      alert('Simulation result not found for export');
+      toast.error('Simulation result not found for export');
     }
   };
 

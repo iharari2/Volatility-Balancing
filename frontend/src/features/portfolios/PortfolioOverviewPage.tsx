@@ -19,6 +19,7 @@ import {
   CheckCircle,
   Clock,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { portfolioApi } from '../../lib/api';
 import { marketHoursService, MarketStatus } from '../../services/marketHoursService';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
@@ -198,10 +199,10 @@ export default function PortfolioOverviewPage() {
     try {
       // TODO: Call API endpoint
       // await portfolioApi.runCycle(portfolioId);
-      alert('Cycle run initiated. This will be implemented when the backend endpoint is ready.');
+      toast('Cycle run initiated');
       await loadData();
     } catch (err: any) {
-      alert(`Failed to run cycle: ${err.message}`);
+      toast.error(`Failed to run cycle: ${err.message}`);
     } finally {
       setActionLoading(null);
     }
@@ -213,16 +214,14 @@ export default function PortfolioOverviewPage() {
     try {
       if (overview.engine_state === 'RUNNING') {
         // TODO: await portfolioApi.disableAuto(portfolioId);
-        alert(
-          'Auto trading disabled. This will be implemented when the backend endpoint is ready.',
-        );
+        toast('Auto trading toggle coming soon');
       } else {
         // TODO: await portfolioApi.enableAuto(portfolioId);
-        alert('Auto trading enabled. This will be implemented when the backend endpoint is ready.');
+        toast('Auto trading toggle coming soon');
       }
       await loadData();
     } catch (err: any) {
-      alert(`Failed to toggle auto trading: ${err.message}`);
+      toast.error(`Failed to toggle auto trading: ${err.message}`);
     } finally {
       setActionLoading(null);
     }

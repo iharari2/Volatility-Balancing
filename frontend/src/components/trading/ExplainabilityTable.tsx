@@ -30,6 +30,7 @@ import {
   Minus,
   AlertTriangle,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { explainabilityApi } from '../../lib/api';
 import {
   ExplainabilityRow,
@@ -255,7 +256,7 @@ export default function ExplainabilityTable({
         await explainabilityApi.exportSimulationTimeline(simulationId, params);
       }
     } catch (err: any) {
-      alert(`Export failed: ${err.message}`);
+      toast.error(`Export failed: ${err.message}`);
     } finally {
       setExporting(false);
     }

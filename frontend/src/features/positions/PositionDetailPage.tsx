@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import {
   ArrowLeft,
   Settings,
@@ -1135,7 +1136,7 @@ export default function PositionDetailPage() {
               <button
                 onClick={() => {
                   // TODO: Implement set anchor functionality
-                  alert('Set Anchor functionality coming soon');
+                  toast('Set Anchor functionality coming soon');
                 }}
                 className="w-full flex items-center justify-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
               >
@@ -1154,7 +1155,7 @@ export default function PositionDetailPage() {
               <button
                 onClick={() => {
                   // TODO: Implement export functionality
-                  alert('Export functionality coming soon');
+                  toast('Export functionality coming soon');
                 }}
                 className="w-full flex items-center justify-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
               >

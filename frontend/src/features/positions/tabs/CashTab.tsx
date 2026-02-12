@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 import { portfolioScopedApi, PortfolioPosition } from '../../../services/portfolioScopedApi';
 
 // Cash summary interface (calculated from positions)
@@ -48,7 +49,7 @@ export default function CashTab({
       onRefresh();
     } catch (error) {
       console.error('Error depositing cash:', error);
-      alert('Failed to deposit cash');
+      toast.error('Failed to deposit cash');
     }
   };
 
@@ -67,7 +68,7 @@ export default function CashTab({
       onRefresh();
     } catch (error) {
       console.error('Error withdrawing cash:', error);
-      alert('Failed to withdraw cash');
+      toast.error('Failed to withdraw cash');
     }
   };
 

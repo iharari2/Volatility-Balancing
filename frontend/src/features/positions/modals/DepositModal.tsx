@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { PortfolioPosition } from '../../../services/portfolioScopedApi';
 
 interface DepositModalProps {
@@ -16,11 +17,11 @@ export default function DepositModal({ position, onClose, onSave }: DepositModal
     e.preventDefault();
     const amountNum = parseFloat(amount);
     if (!amount || amountNum <= 0) {
-      alert('Amount is required and must be > 0');
+      toast.error('Amount is required and must be greater than 0');
       return;
     }
     if (!reason.trim()) {
-      alert('Reason is required');
+      toast.error('Reason is required');
       return;
     }
     onSave(amountNum, reason.trim());

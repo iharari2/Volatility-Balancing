@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { useState } from 'react';
 import { ArrowLeft, Target, Settings, DollarSign, RefreshCw } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 import { usePosition, useSetAnchorPrice, usePositionEvents } from '../hooks/usePositions';
 import { useMarketPrice } from '../hooks/useMarketData';
@@ -288,15 +289,15 @@ export default function PositionDetail() {
                   });
 
                   if (response.ok) {
-                    alert('Configuration saved successfully!');
+                    toast.success('Configuration saved');
                     // Refresh the page or update state
                     window.location.reload();
                   } else {
-                    alert('Failed to save configuration');
+                    toast.error('Failed to save configuration');
                   }
                 } catch (error) {
                   console.error('Error saving configuration:', error);
-                  alert('Error saving configuration');
+                  toast.error('Error saving configuration');
                 }
               }}
               onReset={() => {

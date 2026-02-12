@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { PortfolioPosition } from '../../../services/portfolioScopedApi';
 import { portfolioScopedApi } from '../../../services/portfolioScopedApi';
 
@@ -54,7 +55,7 @@ export default function EditPositionModal({
       onClose();
     } catch (error: any) {
       console.error('Error updating position:', error);
-      alert(`Failed to update position: ${error.message || 'Unknown error'}`);
+      toast.error(`Failed to update position: ${error.message || 'Unknown error'}`);
     } finally {
       setSaving(false);
     }

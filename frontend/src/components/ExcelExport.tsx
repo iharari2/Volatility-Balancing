@@ -4,6 +4,7 @@
 
 import React, { useState } from 'react';
 import { Download, FileSpreadsheet, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 interface ExcelExportProps {
   configId?: string;
@@ -123,7 +124,7 @@ const ExcelExport: React.FC<ExcelExportProps> = ({
       window.URL.revokeObjectURL(downloadUrl);
     } catch (error) {
       console.error('Export failed:', error);
-      alert(`Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(`Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsExporting(false);
     }

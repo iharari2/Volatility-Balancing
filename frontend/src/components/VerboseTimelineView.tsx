@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Download, ChevronLeft, ChevronRight, Filter, X } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { simulationApi } from '../lib/api';
 import DateRangeFilter, { DateRange } from './shared/DateRangeFilter';
 import EventTypeFilter from './shared/EventTypeFilter';
@@ -137,7 +138,7 @@ export default function VerboseTimelineView({ simulationId, ticker }: VerboseTim
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (err: any) {
-      alert(`Export failed: ${err.message}`);
+      toast.error(`Export failed: ${err.message}`);
     } finally {
       setExporting(false);
     }

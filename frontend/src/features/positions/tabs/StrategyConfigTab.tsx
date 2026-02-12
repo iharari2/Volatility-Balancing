@@ -169,7 +169,7 @@ export default function StrategyConfigTab({
   const handleSave = async () => {
     if (!config) return;
     if (!validateConfig(config)) {
-      alert('Please fix validation errors before saving');
+      toast.error('Please fix validation errors before saving');
       return;
     }
     setSaving(true);

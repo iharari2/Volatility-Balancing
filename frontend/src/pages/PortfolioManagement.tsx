@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Edit, Settings, Eye, EyeOff, Download, X, Archive } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { usePortfolio, Position } from '../contexts/PortfolioContext';
 import { marketApi } from '../lib/api';
 
@@ -112,12 +113,12 @@ const PortfolioManagement: React.FC = () => {
   const handleAddPosition = async () => {
     // Validate required fields
     if (!newPosition.ticker) {
-      alert('Please enter a ticker symbol');
+      toast.error('Please enter a ticker symbol');
       return;
     }
 
     if (newPosition.cashAmount <= 0) {
-      alert('Please enter a cash amount');
+      toast.error('Please enter a cash amount');
       return;
     }
 
@@ -125,7 +126,7 @@ const PortfolioManagement: React.FC = () => {
       (newPosition.inputMode === 'dollar' && newPosition.dollarValue <= 0) ||
       (newPosition.inputMode === 'qty' && newPosition.units <= 0)
     ) {
-      alert(
+      toast.error(
         `Please enter ${
           newPosition.inputMode === 'dollar' ? 'a dollar value' : 'a quantity'
         } for the asset`,
@@ -151,7 +152,7 @@ const PortfolioManagement: React.FC = () => {
           currentPrice = editingPosition.currentPrice;
           console.warn(`Using existing position price: $${currentPrice}`);
         } else {
-          alert(
+          toast.error(
             `Failed to fetch market price for ${newPosition.ticker}. Please check the ticker symbol and try again.`,
           );
           return;
@@ -168,7 +169,7 @@ const PortfolioManagement: React.FC = () => {
           units = newPosition.dollarValue / currentPrice;
           finalAssetAmount = newPosition.dollarValue;
         } else {
-          alert('Market price not available. Please ensure ticker is valid.');
+          toast.error('Market price not available. Please ensure ticker is valid.');
           return;
         }
       } else if (newPosition.inputMode === 'qty' && newPosition.units > 0) {
@@ -177,11 +178,11 @@ const PortfolioManagement: React.FC = () => {
         if (currentPrice > 0) {
           finalAssetAmount = units * currentPrice;
         } else {
-          alert('Market price not available. Please ensure ticker is valid.');
+          toast.error('Market price not available. Please ensure ticker is valid.');
           return;
         }
       } else {
-        alert(
+        toast.error(
           `Please enter ${
             newPosition.inputMode === 'dollar' ? 'a dollar value' : 'a quantity'
           } for the asset`,

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Download, Play, Filter, Clock, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
+import toast from 'react-hot-toast';
 import {
   ComposedChart,
   Line,
@@ -122,7 +123,7 @@ export default function SimulationResults({ result }: SimulationResultsProps) {
 
   const handleExportExcel = () => {
     if (!result?.simulation_id) {
-      alert('No simulation ID available. Please run a simulation first.');
+      toast.error('No simulation ID available. Please run a simulation first.');
       return;
     }
     const ticker = result.ticker || '';

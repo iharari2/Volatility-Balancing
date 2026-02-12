@@ -13,6 +13,7 @@ import {
   DollarSign,
   Activity,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import {
   LineChart,
   Line,
@@ -373,7 +374,7 @@ const Analysis: React.FC = () => {
       window.open(`/api/excel/positions/export?${params}`, '_blank');
     } catch (error) {
       console.error('Export failed:', error);
-      alert('Export failed. Please try again.');
+      toast.error('Export failed. Please try again.');
     }
   };
 
@@ -388,11 +389,11 @@ const Analysis: React.FC = () => {
           '_blank',
         );
       } else {
-        alert('Position not found for export');
+        toast.error('Position not found for export');
       }
     } catch (error) {
       console.error('Position export failed:', error);
-      alert('Position export failed. Please try again.');
+      toast.error('Position export failed. Please try again.');
     }
   };
 
@@ -406,11 +407,11 @@ const Analysis: React.FC = () => {
           '_blank',
         );
       } else {
-        alert('No positions available for comprehensive export');
+        toast.error('No positions available for comprehensive export');
       }
     } catch (error) {
       console.error('Comprehensive export failed:', error);
-      alert('Comprehensive export failed. Please try again.');
+      toast.error('Comprehensive export failed. Please try again.');
     }
   };
 

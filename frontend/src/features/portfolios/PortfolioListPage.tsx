@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import {
   Plus,
   Copy,
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import { portfolioApi } from '../../lib/api';
+import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import CreatePortfolioWizard from './CreatePortfolioWizard';
 import PortfolioDetailModal from './PortfolioDetailModal';
 
@@ -32,6 +34,7 @@ export default function PortfolioListPage() {
   const [expandedPortfolios, setExpandedPortfolios] = useState<Set<string>>(new Set());
   const [portfolioPositions, setPortfolioPositions] = useState<Record<string, any[]>>({});
   const [loadingPositions, setLoadingPositions] = useState<Record<string, boolean>>({});
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const handleCreate = () => {
     setShowCreateModal(true);
@@ -56,33 +59,33 @@ export default function PortfolioListPage() {
       await refreshPortfolios();
     } catch (error) {
       console.error('Error duplicating portfolio:', error);
-      alert('Failed to duplicate portfolio');
+      toast.error('Failed to duplicate portfolio');
     }
   };
 
   const handleArchive = async (portfolioId: string) => {
     // Archive is not yet implemented in backend - for now just show message
-    alert('Archive functionality coming soon');
+    toast('Archive functionality coming soon');
   };
 
-  const handleDelete = async (portfolioId: string) => {
-    if (
-      window.confirm(
-        'Are you sure you want to delete this portfolio? This action cannot be undone.',
-      )
-    ) {
-      try {
-        if (!selectedTenantId) return;
-        await portfolioApi.delete(selectedTenantId, portfolioId);
-        // If deleted portfolio was selected, clear selection
-        if (selectedPortfolioId === portfolioId) {
-          setSelectedPortfolioId('');
-        }
-        await refreshPortfolios();
-      } catch (error) {
-        console.error('Error deleting portfolio:', error);
-        alert('Failed to delete portfolio');
+  const handleDelete = (portfolioId: string) => {
+    setDeleteConfirmId(portfolioId);
+  };
+
+  const confirmDeletePortfolio = async () => {
+    if (!deleteConfirmId || !selectedTenantId) return;
+    try {
+      await portfolioApi.delete(selectedTenantId, deleteConfirmId);
+      if (selectedPortfolioId === deleteConfirmId) {
+        setSelectedPortfolioId('');
       }
+      await refreshPortfolios();
+      toast.success('Portfolio deleted');
+    } catch (error) {
+      console.error('Error deleting portfolio:', error);
+      toast.error('Failed to delete portfolio');
+    } finally {
+      setDeleteConfirmId(null);
     }
   };
 
@@ -292,6 +295,16 @@ export default function PortfolioListPage() {
           );
         })}
       </div>
+
+      <ConfirmDialog
+        isOpen={!!deleteConfirmId}
+        title="Delete Portfolio"
+        message="Are you sure you want to delete this portfolio? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={confirmDeletePortfolio}
+        onCancel={() => setDeleteConfirmId(null)}
+      />
 
       <CreatePortfolioWizard
         isOpen={showCreateModal}

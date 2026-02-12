@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import {
   Download,
   Plus,
@@ -18,6 +19,7 @@ import {
   EffectiveConfig,
 } from '../../../services/portfolioScopedApi';
 import { marketApi, portfolioApi } from '../../../lib/api';
+import ConfirmDialog from '../../../components/shared/ConfirmDialog';
 import AddPositionModal from '../modals/AddPositionModal';
 import AdjustPositionModal from '../modals/AdjustPositionModal';
 import SetAnchorModal from '../modals/SetAnchorModal';
@@ -61,6 +63,7 @@ export default function PositionsTab({
   const [showAnchorModal, setShowAnchorModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDetailsDrawer, setShowDetailsDrawer] = useState(false);
+  const [removeConfirm, setRemoveConfirm] = useState<{ id: string; symbol: string } | null>(null);
   const [selectedPosition, setSelectedPosition] = useState<PortfolioPosition | null>(null);
   const [marketDataMap, setMarketDataMap] = useState<
     Record<string, { price: number; change?: number; changePercent?: number }>
@@ -168,7 +171,7 @@ export default function PositionsTab({
       const finalQty = data.inputMode === 'qty' ? data.qty : data.dollarValue / data.currentPrice;
 
       if (finalQty <= 0 || !isFinite(finalQty)) {
-        alert('Invalid quantity. Please check your input values.');
+        toast.error('Invalid quantity. Please check your input values.');
         return;
       }
 
@@ -197,7 +200,7 @@ export default function PositionsTab({
         error?.detail ||
         error?.response?.data?.detail ||
         'Failed to add position';
-      alert(`Failed to add position: ${errorMessage}`);
+      toast.error(`Failed to add position: ${errorMessage}`);
     }
   };
 
@@ -219,7 +222,7 @@ export default function PositionsTab({
       onRefresh();
     } catch (error) {
       console.error('Error adjusting position:', error);
-      alert('Failed to adjust position');
+      toast.error('Failed to adjust position');
     }
   };
 
@@ -236,24 +239,20 @@ export default function PositionsTab({
       onRefresh();
     } catch (error) {
       console.error('Error setting anchor:', error);
-      alert('Failed to set anchor price');
+      toast.error('Failed to set anchor price');
     }
   };
 
-  const handleRemovePosition = async (positionId: string, assetSymbol: string) => {
-    if (
-      !window.confirm(
-        `Are you sure you want to remove position "${assetSymbol}" (${positionId}) from this portfolio? This action cannot be undone.`,
-      )
-    ) {
-      return;
-    }
+  const handleRemovePosition = (positionId: string, assetSymbol: string) => {
+    setRemoveConfirm({ id: positionId, symbol: assetSymbol });
+  };
 
+  const confirmRemovePosition = async () => {
+    if (!removeConfirm) return;
     try {
-      await portfolioScopedApi.removePosition(tenantId, portfolioId, positionId);
+      await portfolioScopedApi.removePosition(tenantId, portfolioId, removeConfirm.id);
       onRefresh();
-      // Show success message
-      alert(`Position "${assetSymbol}" has been removed from the portfolio.`);
+      toast.success(`Position "${removeConfirm.symbol}" removed from portfolio.`);
     } catch (error: any) {
       console.error('Error removing position:', error);
       const errorMessage =
@@ -261,7 +260,9 @@ export default function PositionsTab({
         error?.detail ||
         error?.response?.data?.detail ||
         'Failed to remove position';
-      alert(`Failed to remove position: ${errorMessage}`);
+      toast.error(`Failed to remove position: ${errorMessage}`);
+    } finally {
+      setRemoveConfirm(null);
     }
   };
 
@@ -660,6 +661,16 @@ export default function PositionsTab({
           }}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={!!removeConfirm}
+        title="Remove Position"
+        message={removeConfirm ? `Are you sure you want to remove "${removeConfirm.symbol}" from this portfolio? This action cannot be undone.` : ''}
+        confirmLabel="Remove"
+        variant="danger"
+        onConfirm={confirmRemovePosition}
+        onCancel={() => setRemoveConfirm(null)}
+      />
     </div>
   );
 }
