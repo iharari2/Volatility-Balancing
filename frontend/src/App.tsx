@@ -12,23 +12,14 @@ import { TenantPortfolioProvider } from './contexts/TenantPortfolioContext';
 import PositionWorkspacePage from './features/workspace/PositionWorkspacePage';
 
 // Feature pages
-import OverviewPage from './features/overview/OverviewPage';
 import PortfolioListPage from './features/portfolios/PortfolioListPage';
 import PortfolioOverviewPage from './features/portfolios/PortfolioOverviewPage';
-import PositionsPage from './features/positions/PositionsPage';
 import PositionsAndConfigPage from './features/positions/PositionsAndConfigPage';
 import PositionDetailPage from './features/positions/PositionDetailPage';
-import TradingConsolePage from './features/trading/TradingConsolePage';
 import TradeCockpitPage from './features/trading/TradeCockpitPage';
 import SimulationLabPage from './features/simulation/SimulationLabPage';
 import AnalyticsPage from './features/analytics/AnalyticsPage';
-import AuditTrailPage from './features/audit/AuditTrailPage';
 import SettingsPage from './features/settings/SettingsPage';
-
-// Legacy pages (temporary - for migration)
-import PortfolioManagement from './pages/PortfolioManagement';
-import Trading from './pages/Trading';
-import Simulation from './pages/Simulation';
 import NotFound from './pages/NotFound';
 
 function App() {
@@ -116,48 +107,6 @@ function App() {
                 element={
                   <PageLayout mode={mode}>
                     <AnalyticsPage />
-                  </PageLayout>
-                }
-              />
-
-              {/* Legacy routes (temporary) */}
-              <Route
-                path="/portfolio"
-                element={
-                  <PageLayout mode={mode}>
-                    <PortfolioManagement />
-                  </PageLayout>
-                }
-              />
-              <Route
-                path="/trading-legacy"
-                element={
-                  <PageLayout mode={mode}>
-                    <Trading />
-                  </PageLayout>
-                }
-              />
-              <Route
-                path="/simulation-legacy"
-                element={
-                  <PageLayout mode={mode}>
-                    <Simulation />
-                  </PageLayout>
-                }
-              />
-              <Route
-                path="/positions-legacy"
-                element={
-                  <PageLayout mode={mode}>
-                    <PositionsPage />
-                  </PageLayout>
-                }
-              />
-              <Route
-                path="/trading-console"
-                element={
-                  <PageLayout mode={mode}>
-                    <TradingConsolePage />
                   </PageLayout>
                 }
               />
