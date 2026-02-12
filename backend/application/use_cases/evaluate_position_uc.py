@@ -701,9 +701,12 @@ class EvaluatePositionUC:
         post_qty = position.qty + raw_qty
         post_asset_value = post_qty * current_price_float
         # Calculate post-trade cash from position.cash (cash lives in PositionCell)
-        cash_delta = -(raw_qty * current_price_float) - (  # Negative for BUY, positive for SELL
+        # Cash delta formula:
+        #   BUY  (raw_qty > 0): -(qty * price) - (qty * price * rate) = -(cost + commission)
+        #   SELL (raw_qty < 0): -(-qty * price) - (qty * price * rate) = +(proceeds - commission)
+        cash_delta = -(raw_qty * current_price_float) - (
             abs(raw_qty) * current_price_float * commission_rate_for_calc
-        )  # Always subtract commission
+        )
         post_cash = position.cash + cash_delta  # Cash lives in PositionCell
         post_total_value = post_asset_value + post_cash
         post_asset_pct = post_asset_value / post_total_value if post_total_value > 0 else 0

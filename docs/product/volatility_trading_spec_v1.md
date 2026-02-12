@@ -14,7 +14,7 @@
 - **Trigger threshold (τ):** Default ±3% relative to P_anchor.
 - **Commission:** Default 0.01% of order notional.
 - **Minimum order threshold (min_notional):** Configurable; default $100.
-- **Rebalance ratio (r):** Default 0.5 (50% of available resources).
+- **Rebalance ratio (r):** Default 1.6667 (5/3 ratio, tuned for optimal mean-reversion capture).
 - **Guardrails (g_low, g_high):** Asset% ∈ [25%, 75%].
 - **Portfolio state:**
   - A_t = price × shares
@@ -182,7 +182,7 @@ Every evaluation stores an **Event** with:
 
 - **Trading Parameters:**
   - Threshold setting: ±X% input with slider (default 3%)
-  - Rebalance ratio: decimal input with validation (default 0.5)
+  - Rebalance ratio: decimal input with validation (default 1.6667)
   - Order sizing strategy: dropdown selection (default "proportional")
   - After hours trading: toggle switch (default ON)
 - **Guardrail Settings:**
@@ -363,7 +363,7 @@ Each position sheet contains detailed line items for every evaluation event:
 - Trigger threshold: ±3%
 - Commission: 0.01%
 - Min order: $100
-- Rebalance ratio: 0.5
+- Rebalance ratio: 1.6667 (5/3)
 - Guardrails: [25%, 75%]
 - Max orders/day: 5
 - Withholding tax: 25%
