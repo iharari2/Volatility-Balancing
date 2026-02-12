@@ -7,8 +7,11 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel, ConfigDict
 
+from decimal import Decimal
+
 from app.di import container
 from application.services.portfolio_service import PortfolioService
+from domain.value_objects.configs import GuardrailConfig, TriggerConfig, OrderPolicyConfig
 
 # Align with other routers (positions, simulations) that use /v1 prefix
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/portfolios", tags=["portfolios"])
@@ -319,6 +322,20 @@ def create_position_in_portfolio(
             avg_cost=request.avg_cost,
             starting_cash=request.starting_cash.amount,
         )
+
+        # Store sensible guardrail defaults in ConfigRepo so they're used
+        # by the evaluation engine and displayed in the UI.
+        if not container.config.get_guardrail_config(position.id):
+            container.config.set_guardrail_config(
+                position.id,
+                GuardrailConfig(
+                    min_stock_pct=Decimal("0.25"),
+                    max_stock_pct=Decimal("0.75"),
+                    max_trade_pct_of_position=Decimal("0.5"),
+                    max_orders_per_day=5,
+                ),
+            )
+
         return {
             "message": "Position created in portfolio",
             "portfolio_id": portfolio_id,

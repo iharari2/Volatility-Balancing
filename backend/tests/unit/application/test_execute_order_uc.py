@@ -1,4 +1,6 @@
 import pytest
+from decimal import Decimal
+
 from app.di import container
 from application.use_cases.execute_order_uc import ExecuteOrderUC
 from application.use_cases.submit_order_uc import SubmitOrderUC
@@ -6,6 +8,7 @@ from application.dto.orders import CreateOrderRequest, FillOrderRequest
 from domain.errors import GuardrailBreach
 from domain.entities.portfolio import Portfolio
 from domain.entities.order import Order
+from domain.value_objects.configs import GuardrailConfig
 
 
 def _setup_test_portfolio(
@@ -16,6 +19,18 @@ def _setup_test_portfolio(
     container.portfolio_repo.save(portfolio)
     # Note: Cash is now stored in Position.cash, not PortfolioCash
     return tenant_id, portfolio_id
+
+
+def _set_permissive_guardrails(position_id: str):
+    """Set wide-open guardrails (0%-100%) for test positions."""
+    container.config.set_guardrail_config(
+        position_id,
+        GuardrailConfig(
+            min_stock_pct=Decimal("0.0"),
+            max_stock_pct=Decimal("1.0"),
+            max_trade_pct_of_position=Decimal("1.0"),
+        ),
+    )
 
 
 def _submit_buy_order(tenant_id: str, portfolio_id: str, pos_id: str, qty: float = 2.0):
@@ -46,6 +61,7 @@ def test_fill_buy_increases_qty_and_decreases_cash():
     # Set initial cash on position (cash lives in Position entity)
     pos.cash = 1000.0
     container.positions.save(pos)
+    _set_permissive_guardrails(pos.id)
     oid = _submit_buy_order(tenant_id, portfolio_id, pos.id, qty=2.0)
     uc = ExecuteOrderUC(
         container.positions,
@@ -103,6 +119,7 @@ def test_buy_commission_decreases_cash():
     # Set initial cash on position (cash lives in Position entity)
     pos.cash = 1000.0
     container.positions.save(pos)
+    _set_permissive_guardrails(pos.id)
     oid = container.orders.create(
         tenant_id=tenant_id,
         portfolio_id=portfolio_id,
@@ -169,6 +186,7 @@ def test_commission_defaults_to_zero():
     # Set initial cash on position (cash lives in Position entity)
     pos.cash = 100.0
     container.positions.save(pos)
+    _set_permissive_guardrails(pos.id)
     oid = container.orders.create(
         tenant_id=tenant_id,
         portfolio_id=portfolio_id,
@@ -203,6 +221,7 @@ def test_commission_aggregate_increment_on_buy():
     # Set initial cash on position (cash lives in Position entity)
     pos.cash = 1000.0
     container.positions.save(pos)
+    _set_permissive_guardrails(pos.id)
     oid = container.orders.create(
         tenant_id=tenant_id,
         portfolio_id=portfolio_id,
@@ -271,6 +290,7 @@ def test_commission_aggregate_multiple_trades():
     # Set initial cash on position (cash lives in Position entity)
     pos.cash = 2000.0
     container.positions.save(pos)
+    _set_permissive_guardrails(pos.id)
     uc = ExecuteOrderUC(
         container.positions,
         container.orders,
@@ -313,6 +333,7 @@ def test_trade_commission_rate_effective_set():
     # Set initial cash on position (cash lives in Position entity)
     pos.cash = 1000.0
     container.positions.save(pos)
+    _set_permissive_guardrails(pos.id)
     oid = container.orders.create(
         tenant_id=tenant_id,
         portfolio_id=portfolio_id,
@@ -347,6 +368,7 @@ def test_trade_status_defaults_to_executed():
     # Set initial cash on position (cash lives in Position entity)
     pos.cash = 1000.0
     container.positions.save(pos)
+    _set_permissive_guardrails(pos.id)
     oid = container.orders.create(
         tenant_id=tenant_id,
         portfolio_id=portfolio_id,

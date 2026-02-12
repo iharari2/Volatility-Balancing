@@ -14,8 +14,8 @@ class GuardrailPolicy:
     The check_after_fill() method has been removed - use GuardrailEvaluator.validate_after_fill() instead.
     """
 
-    min_stock_alloc_pct: float = 0.0  # e.g. 0.25
-    max_stock_alloc_pct: float = 1.0  # e.g. 0.75
+    min_stock_alloc_pct: float = 0.25  # 25% min stock allocation
+    max_stock_alloc_pct: float = 0.75  # 75% max stock allocation
     max_orders_per_day: int = 5
     # Maximum percentage of position/cash that can be traded in a single order
     max_sell_pct_per_trade: float = 0.5  # e.g. 0.5 = max 50% of shares in one sell

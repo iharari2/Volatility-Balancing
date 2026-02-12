@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import pytest
+from decimal import Decimal
 from application.dto.orders import CreateOrderRequest, FillOrderRequest
 from application.use_cases.submit_order_uc import SubmitOrderUC
 from application.use_cases.execute_order_uc import ExecuteOrderUC
 from domain.errors import GuardrailBreach
+from domain.value_objects.configs import GuardrailConfig
 from infrastructure.time.clock import Clock
 from app.di import container
 
@@ -88,6 +90,16 @@ def test_daily_cap_at_fill_is_enforced():
     pos.cash = 10_000.0
     pos.guardrails.max_orders_per_day = 1
     container.positions.save(pos)
+    # Set permissive allocation guardrails so the small buy doesn't violate min stock %
+    container.config.set_guardrail_config(
+        pos.id,
+        GuardrailConfig(
+            min_stock_pct=Decimal("0.0"),
+            max_stock_pct=Decimal("1.0"),
+            max_trade_pct_of_position=Decimal("1.0"),
+            max_orders_per_day=1,
+        ),
+    )
 
     # Verify the position was saved correctly
     pos_after = container.positions.get(
