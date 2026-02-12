@@ -10,3 +10,8 @@ build/
 wheelhouse/
 *.whl
 backend/logs/*.jsonl
+*.db
+nul
+.claude/settings.local.json
+.claude_template/
+CLAUDE.template.md
