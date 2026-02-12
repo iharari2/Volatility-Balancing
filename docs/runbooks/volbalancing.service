@@ -1,0 +1,41 @@
+# /etc/systemd/system/volbalancing.service
+# Volatility-Balancing backend service
+#
+# Install:
+#   sudo cp docs/runbooks/volbalancing.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable volbalancing
+#   sudo systemctl start volbalancing
+
+[Unit]
+Description=Volatility-Balancing Trading Backend
+After=network.target postgresql.service redis.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=ec2-user
+Group=ec2-user
+WorkingDirectory=/home/ec2-user/apps/Volatility-Balancing/backend
+EnvironmentFile=/home/ec2-user/apps/Volatility-Balancing/.env
+
+ExecStart=/home/ec2-user/apps/Volatility-Balancing/venv/bin/python -m uvicorn \
+    app.main:app \
+    --host 127.0.0.1 \
+    --port 8000 \
+    --workers 1 \
+    --log-level info
+
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=volbalancing
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/home/ec2-user/apps/Volatility-Balancing
+
+[Install]
+WantedBy=multi-user.target
