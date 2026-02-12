@@ -221,6 +221,10 @@ class ExplainabilityTimeline:
     total_rows: int = 0
     filtered_rows: int = 0
 
+    # Pagination metadata
+    offset: int = 0
+    limit: int = 500
+
     # Query metadata
     position_id: Optional[str] = None
     portfolio_id: Optional[str] = None
@@ -232,6 +236,7 @@ class ExplainabilityTimeline:
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     actions_filter: Optional[List[str]] = None
+    order_status_filter: Optional[List[str]] = None
     aggregation: str = "daily"  # "daily" or "all"
 
     def to_dict(self) -> dict:
@@ -240,6 +245,8 @@ class ExplainabilityTimeline:
             "rows": [row.to_dict() for row in self.rows],
             "total_rows": self.total_rows,
             "filtered_rows": self.filtered_rows,
+            "offset": self.offset,
+            "limit": self.limit,
             "position_id": self.position_id,
             "portfolio_id": self.portfolio_id,
             "simulation_run_id": self.simulation_run_id,
@@ -248,5 +255,6 @@ class ExplainabilityTimeline:
             "start_date": self.start_date,
             "end_date": self.end_date,
             "actions_filter": self.actions_filter,
+            "order_status_filter": self.order_status_filter,
             "aggregation": self.aggregation,
         }

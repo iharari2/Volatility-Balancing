@@ -3,7 +3,7 @@
 Explainability Timeline Service - Builds unified timeline view for live and simulation data.
 
 This service transforms raw evaluation timeline data into the explainability format,
-supporting daily aggregation and filtering.
+supporting daily aggregation, filtering, pagination, and order/trade enrichment.
 """
 
 from datetime import datetime, timezone
@@ -12,6 +12,8 @@ from collections import defaultdict
 import logging
 
 from application.dto.explainability import ExplainabilityRow, ExplainabilityTimeline
+from domain.ports.orders_repo import OrdersRepo
+from domain.ports.trades_repo import TradesRepo
 
 
 logger = logging.getLogger(__name__)
@@ -28,8 +30,19 @@ class ExplainabilityTimelineService:
     Supports:
     - Daily aggregation (show 1 row per day if no action, all action rows if any)
     - Action filtering (BUY/SELL/HOLD/SKIP)
+    - Order status filtering
     - Date range filtering
+    - Pagination (offset/limit with total count)
+    - Order/trade enrichment (joins evaluation data with Order and Trade entities)
     """
+
+    def __init__(
+        self,
+        orders_repo: Optional[OrdersRepo] = None,
+        trades_repo: Optional[TradesRepo] = None,
+    ):
+        self._orders_repo = orders_repo
+        self._trades_repo = trades_repo
 
     def build_from_live_timeline(
         self,
@@ -60,6 +73,93 @@ class ExplainabilityTimelineService:
             except Exception as e:
                 logger.warning(f"Failed to convert live record: {e}")
                 continue
+
+        return rows
+
+    def enrich_with_orders(self, rows: List[ExplainabilityRow]) -> List[ExplainabilityRow]:
+        """
+        Enrich explainability rows with Order and Trade entity data.
+
+        Batch-fetches all referenced orders and their trades, then populates
+        Group 6 (Order Status) and Group 7 (Execution Details) fields.
+
+        Args:
+            rows: List of ExplainabilityRow objects with order_id populated
+
+        Returns:
+            The same list with enriched fields (mutated in place)
+        """
+        if not self._orders_repo or not self._trades_repo:
+            return rows
+
+        # Collect unique order IDs
+        order_ids = {r.order_id for r in rows if r.order_id}
+        if not order_ids:
+            return rows
+
+        # Batch-fetch orders
+        orders_by_id: Dict[str, Any] = {}
+        for order_id in order_ids:
+            try:
+                order = self._orders_repo.get(order_id)
+                if order:
+                    orders_by_id[order_id] = order
+            except Exception as e:
+                logger.warning(f"Failed to fetch order {order_id}: {e}")
+
+        # Batch-fetch trades for each order
+        trades_by_order: Dict[str, List[Any]] = {}
+        for order_id in orders_by_id:
+            try:
+                trades = self._trades_repo.list_for_order(order_id)
+                if trades:
+                    trades_by_order[order_id] = trades
+            except Exception as e:
+                logger.warning(f"Failed to fetch trades for order {order_id}: {e}")
+
+        # Enrich each row
+        for row in rows:
+            if not row.order_id or row.order_id not in orders_by_id:
+                continue
+
+            order = orders_by_id[row.order_id]
+
+            # Group 6: Order Status
+            row.order_status = order.status
+            row.broker_order_id = order.broker_order_id
+            row.broker_status = order.broker_status
+
+            # Group 7: Execution Details from order
+            if order.avg_fill_price is not None:
+                row.execution_price = order.avg_fill_price
+            if order.filled_qty:
+                row.execution_qty = order.filled_qty
+            if row.execution_price and row.execution_qty:
+                row.execution_value = row.execution_price * row.execution_qty
+            if order.total_commission:
+                row.commission = order.total_commission
+
+            # Determine execution status
+            if order.status == "filled":
+                row.execution_status = "FILLED"
+            elif order.status == "partial":
+                row.execution_status = "PARTIAL"
+            elif order.status in ("rejected", "cancelled"):
+                row.execution_status = "NONE"
+            elif order.filled_qty and order.filled_qty > 0:
+                row.execution_status = "PARTIAL"
+
+            # Enrich with individual trade details if available
+            trades = trades_by_order.get(row.order_id, [])
+            if trades:
+                total_qty = sum(abs(t.qty) for t in trades)
+                total_commission = sum(t.commission for t in trades)
+                if total_qty > 0:
+                    weighted_price = sum(abs(t.qty) * t.price for t in trades) / total_qty
+                    row.execution_price = weighted_price
+                    row.execution_qty = total_qty
+                    row.execution_value = weighted_price * total_qty
+                    row.commission = total_commission
 
         return rows
 
@@ -157,15 +257,17 @@ class ExplainabilityTimelineService:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         actions: Optional[List[str]] = None,
+        order_statuses: Optional[List[str]] = None,
     ) -> List[ExplainabilityRow]:
         """
-        Filter rows by date range and action types.
+        Filter rows by date range, action types, and order status.
 
         Args:
             rows: List of rows to filter
             start_date: Start date filter (inclusive)
             end_date: End date filter (inclusive)
             actions: List of action types to include (e.g., ["BUY", "SELL"])
+            order_statuses: List of order statuses to include (e.g., ["filled", "rejected"])
 
         Returns:
             Filtered list of rows
@@ -182,6 +284,13 @@ class ExplainabilityTimelineService:
             actions_upper = [a.upper() for a in actions]
             filtered = [r for r in filtered if r.action in actions_upper]
 
+        if order_statuses:
+            statuses_lower = [s.lower() for s in order_statuses]
+            filtered = [
+                r for r in filtered
+                if r.order_status and r.order_status.lower() in statuses_lower
+            ]
+
         return filtered
 
     def build_timeline(
@@ -190,7 +299,9 @@ class ExplainabilityTimelineService:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         actions: Optional[List[str]] = None,
+        order_statuses: Optional[List[str]] = None,
         aggregation: str = "daily",
+        offset: int = 0,
         limit: int = 500,
         position_id: Optional[str] = None,
         portfolio_id: Optional[str] = None,
@@ -199,14 +310,16 @@ class ExplainabilityTimelineService:
         mode: Optional[str] = None,
     ) -> ExplainabilityTimeline:
         """
-        Build complete explainability timeline with filtering and aggregation.
+        Build complete explainability timeline with filtering, aggregation, and pagination.
 
         Args:
             rows: Raw explainability rows
             start_date: Start date filter
             end_date: End date filter
             actions: Action types to include
+            order_statuses: Order statuses to include
             aggregation: "daily" or "all"
+            offset: Number of rows to skip (for pagination)
             limit: Maximum rows to return
             position_id: Position ID for metadata
             portfolio_id: Portfolio ID for metadata
@@ -220,7 +333,7 @@ class ExplainabilityTimelineService:
         total_rows = len(rows)
 
         # Apply filters first
-        filtered = self.filter_rows(rows, start_date, end_date, actions)
+        filtered = self.filter_rows(rows, start_date, end_date, actions, order_statuses)
 
         # Apply aggregation
         if aggregation == "daily":
@@ -231,7 +344,9 @@ class ExplainabilityTimelineService:
         # Sort by timestamp descending (newest first)
         filtered.sort(key=lambda r: r.timestamp, reverse=True)
 
-        # Apply limit
+        # Apply pagination (offset + limit)
+        if offset > 0:
+            filtered = filtered[offset:]
         if limit and limit > 0:
             filtered = filtered[:limit]
 
@@ -239,6 +354,8 @@ class ExplainabilityTimelineService:
             rows=filtered,
             total_rows=total_rows,
             filtered_rows=filtered_count,
+            offset=offset,
+            limit=limit,
             position_id=position_id,
             portfolio_id=portfolio_id,
             simulation_run_id=simulation_run_id,
@@ -247,6 +364,7 @@ class ExplainabilityTimelineService:
             start_date=start_date.isoformat() if start_date else None,
             end_date=end_date.isoformat() if end_date else None,
             actions_filter=actions,
+            order_status_filter=order_statuses,
             aggregation=aggregation,
         )
 
@@ -298,11 +416,53 @@ class ExplainabilityTimelineService:
         elif isinstance(guardrail_allowed, str):
             guardrail_allowed = guardrail_allowed.upper() != "BLOCKED"
 
+        # Position impact: before values
+        qty_before = record.get("position_qty_before")
+        cash_before = record.get("position_cash_before")
+        stock_value_before = record.get("position_stock_value_before")
+        total_value_before = record.get("position_total_value_before")
+        if qty_before is not None and price and stock_value_before is None:
+            stock_value_before = float(qty_before) * float(price)
+        if cash_before is not None and stock_value_before is not None and total_value_before is None:
+            total_value_before = float(cash_before) + float(stock_value_before)
+        stock_pct_before = None
+        if stock_value_before is not None and total_value_before and total_value_before > 0:
+            stock_pct_before = float(stock_value_before) / float(total_value_before) * 100
+
+        # Position impact: after values
+        qty_after = record.get("position_qty_after")
+        cash_after = record.get("position_cash_after")
+        stock_value_after = None
+        total_value_after = None
+        if qty_after is not None and price:
+            stock_value_after = float(qty_after) * float(price)
+        if cash_after is not None and stock_value_after is not None:
+            total_value_after = float(cash_after) + float(stock_value_after)
+        stock_pct_after = None
+        if stock_value_after is not None and total_value_after and total_value_after > 0:
+            stock_pct_after = float(stock_value_after) / float(total_value_after) * 100
+
+        # Trigger evaluation details
+        trigger_detected = record.get("trigger_detected", False)
+        trigger_direction = record.get("trigger_direction")
+        trigger_up = record.get("trigger_up_threshold")
+        trigger_down = record.get("trigger_down_threshold")
+
+        # Anchor tracking
+        anchor_reset = record.get("anchor_reset_occurred", False)
+        anchor_old_value = record.get("anchor_price_old")
+        anchor_reset_reason = record.get("anchor_reset_reason")
+
+        # Dividend fields
+        dividend_declared = record.get("dividend_declared", False)
+        dividend_receivable = record.get("position_dividend_receivable_before")
+
         return ExplainabilityRow(
             timestamp=timestamp,
             date_str=timestamp.strftime("%Y-%m-%d"),
+            trace_id=record.get("trace_id"),
 
-            # Market
+            # Group 2: Market
             price=price,
             open_price=record.get("open_price"),
             high_price=record.get("high_price"),
@@ -310,31 +470,62 @@ class ExplainabilityTimelineService:
             close_price=record.get("close_price"),
             volume=record.get("volume"),
 
-            # Anchor
+            # Group 3: Trigger Evaluation
             anchor_price=record.get("anchor_price"),
             delta_pct=record.get("pct_change_from_anchor"),
+            trigger_up_threshold=trigger_up,
+            trigger_down_threshold=trigger_down,
+            trigger_fired=trigger_detected,
+            trigger_direction=trigger_direction,
+            trigger_reason=record.get("trigger_reason"),
 
-            # Position
+            # Group 4: Guardrails
+            min_stock_pct=record.get("guardrail_min_stock_pct"),
+            max_stock_pct=record.get("guardrail_max_stock_pct"),
+            current_stock_pct=stock_pct_before,
+            guardrail_allowed=guardrail_allowed,
+            guardrail_block_reason=record.get("guardrail_block_reason"),
+
+            # Group 5: Action
+            action=action,
+            action_reason=record.get("action_reason") or record.get("trigger_reason"),
+            intended_qty=record.get("proposed_qty"),
+            intended_value=record.get("proposed_value"),
+
+            # Group 6: Order Status (populated from record, enriched later)
+            order_id=record.get("order_id"),
+
+            # Group 7: Execution
+            execution_price=record.get("execution_price"),
+            execution_qty=record.get("execution_qty"),
+            commission=record.get("execution_commission") or record.get("commission_value"),
+
+            # Group 8: Position Impact
+            qty_before=qty_before,
+            qty_after=qty_after,
+            cash_before=cash_before,
+            cash_after=cash_after,
+            stock_value_before=stock_value_before,
+            stock_value_after=stock_value_after,
+            total_value_before=total_value_before,
+            total_value_after=total_value_after,
+            stock_pct_before=stock_pct_before,
+            stock_pct_after=stock_pct_after,
+
+            # Group 9: Dividends
+            dividend_declared=dividend_declared,
+
+            # Group 10: Anchor Tracking
+            anchor_reset=anchor_reset,
+            anchor_old_value=anchor_old_value,
+            anchor_reset_reason=anchor_reset_reason,
+
+            # Legacy/Convenience
             qty=qty,
             stock_value=stock_value,
             cash=cash,
             total_value=total_value,
             stock_pct=stock_pct,
-
-            # Guardrails
-            min_stock_pct=record.get("guardrail_min_stock_pct"),
-            max_stock_pct=record.get("guardrail_max_stock_pct"),
-            guardrail_allowed=guardrail_allowed,
-            guardrail_block_reason=record.get("guardrail_block_reason"),
-
-            # Action
-            action=action,
-            action_reason=record.get("action_reason") or record.get("trigger_reason"),
-
-            # Execution
-            execution_price=record.get("execution_price"),
-            execution_qty=record.get("execution_qty"),
-            commission=record.get("execution_commission") or record.get("commission_value"),
 
             # Metadata
             mode="LIVE",
