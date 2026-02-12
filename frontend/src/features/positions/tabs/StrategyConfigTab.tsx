@@ -351,6 +351,8 @@ export default function StrategyConfigTab({
               <input
                 type="number"
                 step="0.01"
+                min="0.01"
+                max="50"
                 value={config.trigger_threshold_up_pct}
                 onChange={(e) =>
                   handleChange('trigger_threshold_up_pct', parseFloat(e.target.value))
@@ -373,6 +375,8 @@ export default function StrategyConfigTab({
               <input
                 type="number"
                 step="0.01"
+                min="-50"
+                max="-0.01"
                 value={config.trigger_threshold_down_pct}
                 onChange={(e) =>
                   handleChange('trigger_threshold_down_pct', parseFloat(e.target.value))
@@ -402,6 +406,8 @@ export default function StrategyConfigTab({
               <input
                 type="number"
                 step="0.01"
+                min="0"
+                max="99"
                 value={config.min_stock_pct}
                 onChange={(e) => handleChange('min_stock_pct', parseFloat(e.target.value))}
                 className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm ${
@@ -419,6 +425,8 @@ export default function StrategyConfigTab({
               <input
                 type="number"
                 step="0.01"
+                min="1"
+                max="100"
                 value={config.max_stock_pct}
                 onChange={(e) => handleChange('max_stock_pct', parseFloat(e.target.value))}
                 className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm ${
@@ -436,6 +444,8 @@ export default function StrategyConfigTab({
               <input
                 type="number"
                 step="0.01"
+                min="0.01"
+                max="100"
                 value={config.max_trade_pct_of_position}
                 onChange={(e) =>
                   handleChange('max_trade_pct_of_position', parseFloat(e.target.value))
