@@ -111,6 +111,10 @@ export interface ExplainabilityTimeline {
   total_rows: number;
   filtered_rows: number;
 
+  // Pagination metadata
+  offset: number;
+  limit: number;
+
   // Query metadata
   position_id: string | null;
   portfolio_id: string | null;
@@ -122,6 +126,7 @@ export interface ExplainabilityTimeline {
   start_date: string | null;
   end_date: string | null;
   actions_filter: string[] | null;
+  order_status_filter: string[] | null;
   aggregation: 'daily' | 'all';
 }
 
@@ -132,7 +137,9 @@ export interface ExplainabilityParams {
   start_date?: string;
   end_date?: string;
   action?: string; // comma-separated: "BUY,SELL,HOLD,SKIP"
+  order_status?: string; // comma-separated: "filled,rejected,cancelled,pending,working"
   aggregation?: 'daily' | 'all';
+  offset?: number;
   limit?: number;
 }
 
@@ -315,6 +322,18 @@ export const ACTION_TYPES = [
   { value: 'SELL', label: 'Sell', color: 'bg-red-100 text-red-800' },
   { value: 'HOLD', label: 'Hold', color: 'bg-gray-100 text-gray-800' },
   { value: 'SKIP', label: 'Skip', color: 'bg-yellow-100 text-yellow-800' },
+];
+
+/**
+ * Order status types for filtering.
+ */
+export const ORDER_STATUS_TYPES = [
+  { value: 'filled', label: 'Filled', color: 'bg-green-100 text-green-700' },
+  { value: 'partial', label: 'Partial', color: 'bg-orange-100 text-orange-700' },
+  { value: 'working', label: 'Working', color: 'bg-yellow-100 text-yellow-700' },
+  { value: 'rejected', label: 'Rejected', color: 'bg-red-100 text-red-700' },
+  { value: 'cancelled', label: 'Cancelled', color: 'bg-gray-100 text-gray-500' },
+  { value: 'pending', label: 'Pending', color: 'bg-blue-100 text-blue-700' },
 ];
 
 /**

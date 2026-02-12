@@ -40,6 +40,7 @@ import {
   DEFAULT_VISIBLE_COLUMNS,
   DEFAULT_ENABLED_GROUPS,
   ACTION_TYPES,
+  ORDER_STATUS_TYPES,
   ORDER_STATUS_COLORS,
   ColumnGroup,
 } from '../../types/explainability';
@@ -175,6 +176,7 @@ export default function ExplainabilityTable({
   const [showFilters, setShowFilters] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange>({ startDate: null, endDate: null });
   const [selectedActions, setSelectedActions] = useState<string[]>([]);
+  const [selectedOrderStatuses, setSelectedOrderStatuses] = useState<string[]>([]);
   const [aggregation, setAggregation] = useState<'daily' | 'all'>('daily');
 
   // Pagination state
@@ -188,16 +190,16 @@ export default function ExplainabilityTable({
 
       const params: ExplainabilityParams = {
         aggregation,
-        limit: 1000,
+        offset: (currentPage - 1) * ROWS_PER_PAGE,
+        limit: ROWS_PER_PAGE,
       };
 
       if (dateRange.startDate) params.start_date = dateRange.startDate;
       if (dateRange.endDate) params.end_date = dateRange.endDate;
       if (selectedActions.length > 0) params.action = selectedActions.join(',');
+      if (selectedOrderStatuses.length > 0) params.order_status = selectedOrderStatuses.join(',');
 
       let result: ExplainabilityTimeline;
-
-      console.log('[ExplainabilityTable] Loading data...', { mode, tenantId, portfolioId, positionId, simulationId, params });
 
       if (mode === 'LIVE' && tenantId && portfolioId && positionId) {
         result = await explainabilityApi.getLiveTimeline(tenantId, portfolioId, positionId, params);
@@ -207,10 +209,7 @@ export default function ExplainabilityTable({
         throw new Error('Invalid configuration: missing required IDs');
       }
 
-      console.log('[ExplainabilityTable] Loaded:', { total_rows: result.total_rows, filtered_rows: result.filtered_rows, rows_length: result.rows?.length });
-
       setData(result);
-      setCurrentPage(1);
     } catch (err: any) {
       console.error('[ExplainabilityTable] Failed to load:', err);
       setError(err.message || 'Failed to load data');
@@ -225,7 +224,9 @@ export default function ExplainabilityTable({
     simulationId,
     dateRange,
     selectedActions,
+    selectedOrderStatuses,
     aggregation,
+    currentPage,
   ]);
 
   useEffect(() => {
@@ -235,7 +236,7 @@ export default function ExplainabilityTable({
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [dateRange, selectedActions, aggregation]);
+  }, [dateRange, selectedActions, selectedOrderStatuses, aggregation]);
 
   // Export handler
   const handleExport = async () => {
@@ -249,6 +250,7 @@ export default function ExplainabilityTable({
       if (dateRange.startDate) params.start_date = dateRange.startDate;
       if (dateRange.endDate) params.end_date = dateRange.endDate;
       if (selectedActions.length > 0) params.action = selectedActions.join(',');
+      if (selectedOrderStatuses.length > 0) params.order_status = selectedOrderStatuses.join(',');
 
       if (mode === 'LIVE' && tenantId && portfolioId && positionId) {
         await explainabilityApi.exportLiveTimeline(tenantId, portfolioId, positionId, params);
@@ -279,12 +281,11 @@ export default function ExplainabilityTable({
     return EXPLAINABILITY_COLUMN_GROUPS.filter((g) => enabledGroups.has(g.id));
   }, [enabledGroups]);
 
-  // Pagination
+  // Pagination (server-side: API returns pre-paginated rows)
   const rows = data?.rows || [];
-  const totalPages = Math.ceil(rows.length / ROWS_PER_PAGE);
+  const filteredTotal = data?.filtered_rows || 0;
+  const totalPages = Math.ceil(filteredTotal / ROWS_PER_PAGE);
   const startIndex = (currentPage - 1) * ROWS_PER_PAGE;
-  const endIndex = startIndex + ROWS_PER_PAGE;
-  const paginatedRows = rows.slice(startIndex, endIndex);
 
   // Toggle column group
   const toggleGroup = (groupId: string) => {
@@ -303,11 +304,12 @@ export default function ExplainabilityTable({
   const handleClearFilters = () => {
     setDateRange({ startDate: null, endDate: null });
     setSelectedActions([]);
+    setSelectedOrderStatuses([]);
     setAggregation('daily');
   };
 
   const hasActiveFilters =
-    dateRange.startDate || dateRange.endDate || selectedActions.length > 0 || aggregation !== 'daily';
+    dateRange.startDate || dateRange.endDate || selectedActions.length > 0 || selectedOrderStatuses.length > 0 || aggregation !== 'daily';
 
   // Render cell with special formatting
   const renderCell = (row: ExplainabilityRow, key: keyof ExplainabilityRow, format?: string) => {
@@ -539,6 +541,16 @@ export default function ExplainabilityTable({
                 placeholder="All Actions"
               />
             </div>
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Order Status</label>
+              <EventTypeFilter
+                selectedTypes={selectedOrderStatuses}
+                onChange={setSelectedOrderStatuses}
+                availableTypes={ORDER_STATUS_TYPES}
+                compact
+                placeholder="All Statuses"
+              />
+            </div>
             <div className="min-w-[150px]">
               <label className="block text-sm font-medium text-gray-700 mb-2">Aggregation</label>
               <select
@@ -585,7 +597,7 @@ export default function ExplainabilityTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {paginatedRows.map((row, idx) => (
+            {rows.map((row, idx) => (
               <tr
                 key={idx}
                 className={`hover:bg-gray-50 ${
@@ -648,7 +660,7 @@ export default function ExplainabilityTable({
       {totalPages > 1 && (
         <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
           <div className="text-sm text-gray-500">
-            Showing {startIndex + 1}-{Math.min(endIndex, rows.length)} of {rows.length} rows
+            Showing {startIndex + 1}-{Math.min(startIndex + rows.length, filteredTotal)} of {filteredTotal} rows
           </div>
           <div className="flex items-center space-x-2">
             <button

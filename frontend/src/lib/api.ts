@@ -845,6 +845,21 @@ export const simulationProgressApi = {
 };
 
 // Explainability API
+
+function buildExplainabilityQuery(params?: ExplainabilityParams): string {
+  if (!params) return '';
+  const q = new URLSearchParams();
+  if (params.start_date) q.append('start_date', params.start_date);
+  if (params.end_date) q.append('end_date', params.end_date);
+  if (params.action) q.append('action', params.action);
+  if (params.order_status) q.append('order_status', params.order_status);
+  if (params.aggregation) q.append('aggregation', params.aggregation);
+  if (params.offset != null) q.append('offset', params.offset.toString());
+  if (params.limit != null) q.append('limit', params.limit.toString());
+  const qs = q.toString();
+  return qs ? `?${qs}` : '';
+}
+
 export const explainabilityApi = {
   /**
    * Get explainability timeline for a live position.
@@ -855,16 +870,9 @@ export const explainabilityApi = {
     positionId: string,
     params?: ExplainabilityParams,
   ) => {
-    const queryParams = new URLSearchParams();
-    if (params?.start_date) queryParams.append('start_date', params.start_date);
-    if (params?.end_date) queryParams.append('end_date', params.end_date);
-    if (params?.action) queryParams.append('action', params.action);
-    if (params?.aggregation) queryParams.append('aggregation', params.aggregation);
-    if (params?.limit) queryParams.append('limit', params.limit.toString());
-
-    const query = queryParams.toString();
+    const query = buildExplainabilityQuery(params);
     return request<ExplainabilityTimeline>(
-      `/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/explainability${query ? `?${query}` : ''}`,
+      `/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/explainability${query}`,
     );
   },
 
@@ -877,14 +885,8 @@ export const explainabilityApi = {
     positionId: string,
     params?: ExplainabilityParams,
   ) => {
-    const queryParams = new URLSearchParams();
-    if (params?.start_date) queryParams.append('start_date', params.start_date);
-    if (params?.end_date) queryParams.append('end_date', params.end_date);
-    if (params?.action) queryParams.append('action', params.action);
-    if (params?.aggregation) queryParams.append('aggregation', params.aggregation);
-
-    const query = queryParams.toString();
-    const url = `${API_BASE}/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/explainability/export${query ? `?${query}` : ''}`;
+    const query = buildExplainabilityQuery(params);
+    const url = `${API_BASE}/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/explainability/export${query}`;
 
     const response = await fetch(url);
     if (!response.ok) {
@@ -906,16 +908,9 @@ export const explainabilityApi = {
    * Get explainability timeline for a simulation.
    */
   getSimulationTimeline: (simulationId: string, params?: ExplainabilityParams) => {
-    const queryParams = new URLSearchParams();
-    if (params?.start_date) queryParams.append('start_date', params.start_date);
-    if (params?.end_date) queryParams.append('end_date', params.end_date);
-    if (params?.action) queryParams.append('action', params.action);
-    if (params?.aggregation) queryParams.append('aggregation', params.aggregation);
-    if (params?.limit) queryParams.append('limit', params.limit.toString());
-
-    const query = queryParams.toString();
+    const query = buildExplainabilityQuery(params);
     return request<ExplainabilityTimeline>(
-      `/v1/simulations/${simulationId}/explainability${query ? `?${query}` : ''}`,
+      `/v1/simulations/${simulationId}/explainability${query}`,
     );
   },
 
@@ -923,14 +918,8 @@ export const explainabilityApi = {
    * Export simulation explainability to Excel.
    */
   exportSimulationTimeline: async (simulationId: string, params?: ExplainabilityParams) => {
-    const queryParams = new URLSearchParams();
-    if (params?.start_date) queryParams.append('start_date', params.start_date);
-    if (params?.end_date) queryParams.append('end_date', params.end_date);
-    if (params?.action) queryParams.append('action', params.action);
-    if (params?.aggregation) queryParams.append('aggregation', params.aggregation);
-
-    const query = queryParams.toString();
-    const url = `${API_BASE}/v1/simulations/${simulationId}/explainability/export${query ? `?${query}` : ''}`;
+    const query = buildExplainabilityQuery(params);
+    const url = `${API_BASE}/v1/simulations/${simulationId}/explainability/export${query}`;
 
     const response = await fetch(url);
     if (!response.ok) {
