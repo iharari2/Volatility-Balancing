@@ -19,7 +19,7 @@ from pathlib import Path
 backend_dir = Path(__file__).parent
 sys.path.insert(0, str(backend_dir))
 
-from infrastructure.persistence.sql.models import get_engine, TradeModel, Base
+from infrastructure.persistence.sql.models import get_engine, TradeModel  # noqa: E402
 
 
 def migrate_add_trades(db_url: str = "sqlite:///./vb.sqlite") -> bool:

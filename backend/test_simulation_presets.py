@@ -31,7 +31,7 @@ try:
     
     if response.status_code == 200:
         preset = response.json()
-        print(f'✅ Day Trading preset:')
+        print('✅ Day Trading preset:')
         print(f'  Name: {preset["name"]}')
         print(f'  Description: {preset["description"]}')
         print(f'  Trigger threshold: {preset["position_config"]["trigger_threshold_pct"]*100}%')
@@ -57,7 +57,7 @@ try:
         result = response.json()
         preset_used = result.get('preset_used', {})
         
-        print(f'✅ Simulation with preset completed:')
+        print('✅ Simulation with preset completed:')
         print(f'  Preset: {preset_used.get("name", "Unknown")}')
         print(f'  Total trades: {result.get("total_trades", 0)}')
         print(f'  Return: {result.get("total_return_pct", 0):.2f}%')

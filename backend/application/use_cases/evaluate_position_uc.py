@@ -508,10 +508,10 @@ class EvaluatePositionUC:
 
         # Get configs from provider or fall back to extracting from Position (backward compat)
         if self.trigger_config_provider:
-            trigger_config = self.trigger_config_provider(tenant_id, portfolio_id, position.id)
+            self.trigger_config_provider(tenant_id, portfolio_id, position.id)
         else:
             # Fallback: extract from Position entity (for backward compatibility)
-            trigger_config = order_policy_to_trigger_config(position.order_policy)
+            order_policy_to_trigger_config(position.order_policy)
 
         if self.guardrail_config_provider:
             guardrail_config = self.guardrail_config_provider(tenant_id, portfolio_id, position.id)

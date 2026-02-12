@@ -5,7 +5,7 @@
 import pytest
 from datetime import datetime, timezone
 from uuid import uuid4
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 from application.use_cases.parameter_optimization_uc import (
     ParameterOptimizationUC,

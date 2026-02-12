@@ -23,7 +23,7 @@ sys.path.insert(0, str(backend_dir))
 os.environ["APP_PERSISTENCE"] = "sql"
 os.environ["SQL_URL"] = "sqlite:///vb.sqlite"
 
-from app.di import container
+from app.di import container  # noqa: E402
 
 
 def get_actual_schema():

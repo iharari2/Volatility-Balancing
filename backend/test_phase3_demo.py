@@ -102,7 +102,7 @@ def test_evaluation_with_market_data(position_id: str) -> None:
 
         if result.get("market_data"):
             market_data = result["market_data"]
-            print(f"\nMarket Data Details:")
+            print("\nMarket Data Details:")
             print(f"  Price: ${market_data['price']:.2f}")
             print(f"  Source: {market_data['source']}")
             print(f"  Market Hours: {market_data['is_market_hours']}")
@@ -130,7 +130,7 @@ def test_auto_sized_order_with_market_data(position_id: str) -> None:
 
         if result.get("market_data"):
             market_data = result["market_data"]
-            print(f"\nMarket Data in Order:")
+            print("\nMarket Data in Order:")
             print(f"  Price: ${market_data['price']:.2f}")
             print(f"  Source: {market_data['source']}")
             print(f"  Market Hours: {market_data['is_market_hours']}")
@@ -168,7 +168,7 @@ def test_price_validation() -> None:
     price_data = test_market_price(ticker)
 
     if price_data:
-        print(f"\nPrice Validation Analysis:")
+        print("\nPrice Validation Analysis:")
         print(f"  Ticker: {price_data['ticker']}")
         print(f"  Price: ${price_data['price']:.2f}")
         print(f"  Source: {price_data['source']}")

@@ -143,7 +143,6 @@ class TestMainApp:
         assert response.status_code == 200
 
         # Check for CORS headers
-        headers = response.headers
         # CORS headers might not be present in all responses
         # but the middleware should be configured
 

@@ -115,6 +115,6 @@ class LiveOrderServiceAdapter(IOrderService):
 
 
 # Avoid circular import
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING  # noqa: E402
 if TYPE_CHECKING:
     from application.services.broker_integration_service import BrokerIntegrationService

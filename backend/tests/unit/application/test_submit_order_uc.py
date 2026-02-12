@@ -127,7 +127,7 @@ class TestSubmitOrderUC:
         mock_repos["clock"].now.return_value = datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
 
         # Act
-        result = submit_order_uc.execute(
+        submit_order_uc.execute(
             tenant_id="default",
             portfolio_id="test_portfolio",
             position_id=position_id,

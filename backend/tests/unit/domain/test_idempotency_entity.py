@@ -1,7 +1,6 @@
 # =========================
 # backend/tests/unit/domain/test_idempotency_entity.py
 # =========================
-import pytest
 from datetime import datetime, timezone, timedelta
 from domain.entities.idempotency import IdempotencyRecord
 

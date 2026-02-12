@@ -8,7 +8,7 @@ print("=" * 40)
 try:
     response = requests.get("http://localhost:8000/v1/healthz")
     print("✅ Server is running")
-except:
+except Exception:
     print("❌ Server not running")
     exit(1)
 

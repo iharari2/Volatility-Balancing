@@ -5,7 +5,7 @@ Debug script to inspect price_data objects in simulation.
 
 import sys
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 # Add the backend directory to the Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -79,7 +79,7 @@ def debug_price_data_objects():
         print(f"Object dict: {first_sim.__dict__ if hasattr(first_sim, '__dict__') else 'NO_DICT'}")
 
     # Now test the simulation use case
-    print(f"\n=== Testing Simulation Use Case ===")
+    print("\n=== Testing Simulation Use Case ===")
 
     # Create simulation use case
     sim_uc = SimulationUnifiedUC(
@@ -111,7 +111,7 @@ def debug_price_data_objects():
             include_after_hours=True,
         )
 
-        print(f"✅ Simulation completed successfully")
+        print("✅ Simulation completed successfully")
         print(f"Algorithm trades: {result.algorithm_trades}")
 
         # Check trigger analysis

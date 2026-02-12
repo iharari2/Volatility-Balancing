@@ -23,8 +23,8 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from infrastructure.persistence.sql.models import get_engine, create_all
-from sqlalchemy import text
+from infrastructure.persistence.sql.models import get_engine, create_all  # noqa: E402
+from sqlalchemy import text  # noqa: E402
 
 
 def create_views(engine):

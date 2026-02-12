@@ -11,11 +11,9 @@ Verifies:
 4. End-to-end: ex-div → receivable → payment → trading continues correctly
 """
 
-import pytest
 from decimal import Decimal
 
 from domain.entities.position import Position
-from domain.entities.dividend import Dividend, DividendReceivable
 from domain.services.price_trigger import PriceTrigger
 from domain.services.guardrail_evaluator import GuardrailEvaluator
 from domain.value_objects.configs import TriggerConfig, GuardrailConfig

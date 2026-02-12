@@ -60,7 +60,7 @@ def main():
     
     # Summary
     print(f"\n{'='*60}")
-    print(f" TEST SUMMARY")
+    print(" TEST SUMMARY")
     print(f"{'='*60}")
     print(f"Passed: {passed}/{total}")
     print(f"Failed: {total - passed}/{total}")

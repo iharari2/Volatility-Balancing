@@ -191,7 +191,7 @@ class EvaluateExperimentUC:
 
             # Create order through broker integration
             # The broker integration service handles submission and fill
-            order_request = CreateOrderRequest(side=side, qty=qty)
+            CreateOrderRequest(side=side, qty=qty)
 
             # We need to create the order and submit it to the broker
             # For the stub broker, orders fill immediately

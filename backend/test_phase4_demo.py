@@ -206,7 +206,7 @@ def test_effective_cash_in_guardrails(position_id: str) -> None:
         return
 
     position = response.json()
-    print(f"Position Details:")
+    print("Position Details:")
     print(f"  Cash: ${position.get('cash', 0):.2f}")
     print(f"  Dividend Receivable: ${position.get('dividend_receivable', 0):.2f}")
     print(

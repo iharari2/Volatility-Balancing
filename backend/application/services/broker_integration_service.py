@@ -12,8 +12,7 @@ This service coordinates between:
 
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Optional, List
-from uuid import uuid4
+from typing import Optional
 import logging
 
 from domain.entities.order import Order
@@ -239,7 +238,7 @@ class BrokerIntegrationService:
         )
 
         try:
-            response = self.execute_order_uc.execute(order.id, fill_request)
+            self.execute_order_uc.execute(order.id, fill_request)
             logger.info(
                 f"Processed fill for order {order.id}: "
                 f"{fill.fill_qty} @ {fill.fill_price}, "

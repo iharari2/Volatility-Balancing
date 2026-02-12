@@ -1074,7 +1074,7 @@ class ExcelTemplateService:
                     dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
                     ws.cell(row=row, column=5, value=dt.strftime("%Y-%m-%d"))
                     ws.cell(row=row, column=6, value=dt.strftime("%H:%M:%S"))
-                except:
+                except Exception:
                     ws.cell(row=row, column=5, value="")
                     ws.cell(row=row, column=6, value="")
 

@@ -16,8 +16,8 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from sqlalchemy import create_engine, text, inspect
-from app.di import get_db_url
+from sqlalchemy import create_engine, text, inspect  # noqa: E402
+from app.di import get_db_url  # noqa: E402
 
 
 def check_column_exists(connection, table_name: str, column_name: str) -> bool:

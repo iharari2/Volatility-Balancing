@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from domain.ports.alert_repo import AlertRepo

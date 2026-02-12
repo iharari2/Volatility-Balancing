@@ -16,7 +16,7 @@ Environment variables required:
 import os
 import pytest
 from decimal import Decimal
-from datetime import datetime, timezone
+from datetime import datetime
 
 # Skip all tests if alpaca-py is not installed
 alpaca = pytest.importorskip("alpaca", reason="alpaca-py not installed")

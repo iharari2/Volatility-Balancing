@@ -129,7 +129,7 @@ def test_yfinance_data(ticker="AAPL"):
             if price and price > 0:
                 best_price = price
                 best_source = "fast_info"
-        except:
+        except Exception:
             pass
 
         # Method 2: info
@@ -140,7 +140,7 @@ def test_yfinance_data(ticker="AAPL"):
                 if price and price > 0:
                     best_price = price
                     best_source = "info"
-            except:
+            except Exception:
                 pass
 
         # Method 3: history latest
@@ -150,7 +150,7 @@ def test_yfinance_data(ticker="AAPL"):
                 if not hist.empty:
                     best_price = hist.iloc[-1]["Close"]
                     best_source = "history (latest)"
-            except:
+            except Exception:
                 pass
 
         if best_price:

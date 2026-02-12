@@ -6,7 +6,6 @@ from typing import List, Optional
 from uuid import UUID
 from datetime import datetime, timezone
 
-from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
 from domain.entities.simulation_result import SimulationResult

@@ -1,6 +1,5 @@
 import requests
 from datetime import datetime, timedelta
-import json
 
 # Test after-hours trading with actual trade execution
 print("🌙 AFTER-HOURS TRADING TEST")
@@ -45,7 +44,7 @@ def test_after_hours_trade_execution():
             triggers = result.get("trigger_analysis", [])
             trades = result.get("trade_log", [])
 
-            print(f"    ✅ Simulation completed successfully")
+            print("    ✅ Simulation completed successfully")
             print(f"    ✅ Total evaluations: {len(triggers)}")
             print(f"    ✅ Total trades executed: {len(trades)}")
 
@@ -77,7 +76,7 @@ def test_after_hours_trade_execution():
 
             # Show sample after-hours triggers
             if after_hours_triggered:
-                print(f"    🌙 Sample after-hours triggers:")
+                print("    🌙 Sample after-hours triggers:")
                 for i, trigger in enumerate(after_hours_triggered[:3]):  # Show first 3
                     price_change = trigger.get("price_change_pct", 0)
                     side = trigger.get("side", "N/A")
@@ -86,11 +85,11 @@ def test_after_hours_trade_execution():
                         f"      {i+1}. {trigger.get('time', 'N/A')} - {side} - {price_change:.2f}% - {reason}"
                     )
             else:
-                print(f"    ⚠️  No after-hours triggers found")
+                print("    ⚠️  No after-hours triggers found")
 
             # Show sample trades
             if trades:
-                print(f"    💰 Sample trades executed:")
+                print("    💰 Sample trades executed:")
                 for i, trade in enumerate(trades[:5]):  # Show first 5
                     time_str = trade.get("time", "N/A")
                     side = trade.get("side", "N/A")
@@ -98,7 +97,7 @@ def test_after_hours_trade_execution():
                     price = trade.get("price", 0)
                     print(f"      {i+1}. {time_str} - {side} {qty:.2f} @ ${price:.2f}")
             else:
-                print(f"    ⚠️  No trades executed")
+                print("    ⚠️  No trades executed")
 
         else:
             print(f"    ❌ Error: {response.status_code} - {response.text}")
@@ -141,7 +140,7 @@ def test_after_hours_disabled():
             triggers = result.get("trigger_analysis", [])
             trades = result.get("trade_log", [])
 
-            print(f"    ✅ Simulation completed successfully")
+            print("    ✅ Simulation completed successfully")
             print(f"    ✅ Total evaluations: {len(triggers)}")
             print(f"    ✅ Total trades executed: {len(trades)}")
 
@@ -176,13 +175,13 @@ def test_after_hours_disabled():
                 print(
                     f"    ⚠️  WARNING: {len(after_hours_triggered)} after-hours triggers found (should be 0)"
                 )
-                print(f"    ⚠️  This suggests after-hours blocking is not working properly")
+                print("    ⚠️  This suggests after-hours blocking is not working properly")
             else:
-                print(f"    ✅ After-hours triggers properly blocked")
+                print("    ✅ After-hours triggers properly blocked")
 
             # Show sample trades
             if trades:
-                print(f"    💰 Sample trades executed:")
+                print("    💰 Sample trades executed:")
                 for i, trade in enumerate(trades[:5]):
                     time_str = trade.get("time", "N/A")
                     side = trade.get("side", "N/A")
@@ -190,7 +189,7 @@ def test_after_hours_disabled():
                     price = trade.get("price", 0)
                     print(f"      {i+1}. {time_str} - {side} {qty:.2f} @ ${price:.2f}")
             else:
-                print(f"    ⚠️  No trades executed")
+                print("    ⚠️  No trades executed")
 
         else:
             print(f"    ❌ Error: {response.status_code} - {response.text}")
@@ -238,7 +237,7 @@ def test_market_hours_validation():
                 hour = int(time_str.split(":")[0]) if ":" in time_str else 0
                 time_distribution[hour] = time_distribution.get(hour, 0) + 1
 
-            print(f"    ✅ Time distribution analysis:")
+            print("    ✅ Time distribution analysis:")
             for hour in sorted(time_distribution.keys()):
                 count = time_distribution[hour]
                 period = "Market Hours" if 9 <= hour < 16 else "After Hours"

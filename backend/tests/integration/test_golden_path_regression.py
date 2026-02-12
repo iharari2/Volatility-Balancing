@@ -15,16 +15,12 @@ Verifies:
 - No guardrail violations occur
 """
 
-import pytest
 from decimal import Decimal
 
-from domain.entities.position import Position
 from domain.services.price_trigger import PriceTrigger
 from domain.services.guardrail_evaluator import GuardrailEvaluator
 from domain.value_objects.configs import TriggerConfig, GuardrailConfig
 from domain.value_objects.position_state import PositionState
-from domain.value_objects.order_policy import OrderPolicy
-from domain.value_objects.guardrails import GuardrailPolicy
 
 
 def _run_simulation(

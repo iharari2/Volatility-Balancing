@@ -362,10 +362,10 @@ class _Container:
         unified_logger = JsonFileEventLogger(log_dir / "audit_trail.jsonl")
 
         # Create adapter that bridges old IEventLogger interface to new unified logger
-        unified_event_logger_adapter = UnifiedEventLoggerAdapter(unified_logger)
+        UnifiedEventLoggerAdapter(unified_logger)
 
         # Also keep old EventLoggerAdapter for backward compatibility with use cases
-        event_logger_adapter = EventLoggerAdapter(self.events, self.clock)
+        EventLoggerAdapter(self.events, self.clock)
 
         # Create adapters
         position_repo_adapter = PositionRepoAdapter(

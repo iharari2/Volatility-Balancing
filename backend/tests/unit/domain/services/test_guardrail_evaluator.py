@@ -14,7 +14,6 @@ Tests cover:
 
 from decimal import Decimal
 
-import pytest
 
 from domain.services.guardrail_evaluator import GuardrailEvaluator
 from domain.value_objects.configs import GuardrailConfig

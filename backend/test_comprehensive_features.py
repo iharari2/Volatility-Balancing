@@ -1,7 +1,6 @@
 import requests
 import time
 from datetime import datetime, timedelta
-import json
 
 # Comprehensive test suite for all new features
 print("🧪 COMPREHENSIVE FEATURE TEST SUITE")
@@ -508,7 +507,7 @@ def test_simulation_presets():
             preset_used = result.get("preset_used", {})
             trades = result.get("total_trades", 0)
 
-            print(f"  ✅ Simulation with preset completed")
+            print("  ✅ Simulation with preset completed")
             print(f"    Preset: {preset_used.get('name', 'unknown')}")
             print(f"    Total trades: {trades}")
         else:

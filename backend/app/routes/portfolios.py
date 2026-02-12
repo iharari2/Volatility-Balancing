@@ -11,7 +11,7 @@ from decimal import Decimal
 
 from app.di import container
 from application.services.portfolio_service import PortfolioService
-from domain.value_objects.configs import GuardrailConfig, TriggerConfig, OrderPolicyConfig
+from domain.value_objects.configs import GuardrailConfig
 
 # Align with other routers (positions, simulations) that use /v1 prefix
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/portfolios", tags=["portfolios"])

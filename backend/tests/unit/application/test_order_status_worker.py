@@ -3,14 +3,11 @@
 # =========================
 """Unit tests for OrderStatusWorker."""
 
-import pytest
-from decimal import Decimal
 from datetime import datetime, timezone
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 
 from application.services.order_status_worker import OrderStatusWorker
 from domain.entities.order import Order
-from domain.ports.broker_service import BrokerOrderStatus
 
 
 class TestOrderStatusWorker:

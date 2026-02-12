@@ -21,7 +21,6 @@ For SELL (raw_qty < 0):
 This test file verifies both paths produce correct cash_delta values.
 """
 
-import pytest
 from decimal import Decimal
 
 from domain.entities.position import Position

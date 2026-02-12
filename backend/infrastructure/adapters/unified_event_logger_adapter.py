@@ -54,7 +54,7 @@ class UnifiedEventLoggerAdapter(OldIEventLogger):
         tenant_id = payload.get("tenant_id")
         portfolio_id = payload.get("portfolio_id")
         asset_id = payload.get("asset_id") or payload.get("ticker")
-        position_id = payload.get("position_id")
+        payload.get("position_id")
 
         # Use existing trace_id or create new one
         trace_id = payload.get("trace_id") or self._current_trace_id

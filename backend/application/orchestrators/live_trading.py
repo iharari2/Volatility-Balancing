@@ -66,8 +66,6 @@ class LiveTradingOrchestrator:
         logger = logging.getLogger(__name__)
 
         positions_evaluated = 0
-        triggers_fired = 0
-        orders_created = 0
         errors_count = 0
 
         active_positions = list(self.position_repo.get_active_positions_for_trading())

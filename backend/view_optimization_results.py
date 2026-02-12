@@ -5,7 +5,6 @@ Shows detailed results from the optimization system
 """
 
 import requests
-import json
 from typing import List, Dict, Any
 
 
@@ -70,14 +69,14 @@ def display_top_results(results: List[Dict[str, Any]], top_n: int = 5):
         params = result["parameter_combination"]
 
         print(f"Rank #{i}")
-        print(f"  📊 Performance Metrics:")
+        print("  📊 Performance Metrics:")
         print(f"     Sharpe Ratio: {metrics['sharpe_ratio']:.3f}")
         print(f"     Total Return: {metrics['total_return']:.3f}")
         print(f"     Max Drawdown: {metrics['max_drawdown']:.3f}")
         print(f"     Volatility: {metrics['volatility']:.3f}")
         print(f"     Win Rate: {metrics['win_rate']:.3f}")
         print(f"     Trade Count: {metrics['trade_count']}")
-        print(f"  ⚙️  Parameters:")
+        print("  ⚙️  Parameters:")
         for param, value in params.items():
             print(f"     {param}: {value}")
         print()

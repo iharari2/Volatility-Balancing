@@ -39,9 +39,8 @@ def test_position_evaluation(position_id: str, current_price: float = None) -> b
     portfolio_id = None
 
     try:
-        from infrastructure.persistence.sql.models import PositionModel
         from infrastructure.persistence.sql.positions_repo_sql import SQLPositionsRepo
-        from sqlalchemy import select, text
+        from sqlalchemy import text
 
         if isinstance(container.positions, SQLPositionsRepo) and hasattr(
             container.positions, "_sf"

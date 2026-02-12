@@ -3,7 +3,6 @@
 # =========================
 """Unit tests for StubBrokerAdapter."""
 
-import pytest
 from decimal import Decimal
 
 from infrastructure.adapters.stub_broker_adapter import StubBrokerAdapter

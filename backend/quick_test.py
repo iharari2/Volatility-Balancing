@@ -2,7 +2,6 @@
 """Quick test of Phase 2 functionality"""
 
 import requests
-import json
 
 BASE_URL = "http://localhost:8000/v1"
 

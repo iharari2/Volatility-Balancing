@@ -16,7 +16,6 @@ def fix_file(file_path: Path):
         content = f.read()
 
     original_content = content
-    changes_made = []
 
     # Fix 1: Position creation - ticker -> asset_symbol, remove cash
     # Pattern: Position(..., ticker="...", ..., cash=...)
@@ -24,7 +23,7 @@ def fix_file(file_path: Path):
 
     def replace_position1(match):
         before = match.group(1)
-        ticker_value = match.group(2)
+        match.group(2)
         middle = match.group(3)
         cash_part = match.group(4)
         after = match.group(5)

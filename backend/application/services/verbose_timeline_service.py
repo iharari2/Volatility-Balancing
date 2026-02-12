@@ -99,7 +99,7 @@ class VerboseTimelineService:
         for idx, ts_data in enumerate(time_series_data):
             timestamp_str = ts_data.get("timestamp", "")
             date_str = ts_data.get("date", "")
-            current_time = self._parse_timestamp(timestamp_str)
+            self._parse_timestamp(timestamp_str)
 
             # Get OHLCV data
             # Check if OHLC is in the time series data directly

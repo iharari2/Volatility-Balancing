@@ -3,10 +3,8 @@
 Generate trigger analysis table for ZIM stock over a period
 This bypasses the SimulationResult issue by creating analysis directly
 """
-import requests
 import yfinance as yf
 from datetime import datetime, timedelta
-import pandas as pd
 
 
 def generate_trigger_analysis(ticker="ZIM", days=30):
@@ -153,7 +151,7 @@ def print_trigger_table(trigger_analysis):
     ]
 
     print(f"\n{'='*200}")
-    print(f"TRIGGER ANALYSIS TABLE")
+    print("TRIGGER ANALYSIS TABLE")
     print(f"{'='*200}")
     print(
         f"Showing {len(significant_events)} significant events out of {len(trigger_analysis)} total evaluations"
@@ -241,4 +239,4 @@ if __name__ == "__main__":
     with open("trigger_analysis_aapl.json", "w") as f:
         json.dump(analysis, f, indent=2)
 
-    print(f"\nTrigger analysis saved to trigger_analysis_aapl.json")
+    print("\nTrigger analysis saved to trigger_analysis_aapl.json")

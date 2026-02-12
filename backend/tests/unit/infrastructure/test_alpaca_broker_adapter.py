@@ -3,14 +3,15 @@
 # =========================
 """Unit tests for AlpacaBrokerAdapter with mocked Alpaca client."""
 
+import importlib.util
+
 import pytest
 from decimal import Decimal
 from datetime import datetime, timezone
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 from domain.ports.broker_service import (
     BrokerOrderRequest,
-    BrokerOrderStatus,
 )
 
 
@@ -96,11 +97,7 @@ class TestAlpacaBrokerCredentials:
 
 def _has_alpaca():
     """Check if alpaca-py is installed."""
-    try:
-        import alpaca
-        return True
-    except ImportError:
-        return False
+    return importlib.util.find_spec("alpaca") is not None
 
 
 @pytest.mark.skipif(not _has_alpaca(), reason="alpaca-py not installed")
@@ -144,7 +141,6 @@ class TestAlpacaBrokerAdapterMocked:
 
     def test_adapter_import_works(self):
         """Test that adapter can be imported when alpaca-py is installed."""
-        from infrastructure.config.broker_credentials import AlpacaCredentials
         from infrastructure.adapters.alpaca_broker_adapter import AlpacaBrokerAdapter
 
         # Just verify the import works
@@ -164,7 +160,7 @@ class TestAlpacaBrokerAdapterMocked:
             adapter._trading_client = mock_trading
             adapter._data_client = mock_data
 
-            request = BrokerOrderRequest(
+            BrokerOrderRequest(
                 client_order_id="client_001",
                 symbol="AAPL",
                 side="buy",

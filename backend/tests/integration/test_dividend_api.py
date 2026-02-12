@@ -160,7 +160,7 @@ class TestDividendAPI:
 
         response = client.post("/v1/dividends/announce", json=dividend_data)
         assert response.status_code == 200
-        dividend_id = response.json()["dividend_id"]
+        response.json()["dividend_id"]
 
         # 3. Check dividend status
         response = client.get(

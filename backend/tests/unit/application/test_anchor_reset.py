@@ -7,9 +7,8 @@ Tests for anchor price reset logic:
 2. Post-trade anchor reset to fill price (in ExecuteOrderUC)
 """
 
-import pytest
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 from decimal import Decimal
 
 from domain.entities.position import Position

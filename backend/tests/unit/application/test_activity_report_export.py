@@ -6,7 +6,7 @@
 import pytest
 from datetime import datetime, timezone, timedelta
 from io import BytesIO
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from openpyxl import load_workbook
 
 from application.services.activity_report_export_service import ActivityReportExportService

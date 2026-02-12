@@ -4,7 +4,6 @@ Migration script to add anchor_price column to positions table.
 """
 
 import sqlite3
-import os
 from pathlib import Path
 
 def migrate_add_anchor_price():

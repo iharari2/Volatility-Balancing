@@ -375,12 +375,16 @@ class ContinuousTradingService:
                                 )
 
                                 if submit_response.accepted:
+                                    # Auto-fill order immediately (virtual trading)
+                                    fill_qty = abs(order_proposal["trimmed_qty"])
+                                    fill_commission = order_proposal.get("commission", 0.0)
+
                                     # Log order creation to audit trail
                                     order_event = None
                                     if event_logger:
                                         order_event = event_logger.log(
                                             EventType.ORDER_CREATED,
-                                            asset_id=position.asset_symbol,  # Use asset_symbol instead of ticker
+                                            asset_id=position.asset_symbol,
                                             trace_id=trace_id,
                                             parent_event_id=(
                                                 trigger_event.event_id if trigger_event else None
@@ -395,10 +399,6 @@ class ContinuousTradingService:
                                                 "commission_est": fill_commission,
                                             },
                                         )
-
-                                    # Auto-fill order immediately (virtual trading)
-                                    fill_qty = abs(order_proposal["trimmed_qty"])
-                                    fill_commission = order_proposal.get("commission", 0.0)
                                     print(
                                         f"   Filling order: qty={fill_qty:.4f}, price=${current_price:.2f}, commission=${fill_commission:.4f}"
                                     )

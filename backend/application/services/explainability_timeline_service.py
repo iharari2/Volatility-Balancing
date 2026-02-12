@@ -455,7 +455,7 @@ class ExplainabilityTimelineService:
 
         # Dividend fields
         dividend_declared = record.get("dividend_declared", False)
-        dividend_receivable = record.get("position_dividend_receivable_before")
+        record.get("position_dividend_receivable_before")
 
         return ExplainabilityRow(
             timestamp=timestamp,

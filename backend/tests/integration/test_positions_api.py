@@ -67,7 +67,7 @@ class TestPositionsAPI:
         import uuid
 
         unique_suffix = uuid.uuid4().hex[:8]
-        response = client.post(
+        client.post(
             f"/v1/tenants/{tenant_id}/portfolios",
             json={
                 "name": f"Test Portfolio Invalid {unique_suffix}",

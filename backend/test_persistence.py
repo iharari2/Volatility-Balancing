@@ -22,8 +22,8 @@ os.environ["APP_EVENTS"] = "sql"
 os.environ["APP_AUTO_CREATE"] = "true"
 os.environ["SQL_URL"] = "sqlite:///./test_vb.sqlite"
 
-from app.di import container
-from application.dto.orders import FillOrderRequest
+from app.di import container  # noqa: E402
+from application.dto.orders import FillOrderRequest  # noqa: E402
 
 
 def test_persistence():

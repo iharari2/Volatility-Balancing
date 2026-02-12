@@ -1,7 +1,6 @@
 # =========================
 # backend/tests/unit/domain/test_dividend_entities.py
 # =========================
-import pytest
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -209,7 +208,7 @@ class TestDividendReceivable:
             withholding_tax=Decimal("20.50")
         )
         
-        first_paid_at = datetime.now(timezone.utc)
+        datetime.now(timezone.utc)
         receivable.mark_paid()
         first_paid_time = receivable.paid_at
         

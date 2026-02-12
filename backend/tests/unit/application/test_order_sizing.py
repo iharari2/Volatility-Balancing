@@ -15,16 +15,13 @@ Tests verify:
 - max_trade_pct_of_position capping
 """
 
-import pytest
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, PropertyMock
+from unittest.mock import MagicMock
 
 from domain.entities.position import Position
 from domain.value_objects.order_policy import OrderPolicy
 from domain.value_objects.guardrails import GuardrailPolicy
-from domain.value_objects.configs import TriggerConfig, GuardrailConfig, OrderPolicyConfig
 from application.use_cases.evaluate_position_uc import EvaluatePositionUC
-from decimal import Decimal
 
 
 def _make_position(

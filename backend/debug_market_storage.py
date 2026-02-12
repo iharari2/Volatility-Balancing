@@ -5,7 +5,7 @@ Debug script to test market data storage and retrieval directly.
 
 import sys
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 # Add the backend directory to the Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -53,10 +53,10 @@ def test_market_data_storage():
     for price_data in historical_data:
         market_storage.store_price_data("AAPL", price_data)
 
-    print(f"✅ Stored data in market storage")
+    print("✅ Stored data in market storage")
 
     # Test retrieval
-    print(f"\nTesting data retrieval...")
+    print("\nTesting data retrieval...")
 
     # Test get_historical_data
     retrieved_data = market_storage.get_historical_data("AAPL", start_date, end_date)
@@ -73,7 +73,7 @@ def test_market_data_storage():
         )
 
     # Test get_simulation_data
-    print(f"\nTesting get_simulation_data...")
+    print("\nTesting get_simulation_data...")
     sim_data = market_storage.get_simulation_data(
         "AAPL", start_date, end_date, include_after_hours=True
     )
@@ -92,7 +92,7 @@ def test_market_data_storage():
         print("❌ No data in sim_data.price_data!")
 
     # Check what's in the storage
-    print(f"\nChecking storage contents...")
+    print("\nChecking storage contents...")
     print(f"price_history keys: {list(market_storage.price_history.keys())}")
     if "AAPL" in market_storage.price_history:
         stored_count = len(market_storage.price_history["AAPL"])

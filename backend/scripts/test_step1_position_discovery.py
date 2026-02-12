@@ -43,9 +43,8 @@ def test_position_discovery(position_id: str) -> bool:
     # First, try to get tenant_id and portfolio_id from database directly
     print("Attempting direct database query...")
     try:
-        from infrastructure.persistence.sql.models import PositionModel
         from infrastructure.persistence.sql.positions_repo_sql import SQLPositionsRepo
-        from sqlalchemy import select, text
+        from sqlalchemy import text
 
         print(f"  Position repo type: {type(container.positions).__name__}")
         print(f"  Is SQLPositionsRepo: {isinstance(container.positions, SQLPositionsRepo)}")

@@ -33,7 +33,7 @@ try:
         result = response.json()
         triggers = result.get('trigger_analysis', [])
         
-        print(f'✅ Chunked data fetching completed')
+        print('✅ Chunked data fetching completed')
         print(f'  Total evaluations: {len(triggers)}')
         
         # Check if we have minute-by-minute data (more data points than daily)

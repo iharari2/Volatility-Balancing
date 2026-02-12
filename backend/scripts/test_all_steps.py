@@ -25,7 +25,7 @@ def test_all_steps(position_id: str) -> bool:
     print("=" * 80)
     print()
 
-    steps = [
+    [
         ("Step 1: Position Discovery", lambda: test_position_discovery(position_id)),
         ("Step 2: Market Data", None),  # Will be called after Step 1
         ("Step 3: Config Loading", lambda: test_config_loading(position_id)),

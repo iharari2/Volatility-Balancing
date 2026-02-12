@@ -85,7 +85,7 @@ def demo_volatility_trading():
         return
 
     print(f"✅ Anchor price set to: ${anchor_result['anchor_price']:.2f}")
-    print(f"   This is our reference point for volatility calculations")
+    print("   This is our reference point for volatility calculations")
     print(f"   Buy trigger: ≤ ${ANCHOR_PRICE * 0.97:.2f} (3% below anchor)")
     print(f"   Sell trigger: ≥ ${ANCHOR_PRICE * 1.03:.2f} (3% above anchor)")
 
@@ -118,7 +118,7 @@ def demo_volatility_trading():
     print_step("4", "Simulating order execution and anchor price updates")
 
     # Simulate a BUY order at $145
-    print(f"\n   Simulating BUY order at $145.00...")
+    print("\n   Simulating BUY order at $145.00...")
     order_data = {"side": "BUY", "qty": 10.0}
 
     # Submit order
@@ -138,14 +138,14 @@ def demo_volatility_trading():
         fill_result = make_request("POST", f"{BASE_URL}/orders/{order_id}/fill", json=fill_data)
         if fill_result:
             print(f"   ✅ Order filled: {fill_result['status']}")
-            print(f"   📈 New position: 10 shares @ $145.00")
+            print("   📈 New position: 10 shares @ $145.00")
             print(f"   💰 Remaining cash: ${INITIAL_CASH - (10 * 145) - 1.45:,.2f}")
-            print(f"   🎯 Anchor price updated to: $145.00")
+            print("   🎯 Anchor price updated to: $145.00")
 
     # Step 5: Test new anchor price
     print_step("5", "Testing triggers with new anchor price")
 
-    print(f"\n   New anchor price: $145.00")
+    print("\n   New anchor price: $145.00")
     print(f"   New buy trigger: ≤ ${145 * 0.97:.2f}")
     print(f"   New sell trigger: ≥ ${145 * 1.03:.2f}")
 
@@ -189,7 +189,7 @@ def demo_volatility_trading():
 
     position_result = make_request("GET", f"{BASE_URL}/positions/{position_id}")
     if position_result:
-        print(f"\n   📊 Final Position State:")
+        print("\n   📊 Final Position State:")
         print(f"      Ticker: {position_result['ticker']}")
         print(f"      Shares: {position_result['qty']}")
         print(f"      Cash: ${position_result['cash']:,.2f}")
@@ -208,13 +208,13 @@ def demo_volatility_trading():
     print("✅ Complete audit trail with reasoning")
     print("✅ Real-time evaluation API")
 
-    print(f"\n🔗 API Endpoints Used:")
-    print(f"   POST /v1/positions - Create position")
-    print(f"   POST /v1/positions/{{id}}/anchor - Set anchor price")
-    print(f"   POST /v1/positions/{{id}}/evaluate - Evaluate triggers")
-    print(f"   POST /v1/positions/{{id}}/orders - Submit orders")
-    print(f"   POST /v1/orders/{{id}}/fill - Execute orders")
-    print(f"   GET /v1/positions/{{id}}/events - View audit trail")
+    print("\n🔗 API Endpoints Used:")
+    print("   POST /v1/positions - Create position")
+    print("   POST /v1/positions/{id}/anchor - Set anchor price")
+    print("   POST /v1/positions/{id}/evaluate - Evaluate triggers")
+    print("   POST /v1/positions/{id}/orders - Submit orders")
+    print("   POST /v1/orders/{id}/fill - Execute orders")
+    print("   GET /v1/positions/{id}/events - View audit trail")
 
 
 if __name__ == "__main__":

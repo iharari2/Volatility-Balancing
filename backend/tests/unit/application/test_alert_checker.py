@@ -4,8 +4,7 @@ from datetime import datetime, timezone, timedelta
 
 import pytest
 
-from domain.entities.alert import AlertCondition, AlertSeverity, AlertStatus
-from domain.ports.alert_repo import AlertRepo
+from domain.entities.alert import AlertCondition, AlertSeverity
 from infrastructure.persistence.memory.alert_repo_mem import InMemoryAlertRepo
 from infrastructure.time.clock import Clock
 from application.services.alert_checker import AlertChecker

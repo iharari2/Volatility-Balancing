@@ -142,7 +142,7 @@ class SimulationOrchestrator:
             )
 
             # 4. Log order creation
-            order_event = self.event_logger.log(
+            self.event_logger.log(
                 EventType.ORDER_CREATED,
                 asset_id=state.ticker,
                 trace_id=trace_id,

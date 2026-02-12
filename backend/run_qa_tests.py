@@ -37,7 +37,7 @@ def main():
     print("Step 1: Collecting tests...")
     returncode, stdout, stderr = run_command("python -m pytest tests/ --collect-only -q")
     if returncode == 0:
-        test_count = stdout.count("test session starts")
+        stdout.count("test session starts")
         print("✓ Found tests (checking collection)")
     else:
         print("✗ Test collection failed")

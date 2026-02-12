@@ -14,8 +14,8 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from sqlalchemy import create_engine, text, inspect
-from sqlalchemy.engine import Engine
+from sqlalchemy import create_engine, text, inspect  # noqa: E402
+from sqlalchemy.engine import Engine  # noqa: E402
 
 # Import models for migration
 

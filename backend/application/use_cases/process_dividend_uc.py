@@ -244,7 +244,6 @@ class ProcessDividendUC:
         )  # Use asset_symbol instead of ticker
 
         # Cash lives in position (cash lives in PositionCell)
-        cash_balance = position.cash
 
         return {
             "position_id": position_id,

@@ -81,8 +81,8 @@ def categorize_errors(errors, output):
 
     for error in errors:
         # Try to find error message in output
-        error_file = error["file"]
-        test_name = error["test"]
+        error["file"]
+        error["test"]
 
         # Look for common error patterns
         if "ImportError" in output or "ModuleNotFoundError" in output:

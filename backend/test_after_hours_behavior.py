@@ -37,7 +37,7 @@ try:
         result = response.json()
         triggers = result.get("trigger_analysis", [])
 
-        print(f"✅ After-hours ENABLED simulation completed")
+        print("✅ After-hours ENABLED simulation completed")
         print(f"  Total evaluations: {len(triggers)}")
 
         # Check for after-hours data
@@ -92,7 +92,7 @@ try:
         result = response.json()
         triggers = result.get("trigger_analysis", [])
 
-        print(f"✅ After-hours DISABLED simulation completed")
+        print("✅ After-hours DISABLED simulation completed")
         print(f"  Total evaluations: {len(triggers)}")
 
         # Check for after-hours data

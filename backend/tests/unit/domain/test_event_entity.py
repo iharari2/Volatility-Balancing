@@ -1,7 +1,6 @@
 # =========================
 # backend/tests/unit/domain/test_event_entity.py
 # =========================
-import pytest
 from datetime import datetime, timezone
 from domain.entities.event import Event
 

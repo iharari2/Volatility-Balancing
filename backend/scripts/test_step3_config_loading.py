@@ -40,9 +40,8 @@ def test_config_loading(position_id: str) -> bool:
     portfolio_id = None
 
     try:
-        from infrastructure.persistence.sql.models import PositionModel
         from infrastructure.persistence.sql.positions_repo_sql import SQLPositionsRepo
-        from sqlalchemy import select, text
+        from sqlalchemy import text
 
         if isinstance(container.positions, SQLPositionsRepo) and hasattr(
             container.positions, "_sf"

@@ -372,8 +372,8 @@ class ActivityReportExportService:
         ]
 
         # Write data with styling
-        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-        header_font = Font(bold=True, color="FFFFFF")
+        PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        Font(bold=True, color="FFFFFF")
         section_font = Font(bold=True, size=12)
 
         for row_idx, row_data in enumerate(summary_data, start=1):

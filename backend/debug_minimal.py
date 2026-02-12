@@ -43,7 +43,7 @@ except Exception as e:
 
 # Test 2: Check if there are multiple SimulationResult classes
 print("\n=== Test 2: Check for multiple SimulationResult classes ===")
-import sys
+import sys  # noqa: E402
 
 for module_name, module in sys.modules.items():
     if hasattr(module, "SimulationResult"):
@@ -55,7 +55,7 @@ for module_name, module in sys.modules.items():
             print(f"  Has trigger_analysis: {has_trigger_analysis}")
 
 print("\n=== Test 3: Check what's actually being imported ===")
-from application.use_cases import simulation_unified_uc
+from application.use_cases import simulation_unified_uc  # noqa: E402
 
 print(
     f"simulation_unified_uc.SimulationResult fields: {list(simulation_unified_uc.SimulationResult.__dataclass_fields__.keys())}"

@@ -4,9 +4,7 @@ Test script for market data storage and simulation features.
 """
 
 import requests
-import json
 from datetime import datetime, timedelta
-import time
 
 
 def test_market_data_storage():
@@ -145,13 +143,13 @@ def test_simulation():
 
         if response.status_code == 200:
             data = response.json()
-            print(f"✅ Simulation completed!")
+            print("✅ Simulation completed!")
             print(f"   Ticker: {data['ticker']}")
             print(f"   Trading Days: {data['total_trading_days']}")
 
             # Algorithm performance
             algo = data["algorithm"]
-            print(f"\n📈 Algorithm Performance:")
+            print("\n📈 Algorithm Performance:")
             print(f"   Trades: {algo['trades']}")
             print(f"   P&L: ${algo['pnl']:.2f}")
             print(f"   Return: {algo['return_pct']:.2f}%")
@@ -161,7 +159,7 @@ def test_simulation():
 
             # Buy & Hold performance
             buy_hold = data["buy_hold"]
-            print(f"\n📊 Buy & Hold Performance:")
+            print("\n📊 Buy & Hold Performance:")
             print(f"   P&L: ${buy_hold['pnl']:.2f}")
             print(f"   Return: {buy_hold['return_pct']:.2f}%")
             print(f"   Volatility: {buy_hold['volatility']:.4f}")
@@ -170,7 +168,7 @@ def test_simulation():
 
             # Comparison
             comparison = data["comparison"]
-            print(f"\n⚖️  Comparison:")
+            print("\n⚖️  Comparison:")
             print(f"   Excess Return: {comparison['excess_return']:.2f}%")
             print(f"   Alpha: {comparison['alpha']:.2f}%")
             print(f"   Beta: {comparison['beta']:.4f}")
@@ -178,7 +176,7 @@ def test_simulation():
 
             # Trade log (show first few trades)
             if data["trade_log"]:
-                print(f"\n📋 Trade Log (showing first 5 trades):")
+                print("\n📋 Trade Log (showing first 5 trades):")
                 for i, trade in enumerate(data["trade_log"][:5]):
                     print(
                         f"   {i+1}. {trade['timestamp']}: {trade['side']} {trade['qty']:.2f} @ ${trade['price']:.2f}"
@@ -233,7 +231,7 @@ def test_position_with_market_data():
                 eval_response = requests.post(f"{base_url}/positions/{position_id}/evaluate/market")
                 if eval_response.status_code == 200:
                     eval_data = eval_response.json()
-                    print(f"✅ Evaluation completed!")
+                    print("✅ Evaluation completed!")
                     print(f"   Current Price: ${eval_data.get('current_price', 'N/A')}")
                     print(f"   Anchor Price: ${eval_data.get('anchor_price', 'N/A')}")
                     print(f"   Trigger Detected: {eval_data.get('trigger_detected', False)}")
@@ -270,7 +268,7 @@ def main():
         if response.status_code != 200:
             print("❌ Server is not running. Please start the server first.")
             return
-    except:
+    except Exception:
         print("❌ Server is not running. Please start the server first.")
         return
 

@@ -32,7 +32,7 @@ try:
         result = response.json()
         triggers = result.get('trigger_analysis', [])
         
-        print(f'✅ Simulation completed successfully')
+        print('✅ Simulation completed successfully')
         print(f'  Total evaluations: {len(triggers)}')
         
         # Check if we have any data quality issues in the response
@@ -54,7 +54,7 @@ try:
             if missing_fields:
                 print(f'  ❌ Missing required fields: {missing_fields}')
             else:
-                print(f'  ✅ All required fields present')
+                print('  ✅ All required fields present')
     else:
         print(f'❌ Simulation failed: {response.status_code} - {response.text}')
 except Exception as e:

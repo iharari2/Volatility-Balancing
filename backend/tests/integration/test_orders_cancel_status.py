@@ -4,7 +4,6 @@
 """Integration tests for order cancel and status endpoints."""
 
 import pytest
-from decimal import Decimal
 from fastapi.testclient import TestClient
 
 from app.main import app

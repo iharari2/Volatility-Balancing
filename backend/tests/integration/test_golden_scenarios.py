@@ -146,7 +146,7 @@ class TestScenarioB_SimpleBuyAndSellCycle:
             up_threshold_pct=Decimal("3.0"),
             down_threshold_pct=Decimal("3.0"),
         )
-        guardrail_config = GuardrailConfig(
+        GuardrailConfig(
             min_stock_pct=Decimal("0"),
             max_stock_pct=Decimal("50"),
             max_trade_pct_of_position=Decimal("10"),

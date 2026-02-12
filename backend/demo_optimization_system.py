@@ -5,7 +5,6 @@ Shows all features including results analysis and heatmap generation
 """
 
 import requests
-import json
 from datetime import datetime, timedelta
 from uuid import uuid4
 
@@ -131,7 +130,7 @@ def demo_optimization_system():
     )
     if response.status_code == 200:
         heatmap = response.json()
-        print(f"✅ Generated heatmap data")
+        print("✅ Generated heatmap data")
         print(f"   - X parameter: {heatmap['x_parameter']}")
         print(f"   - Y parameter: {heatmap['y_parameter']}")
         print(f"   - Metric: {heatmap['metric']}")
@@ -195,8 +194,8 @@ def demo_optimization_system():
     print("   ✅ Applied optimization constraints")
 
     print(f"\n🔧 Configuration ID: {config_id}")
-    print(f"📖 API Documentation: http://localhost:8000/docs")
-    print(f"🌐 Frontend: http://localhost:3000 (if running)")
+    print("📖 API Documentation: http://localhost:8000/docs")
+    print("🌐 Frontend: http://localhost:3000 (if running)")
 
     return config_id
 
@@ -205,11 +204,11 @@ if __name__ == "__main__":
     try:
         config_id = demo_optimization_system()
         if config_id:
-            print(f"\n💡 Next Steps:")
-            print(f"   1. Explore the API at http://localhost:8000/docs")
+            print("\n💡 Next Steps:")
+            print("   1. Explore the API at http://localhost:8000/docs")
             print(f"   2. Use configuration ID {config_id} for further testing")
-            print(f"   3. Integrate with the frontend for visualization")
-            print(f"   4. Extend with real simulation processing")
+            print("   3. Integrate with the frontend for visualization")
+            print("   4. Extend with real simulation processing")
     except requests.exceptions.ConnectionError:
         print("❌ Could not connect to the API server.")
         print("   Make sure the server is running on http://localhost:8000")

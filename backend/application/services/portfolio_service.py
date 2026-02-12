@@ -81,7 +81,7 @@ class PortfolioService:
 
             # Get starting cash amount (used as fallback if positions don't specify cash)
             cash_amount = starting_cash.get("amount", 0.0) if starting_cash else 0.0
-            currency = starting_cash.get("currency", "USD") if starting_cash else "USD"
+            starting_cash.get("currency", "USD") if starting_cash else "USD"
 
             # Create positions if provided - each position gets its own cash allocation
             positions_created = []
@@ -436,7 +436,6 @@ class PortfolioService:
                 )
             position.cash -= amount
             self._positions_repo.save(position)
-            positions_updated = [position]
         else:
             # Withdraw equally from all positions (backward compatibility)
             positions = self.get_portfolio_positions(tenant_id=tenant_id, portfolio_id=portfolio_id)
@@ -459,7 +458,6 @@ class PortfolioService:
                 else:
                     position.cash -= cash_per_position
                 self._positions_repo.save(position)
-            positions_updated = positions
 
         # If there's remaining amount due to rounding, withdraw from first position
         if amount > 0.01:  # Small threshold for floating point
@@ -761,8 +759,8 @@ class PortfolioService:
                     # Volatility (annualized standard deviation of daily returns)
                     import statistics
 
-                    mean_return = statistics.mean(daily_returns)
-                    variance = statistics.variance(daily_returns) if len(daily_returns) > 1 else 0.0
+                    statistics.mean(daily_returns)
+                    statistics.variance(daily_returns) if len(daily_returns) > 1 else 0.0
                     std_dev = statistics.stdev(daily_returns) if len(daily_returns) > 1 else 0.0
                     # Annualize: multiply by sqrt(252 trading days)
                     kpis["volatility"] = std_dev * (252**0.5) * 100  # Convert to percentage

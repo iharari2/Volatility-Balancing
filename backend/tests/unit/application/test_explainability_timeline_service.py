@@ -12,12 +12,12 @@ Covers:
 """
 
 import pytest
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict
 
 from application.services.explainability_timeline_service import ExplainabilityTimelineService
-from application.dto.explainability import ExplainabilityRow, ExplainabilityTimeline
+from application.dto.explainability import ExplainabilityRow
 
 
 # ────────────────── Fake repositories ──────────────────
