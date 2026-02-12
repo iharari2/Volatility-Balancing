@@ -52,6 +52,7 @@ class TradingWorker:
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         self._lock = threading.Lock()
+        self.last_cycle_time: Optional[datetime] = None
 
     def start(self) -> None:
         """Start the trading worker in a background thread."""
@@ -177,6 +178,35 @@ class TradingWorker:
 
             duration = (datetime.now(timezone.utc) - start_time).total_seconds()
             logger.debug(f"✅ Trading cycle completed in {duration:.2f}s")
+
+            self.last_cycle_time = datetime.now(timezone.utc)
+
+            # Run alert checks
+            try:
+                alert_checker = container.alert_checker
+                webhook_svc = container.webhook_service
+
+                # Determine market hours from market data adapter
+                is_market_hours = False
+                try:
+                    market_status = container.market_data.get_market_status()
+                    is_market_hours = market_status.get("is_open", False) if isinstance(market_status, dict) else False
+                except Exception:
+                    pass
+
+                new_alerts = alert_checker.run_all_checks(
+                    worker_running=self._running,
+                    worker_enabled=self.enabled,
+                    last_evaluation_time=self.last_cycle_time,
+                    is_market_hours=is_market_hours,
+                )
+
+                for alert in new_alerts:
+                    logger.warning(f"Alert fired: [{alert.severity.value}] {alert.title}")
+                    if webhook_svc.is_configured:
+                        webhook_svc.send_alert(alert)
+            except Exception as e:
+                logger.error(f"Error running alert checks: {e}", exc_info=True)
 
         except Exception as e:
             logger.error(f"⚠️  Error running trading cycle: {e}", exc_info=True)

@@ -33,9 +33,15 @@ from app.routes.positions_cockpit import router as positions_cockpit_router
 from app.routes.portfolio_cockpit_api import router as portfolio_cockpit_router
 from app.routes.explainability import live_router as explainability_live_router
 from app.routes.explainability import simulation_router as explainability_sim_router
+from app.routes.monitoring import router as monitoring_router
 from application.services.trading_worker import start_trading_worker, stop_trading_worker
 
 API_PREFIX = "/v1"
+
+# Activate structured logging if enabled
+if os.getenv("STRUCTURED_LOGGING", "false").lower() in ("1", "true", "yes", "on"):
+    from infrastructure.logging.structured_logging import configure_structured_logging
+    configure_structured_logging(os.getenv("LOG_LEVEL", "INFO"))
 
 
 def _fix_portfolio_trading_states():
@@ -146,6 +152,7 @@ def create_app(enable_trading_worker: bool | None = None) -> FastAPI:
     app.include_router(portfolio_cockpit_router)
     app.include_router(explainability_live_router)
     app.include_router(explainability_sim_router)
+    app.include_router(monitoring_router)
 
     def __sync_ping() -> dict[str, bool]:
         return {"ok": True}

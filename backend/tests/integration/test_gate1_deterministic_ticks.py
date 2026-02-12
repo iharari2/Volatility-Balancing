@@ -137,4 +137,6 @@ async def test_deterministic_timeline_increases_by_ten(async_client, determinist
 async def test_async_healthz_over_async_client(async_client):
     response = await async_client.get("/v1/healthz")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    data = response.json()
+    assert "status" in data
+    assert data["status"] in ("healthy", "degraded", "unhealthy")

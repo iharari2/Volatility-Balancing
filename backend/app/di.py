@@ -22,6 +22,7 @@ from domain.ports.optimization_repo import (
     HeatmapDataRepo,
 )
 from domain.ports.simulation_repo import SimulationRepo
+from domain.ports.alert_repo import AlertRepo
 
 from infrastructure.time.clock import Clock
 
@@ -61,6 +62,7 @@ from infrastructure.persistence.memory.optimization_repo_mem import (
 )
 from infrastructure.persistence.memory.simulation_repo_mem import InMemorySimulationRepo
 from infrastructure.persistence.sql.simulation_repo_sql import SQLSimulationRepo
+from infrastructure.persistence.memory.alert_repo_mem import InMemoryAlertRepo
 
 # Use cases
 from application.use_cases.parameter_optimization_uc import ParameterOptimizationUC
@@ -81,6 +83,9 @@ from domain.ports.broker_service import IBrokerService
 from infrastructure.adapters.stub_broker_adapter import StubBrokerAdapter
 from application.services.broker_integration_service import BrokerIntegrationService
 from application.services.order_status_worker import OrderStatusWorker
+from application.services.alert_checker import AlertChecker
+from application.services.webhook_service import WebhookService
+from application.services.system_status_service import SystemStatusService
 
 # New clean architecture: Orchestrators
 from application.orchestrators.live_trading import LiveTradingOrchestrator
@@ -141,6 +146,12 @@ class _Container:
     broker: IBrokerService
     broker_integration: BrokerIntegrationService
     order_status_worker: OrderStatusWorker
+
+    # Monitoring & alerting
+    alert_repo: AlertRepo
+    alert_checker: AlertChecker
+    webhook_service: WebhookService
+    system_status_service: SystemStatusService
 
     # Config providers (for backward compatibility with Position entities)
     trigger_config_provider: Callable[[str], TriggerConfig]
@@ -416,6 +427,21 @@ class _Container:
             broker_integration=self.broker_integration,
         )
 
+        # --- Monitoring & Alerting ---
+        self.alert_repo = InMemoryAlertRepo()
+        self.webhook_service = WebhookService(os.getenv("ALERT_WEBHOOK_URL"))
+        self.alert_checker = AlertChecker(
+            alert_repo=self.alert_repo,
+            clock=self.clock,
+            no_eval_minutes=int(os.getenv("ALERT_NO_EVAL_MINUTES", "10")),
+            guardrail_skip_threshold=int(os.getenv("ALERT_GUARDRAIL_SKIP_THRESHOLD", "5")),
+            price_stale_minutes=int(os.getenv("ALERT_PRICE_STALE_MINUTES", "5")),
+        )
+        self.system_status_service = SystemStatusService(
+            alert_repo=self.alert_repo,
+            clock=self.clock,
+        )
+
         # Update submit_order_uc with guardrail_config_provider after it's created
         # (We need to do this after guardrail_config_provider is defined)
         # Actually, we'll set it after creating the providers below
@@ -545,6 +571,7 @@ class _Container:
         self.events.clear()
         self.idempotency.clear()
         self.portfolio_state.clear()
+        self.alert_repo.clear()
         if hasattr(self, "_timeline_session_factory"):
             self.evaluation_timeline = EvaluationTimelineRepoSQL(self._timeline_session_factory)
         # Reset broker if it's a stub

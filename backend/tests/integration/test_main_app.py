@@ -33,7 +33,8 @@ class TestMainApp:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "ok"
+        assert data["status"] in ("healthy", "degraded", "unhealthy")
+        assert "components" in data
 
     def test_root_health_endpoint(self, client):
         """Test the root health check endpoint."""
@@ -41,7 +42,7 @@ class TestMainApp:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "ok"
+        assert data["status"] in ("healthy", "degraded", "unhealthy")
 
     def test_cors_headers(self, client):
         """Test that CORS headers are properly set."""
