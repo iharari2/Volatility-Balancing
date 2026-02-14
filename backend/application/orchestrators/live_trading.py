@@ -12,8 +12,6 @@ from domain.value_objects.configs import TriggerConfig, GuardrailConfig
 from application.ports.market_data import IMarketDataProvider
 from application.ports.orders import IOrderService
 from application.ports.repos import IPositionRepository
-from application.ports.event_logger import IEventLogger
-from application.events import EventType
 from domain.ports.portfolio_repo import PortfolioRepo
 from domain.ports.market_data import MarketDataRepo
 
@@ -29,7 +27,6 @@ class LiveTradingOrchestrator:
         market_data: IMarketDataProvider,
         order_service: IOrderService,
         position_repo: IPositionRepository,
-        event_logger: IEventLogger,
         trigger_config_provider: Callable[[str], TriggerConfig],
         guardrail_config_provider: Callable[[str], GuardrailConfig],
         portfolio_repo: Optional[PortfolioRepo] = None,
@@ -39,7 +36,6 @@ class LiveTradingOrchestrator:
         self.market_data = market_data
         self.order_service = order_service
         self.position_repo = position_repo
-        self.event_logger = event_logger
         self.trigger_config_provider = trigger_config_provider
         self.guardrail_config_provider = guardrail_config_provider
         self.portfolio_repo = portfolio_repo
@@ -267,29 +263,6 @@ class LiveTradingOrchestrator:
                                     f"Unified path: Order submitted successfully: order_id={order_id}"
                                 )
 
-                                # Log order creation event (use existing trace_id from line 121)
-                                order_event = self.event_logger.log(
-                                    EventType.ORDER_CREATED,
-                                    asset_id=ticker,
-                                    trace_id=trace_id,  # Use existing trace_id
-                                    parent_event_id=None,
-                                    source=source,
-                                    payload={
-                                        "position_id": position_id,
-                                        "order_id": order_id,
-                                        "trade_intent": {
-                                            "side": trade_intent.side,
-                                            "qty": str(trade_intent.qty),
-                                            "reason": trade_intent.reason,
-                                        },
-                                        "quote": {
-                                            "ticker": quote.ticker,
-                                            "price": str(quote.price),
-                                            "timestamp": quote.timestamp.isoformat(),
-                                        },
-                                    },
-                                )
-
                                 # Execute the order immediately (auto-fill in live trading)
                                 try:
                                     from application.use_cases.execute_order_uc import (
@@ -323,23 +296,6 @@ class LiveTradingOrchestrator:
                                         f"order_id={order_id}, "
                                         f"filled_qty={fill_response.filled_qty}, "
                                         f"status={fill_response.status}"
-                                    )
-
-                                    # Log execution event
-                                    self.event_logger.log(
-                                        EventType.EXECUTION_RECORDED,
-                                        asset_id=ticker,
-                                        trace_id=trace_id,
-                                        parent_event_id=order_event.event_id,
-                                        source=source,
-                                        payload={
-                                            "position_id": position_id,
-                                            "order_id": order_id,
-                                            "trade_id": None,  # Will be set by execute_uc
-                                            "filled_qty": fill_response.filled_qty,
-                                            "price": str(quote.price),
-                                            "status": fill_response.status,
-                                        },
                                     )
 
                                 except Exception as exec_error:
@@ -390,21 +346,6 @@ class LiveTradingOrchestrator:
             # Skip old path if unified path already handled it
             if unified_path_handled:
                 return trace_id
-
-            # 1. Log price event (OLD PATH - only runs if unified path didn't handle it)
-            price_event = self.event_logger.log(
-                EventType.PRICE_EVENT,
-                asset_id=state.ticker,
-                trace_id=trace_id,
-                source=source,
-                payload={
-                    "position_id": position_id,
-                    "ticker": state.ticker,
-                    "price": str(quote.price),
-                    "timestamp": quote.timestamp.isoformat(),
-                    "anchor_price": str(state.anchor_price) if state.anchor_price else None,
-                },
-            )
 
             # Get tenant_id and portfolio_id for config providers
             # Try to find them from the position
@@ -473,27 +414,6 @@ class LiveTradingOrchestrator:
                 config=trigger_config,
             )
 
-            # 2. Log trigger evaluation
-            trigger_event = self.event_logger.log(
-                EventType.TRIGGER_EVALUATED,
-                asset_id=state.ticker,
-                trace_id=trace_id,
-                parent_event_id=price_event.event_id,
-                source=source,
-                payload={
-                    "position_id": position_id,
-                    "ticker": state.ticker,
-                    "trigger_decision": {
-                        "fired": trigger_decision.fired,
-                        "direction": trigger_decision.direction,
-                        "reason": trigger_decision.reason,
-                    },
-                    "anchor_price": str(state.anchor_price) if state.anchor_price else None,
-                    "current_price": str(quote.price),
-                    "threshold_pct": str(trigger_config.up_threshold_pct),
-                },
-            )
-
             if not trigger_decision.fired:
                 return trace_id  # Cycle completed, no trigger fired
 
@@ -502,31 +422,6 @@ class LiveTradingOrchestrator:
                 trigger_decision=trigger_decision,
                 config=guardrail_config,
                 price=quote.price,
-            )
-
-            # 3. Log guardrail evaluation
-            guardrail_event = self.event_logger.log(
-                EventType.GUARDRAIL_EVALUATED,
-                asset_id=state.ticker,
-                trace_id=trace_id,
-                parent_event_id=trigger_event.event_id,
-                source=source,
-                payload={
-                    "position_id": position_id,
-                    "decision": {
-                        "allowed": guardrail_decision.allowed,
-                        "reason": guardrail_decision.reason,
-                        "trade_intent": (
-                            {
-                                "side": guardrail_decision.trade_intent.side,
-                                "qty": str(guardrail_decision.trade_intent.qty),
-                                "reason": guardrail_decision.trade_intent.reason,
-                            }
-                            if guardrail_decision.trade_intent
-                            else None
-                        ),
-                    },
-                },
             )
 
             if not guardrail_decision.allowed or guardrail_decision.trade_intent is None:
@@ -600,21 +495,6 @@ class LiveTradingOrchestrator:
                     f"Could not find portfolio_id and tenant_id. "
                     f"portfolio_id={portfolio_id}, tenant_id={tenant_id}"
                 )
-                # Log this as a guardrail block
-                self.event_logger.log(
-                    EventType.GUARDRAIL_EVALUATED,
-                    asset_id=state.ticker,
-                    trace_id=trace_id,
-                    parent_event_id=guardrail_event.event_id,
-                    source=source,
-                    payload={
-                        "position_id": position_id,
-                        "decision": {
-                            "allowed": False,
-                            "reason": f"Cannot submit order: portfolio_id ({portfolio_id}) or tenant_id ({tenant_id}) not found",
-                        },
-                    },
-                )
                 return trace_id  # Cannot submit without portfolio/tenant info
 
             # Check if we're in market hours and if after-hours is allowed
@@ -623,21 +503,6 @@ class LiveTradingOrchestrator:
                 price_data = self.market_data_repo.get_reference_price(state.ticker)
                 if price_data and not price_data.is_market_hours:
                     if not allow_after_hours:
-                        # Log that trade was blocked due to market hours policy
-                        self.event_logger.log(
-                            EventType.GUARDRAIL_EVALUATED,
-                            asset_id=state.ticker,
-                            trace_id=trace_id,
-                            parent_event_id=guardrail_event.event_id,
-                            source=source,
-                            payload={
-                                "position_id": position_id,
-                                "decision": {
-                                    "allowed": False,
-                                    "reason": "Market is closed - after-hours trading disabled (portfolio policy: OPEN_ONLY)",
-                                },
-                            },
-                        )
                         return trace_id  # Blocked by market hours policy
 
             # Submit live order
@@ -669,30 +534,6 @@ class LiveTradingOrchestrator:
                 # Re-raise so it gets caught by outer exception handler
                 raise
 
-            # 4. Log order creation
-            order_event = self.event_logger.log(
-                EventType.ORDER_CREATED,
-                asset_id=state.ticker,
-                trace_id=trace_id,
-                parent_event_id=guardrail_event.event_id,
-                source=source,
-                payload={
-                    "position_id": position_id,
-                    "order_id": order_id,
-                    "trade_intent": {
-                        "side": guardrail_decision.trade_intent.side,
-                        "qty": str(guardrail_decision.trade_intent.qty),
-                        "reason": guardrail_decision.trade_intent.reason,
-                    },
-                    "quote": {
-                        "ticker": quote.ticker,
-                        "price": str(quote.price),
-                        "timestamp": quote.timestamp.isoformat(),
-                    },
-                    "commission_estimate": None,  # TODO: Calculate from config
-                },
-            )
-
             return trace_id
 
         except Exception as e:
@@ -709,19 +550,4 @@ class LiveTradingOrchestrator:
                     "trace_id": trace_id if "trace_id" in locals() else None,
                 },
             )
-            # Also log to event logger if available
-            try:
-                self.event_logger.log(
-                    EventType.TRIGGER_EVALUATED,  # Using existing event type for errors
-                    asset_id=state.ticker if "state" in locals() else "UNKNOWN",
-                    trace_id=trace_id if "trace_id" in locals() else None,
-                    source=source,
-                    payload={
-                        "position_id": position_id,
-                        "error": str(e),
-                        "error_type": type(e).__name__,
-                    },
-                )
-            except Exception:
-                pass  # Don't fail if event logging fails
             return None

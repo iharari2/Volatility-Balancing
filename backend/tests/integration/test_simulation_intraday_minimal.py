@@ -30,12 +30,10 @@ from application.orchestrators.simulation import SimulationOrchestrator
 from application.ports.market_data import IHistoricalPriceProvider
 from application.ports.orders import ISimulationOrderService
 from application.ports.repos import ISimulationPositionRepository
-from application.ports.event_logger import IEventLogger
 from domain.value_objects.market import MarketQuote
 from domain.value_objects.position_state import PositionState
 from domain.value_objects.trade_intent import TradeIntent
 from domain.value_objects.configs import TriggerConfig, GuardrailConfig
-from application.events import EventRecord, EventType
 from app.di import container
 
 
@@ -70,21 +68,6 @@ class FakeHistoricalPriceProvider(IHistoricalPriceProvider):
             timestamp=matching_bar["timestamp"],
             currency="USD",
         )
-
-
-class InMemorySimEventLogger(IEventLogger):
-    """In-memory event logger that stores events in a list (simulation only)."""
-
-    def __init__(self):
-        self.events: List[EventRecord] = []
-
-    def log_event(self, event: EventRecord) -> None:
-        """Store event in memory."""
-        self.events.append(event)
-
-    def get_events_by_trace(self, trace_id: str) -> List[EventRecord]:
-        """Get all events for a trace_id."""
-        return [e for e in self.events if e.trace_id == trace_id]
 
 
 class FakeSimPositionRepo(ISimulationPositionRepository):
@@ -259,12 +242,6 @@ def sim_order_service(sim_position_repo):
 
 
 @pytest.fixture
-def sim_event_logger():
-    """Create in-memory event logger."""
-    return InMemorySimEventLogger()
-
-
-@pytest.fixture
 def trigger_config():
     """Create trigger configuration."""
     return TriggerConfig(
@@ -301,7 +278,6 @@ def test_simulation_intraday_minimal(
     fake_price_provider,
     sim_position_repo,
     sim_order_service,
-    sim_event_logger,
     trigger_config,
     guardrail_config,
     timestamps,
@@ -345,7 +321,6 @@ def test_simulation_intraday_minimal(
         historical_data=fake_price_provider,
         sim_order_service=sim_order_service,
         sim_position_repo=sim_position_repo,
-        event_logger=sim_event_logger,
     )
 
     # Run simulation
@@ -362,121 +337,44 @@ def test_simulation_intraday_minimal(
 
     # Get final state
     final_state = sim_position_repo.get_final_state()
-    events = sim_event_logger.get_events_by_trace(simulation_run_id)
+    orders = sim_order_service.orders
 
-    # ===== ASSERTION A: At least 6 events (1+ per bar) =====
-    # The orchestrator logs multiple events per bar (PRICE_EVENT, TRIGGER_EVALUATED, etc.)
-    # So we should have at least 6 events (one per bar), but likely more
-    assert len(events) >= 6, f"Expected at least 6 events (1 per bar), got {len(events)}"
-
-    # Verify we have events for all 6 timestamps (check PRICE_EVENT for each timestamp)
-    price_events = [e for e in events if e.event_type == EventType.PRICE_EVENT]
-    assert (
-        len(price_events) == 6
-    ), f"Expected exactly 6 PRICE_EVENT events (1 per bar), got {len(price_events)}"
+    # ===== ASSERTION A: Orders were created =====
+    assert len(orders) > 0, "Expected at least one order to be created"
 
     # ===== ASSERTION B: At least one BUY and one SELL =====
-    # Trigger decisions use lowercase "buy"/"sell"
-    # Handle None values safely
-    buy_events = [
-        e
-        for e in events
-        if (direction := e.payload.get("trigger_decision", {}).get("direction"))
-        and direction.lower() == "buy"
-    ]
-    sell_events = [
-        e
-        for e in events
-        if (direction := e.payload.get("trigger_decision", {}).get("direction"))
-        and direction.lower() == "sell"
-    ]
-
-    # Also check order events for BUY/SELL (trade_intent uses lowercase)
-    order_events = [e for e in events if e.event_type == EventType.ORDER_CREATED]
     buy_orders = [
-        e
-        for e in order_events
-        if (side := e.payload.get("trade_intent", {}).get("side")) and side.lower() == "buy"
+        o for o in orders
+        if o["trade_intent"].side.lower() == "buy"
     ]
     sell_orders = [
-        e
-        for e in order_events
-        if (side := e.payload.get("trade_intent", {}).get("side")) and side.lower() == "sell"
+        o for o in orders
+        if o["trade_intent"].side.lower() == "sell"
     ]
 
-    assert len(buy_events) > 0 or len(buy_orders) > 0, "Expected at least one BUY action"
-    assert len(sell_events) > 0 or len(sell_orders) > 0, "Expected at least one SELL action"
+    assert len(buy_orders) > 0, "Expected at least one BUY action"
+    assert len(sell_orders) > 0, "Expected at least one SELL action"
 
     # ===== ASSERTION C: State changes after BUY/SELL =====
     initial_qty = initial_position_state.qty
     initial_cash = initial_position_state.cash
 
     # State should change if orders were executed
-    if len(sim_order_service.orders) > 0:
-        assert (
-            final_state.qty != initial_qty or final_state.cash != initial_cash
-        ), "Position state should change after BUY/SELL orders"
+    assert (
+        final_state.qty != initial_qty or final_state.cash != initial_cash
+    ), "Position state should change after BUY/SELL orders"
 
-    # ===== ASSERTION D: Event structure validation =====
-    # For each bar, we should have at least a PRICE_EVENT
-    # We'll validate that events contain the required information
-    for event in events:
-        # Every event should have timestamp
-        assert event.created_at is not None, f"Event {event.event_id} missing timestamp"
-
-        # Price events should have price info (effective_price, anchor_price)
-        if event.event_type == EventType.PRICE_EVENT:
-            assert (
-                "price" in event.payload
-            ), f"Price event {event.event_id} missing price (effective_price)"
-            assert "timestamp" in event.payload, f"Price event {event.event_id} missing timestamp"
-            assert (
-                "anchor_price" in event.payload
-            ), f"Price event {event.event_id} missing anchor_price"
-            # Verify price and anchor_price are not empty
-            assert event.payload.get("price"), f"Price event {event.event_id} has empty price"
-            # anchor_price can be None initially, but should be set after first trade
-
-        # Trigger events should have decision (action and action_reason)
-        if event.event_type == EventType.TRIGGER_EVALUATED:
-            assert (
-                "trigger_decision" in event.payload
-            ), f"Trigger event {event.event_id} missing decision"
-            decision = event.payload["trigger_decision"]
-            assert "fired" in decision, "Trigger decision missing 'fired'"
-            assert "direction" in decision or not decision.get(
-                "fired"
-            ), "Trigger decision missing 'direction' when fired"
-            assert "reason" in decision, "Trigger decision missing 'reason' (action_reason)"
-            # Verify action_reason is not empty
-            assert decision.get("reason"), "Trigger decision reason should not be empty"
-
-        # Guardrail events should have decision
-        if event.event_type == EventType.GUARDRAIL_EVALUATED:
-            assert "decision" in event.payload, f"Guardrail event {event.event_id} missing decision"
-            decision = event.payload["decision"]
-            assert "allowed" in decision, "Guardrail decision missing 'allowed'"
-            assert "reason" in decision, "Guardrail decision missing 'reason'"
-            # Verify reason is not empty
-            assert decision.get("reason"), "Guardrail decision reason should not be empty"
-
-        # Order events should have trade intent (action and action_reason)
-        if event.event_type == EventType.ORDER_CREATED:
-            assert (
-                "trade_intent" in event.payload
-            ), f"Order event {event.event_id} missing trade_intent"
-            intent = event.payload["trade_intent"]
-            assert "side" in intent, "Trade intent missing 'side' (action)"
-            assert "qty" in intent, "Trade intent missing 'qty'"
-            assert "reason" in intent, "Trade intent missing 'reason' (action_reason)"
-            # Verify action and action_reason are not empty (as per requirement D)
-            assert intent.get("side"), "Trade intent side (action) should not be empty"
-            assert intent.get("reason"), "Trade intent reason (action_reason) should not be empty"
-            # Verify quote has effective_price
-            assert "quote" in event.payload, f"Order event {event.event_id} missing quote"
-            quote = event.payload["quote"]
-            assert "price" in quote, "Order event quote missing price (effective_price)"
-            assert quote.get("price"), "Order event quote price should not be empty"
+    # ===== ASSERTION D: Order structure validation =====
+    for order in orders:
+        assert "order_id" in order, "Order missing order_id"
+        assert "trade_intent" in order, "Order missing trade_intent"
+        intent = order["trade_intent"]
+        assert intent.side, "Trade intent side should not be empty"
+        assert intent.qty > 0, "Trade intent qty should be positive"
+        assert intent.reason, "Trade intent reason should not be empty"
+        assert "quote" in order, "Order missing quote"
+        quote = order["quote"]
+        assert quote.price > 0, "Quote price should be positive"
 
     # ===== ASSERTION E: Production tables unchanged =====
     # Count final production table rows using same method as initial
@@ -513,10 +411,9 @@ def test_simulation_intraday_minimal(
 
     # Print summary for debugging
     print("\n=== Simulation Test Summary ===")
-    print(f"Total events: {len(events)}")
-    print(f"BUY actions: {len(buy_events) + len(buy_orders)}")
-    print(f"SELL actions: {len(sell_events) + len(sell_orders)}")
-    print(f"Orders created: {len(sim_order_service.orders)}")
+    print(f"BUY orders: {len(buy_orders)}")
+    print(f"SELL orders: {len(sell_orders)}")
+    print(f"Total orders: {len(orders)}")
     print(f"Initial state: qty={initial_qty}, cash={initial_cash}")
     print(f"Final state: qty={final_state.qty}, cash={final_state.cash}")
     print("Production tables unchanged: ✓")

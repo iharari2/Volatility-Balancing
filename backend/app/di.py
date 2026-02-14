@@ -74,7 +74,6 @@ from infrastructure.adapters.position_repo_adapter import PositionRepoAdapter
 from infrastructure.adapters.market_data_adapter import YFinanceMarketDataAdapter
 from infrastructure.adapters.historical_data_adapter import HistoricalDataAdapter
 from infrastructure.adapters.order_service_adapter import LiveOrderServiceAdapter
-from infrastructure.adapters.event_logger_adapter import EventLoggerAdapter
 from infrastructure.adapters.sim_order_service_adapter import SimOrderServiceAdapter
 from infrastructure.adapters.sim_position_repo_adapter import SimPositionRepoAdapter
 
@@ -350,23 +349,6 @@ class _Container:
         )
 
         # --- New Clean Architecture: Adapters and Orchestrators ---
-        # Create unified event logger for audit trail
-        from pathlib import Path
-        from infrastructure.logging.json_event_logger import JsonFileEventLogger
-        from infrastructure.adapters.unified_event_logger_adapter import (
-            UnifiedEventLoggerAdapter,
-        )
-
-        log_dir = Path("logs")
-        log_dir.mkdir(parents=True, exist_ok=True)
-        unified_logger = JsonFileEventLogger(log_dir / "audit_trail.jsonl")
-
-        # Create adapter that bridges old IEventLogger interface to new unified logger
-        UnifiedEventLoggerAdapter(unified_logger)
-
-        # Also keep old EventLoggerAdapter for backward compatibility with use cases
-        EventLoggerAdapter(self.events, self.clock)
-
         # Create adapters
         position_repo_adapter = PositionRepoAdapter(
             self.positions,
@@ -418,7 +400,6 @@ class _Container:
             broker=self.broker,
             orders_repo=self.orders,
             execute_order_uc=execute_order_uc,
-            event_logger=unified_logger,
         )
 
         # Order status reconciliation worker
@@ -527,13 +508,11 @@ class _Container:
         execute_order_uc.guardrail_config_provider = guardrail_config_provider
         execute_order_uc.order_policy_config_provider = order_policy_config_provider
 
-        # Create orchestrators (use unified event logger directly for audit trail)
-        # Orchestrators use the new IEventLogger interface from application.ports.event_logger
+        # Create orchestrators
         self.live_trading_orchestrator = LiveTradingOrchestrator(
             market_data=market_data_adapter,
             order_service=order_service_adapter,
             position_repo=position_repo_adapter,
-            event_logger=unified_logger,  # Use unified logger directly (implements new interface)
             trigger_config_provider=trigger_config_provider,
             guardrail_config_provider=guardrail_config_provider,
             portfolio_repo=self.portfolio_repo,
@@ -545,7 +524,6 @@ class _Container:
             historical_data=historical_data_adapter,
             sim_order_service=sim_order_service_adapter,
             sim_position_repo=sim_position_repo_adapter,
-            event_logger=unified_logger,  # Use unified logger directly (implements new interface)
         )
 
     def get_evaluate_position_uc(self):

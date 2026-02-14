@@ -27,29 +27,6 @@ from domain.value_objects.guardrails import GuardrailPolicy
 from domain.value_objects.order_policy import OrderPolicy
 
 
-class MockEventLogger:
-    """Mock event logger that tracks logged events."""
-
-    def __init__(self):
-        self.events = []
-
-    def log(self, event_type, asset_id, trace_id, parent_event_id=None, source=None, payload=None):
-        event = {
-            "event_type": event_type,
-            "asset_id": asset_id,
-            "trace_id": trace_id,
-            "parent_event_id": parent_event_id,
-            "source": source,
-            "payload": payload,
-        }
-        self.events.append(event)
-        # Return mock event with event_id
-        mock_event = Mock()
-        mock_event.event_id = f"evt_{len(self.events)}"
-        mock_event.event_type = event_type
-        return mock_event
-
-
 @pytest.fixture
 def mock_position():
     """Create a mock position for testing."""
@@ -108,7 +85,7 @@ def test_evaluate_called_with_correct_parameters(mock_position, mock_portfolio):
         patch.object(container, "portfolio_repo") as mock_portfolio_repo,
         patch.object(container, "positions") as mock_positions_repo,
         patch.object(container, "market_data") as mock_market_data,
-        patch.object(container, "live_trading_orchestrator") as mock_orchestrator,
+        patch.object(container, "live_trading_orchestrator"),
     ):
         # Setup mocks
         mock_portfolio_repo.list_all.return_value = [mock_portfolio]
@@ -118,8 +95,6 @@ def test_evaluate_called_with_correct_parameters(mock_position, mock_portfolio):
         price_data.price = 95.0  # Price below anchor (should trigger BUY)
         mock_market_data.get_price.return_value = price_data
 
-        mock_event_logger = MockEventLogger()
-        mock_orchestrator.event_logger = mock_event_logger
 
         # Create service and inject mock eval_uc
         service = ContinuousTradingService()
@@ -200,7 +175,7 @@ def test_error_event_logged_on_evaluation_failure(mock_position, mock_portfolio)
         patch.object(container, "portfolio_repo") as mock_portfolio_repo,
         patch.object(container, "positions") as mock_positions_repo,
         patch.object(container, "market_data") as mock_market_data,
-        patch.object(container, "live_trading_orchestrator") as mock_orchestrator,
+        patch.object(container, "live_trading_orchestrator"),
     ):
         # Setup mocks
         mock_portfolio_repo.list_all.return_value = [mock_portfolio]
@@ -210,8 +185,6 @@ def test_error_event_logged_on_evaluation_failure(mock_position, mock_portfolio)
         price_data.price = 95.0
         mock_market_data.get_price.return_value = price_data
 
-        mock_event_logger = MockEventLogger()
-        mock_orchestrator.event_logger = mock_event_logger
 
         # Create service
         service = ContinuousTradingService()
@@ -234,6 +207,8 @@ def test_error_event_logged_on_evaluation_failure(mock_position, mock_portfolio)
             # Call _monitor_position
             service._monitor_position("test_pos_001", 0, stop_event, None)
 
-        # Verify error event was logged
-        error_events = [e for e in mock_event_logger.events if "error" in e.get("payload", {})]
-        assert len(error_events) > 0, "Error event should be logged on evaluation failure"
+        # Verify error was tracked in status
+        status = service._active_positions.get("test_pos_001")
+        assert status is not None
+        assert status.total_errors > 0, "Errors should be tracked in status"
+        assert status.last_error is not None, "Last error should be recorded"

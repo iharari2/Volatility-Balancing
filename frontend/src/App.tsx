@@ -58,7 +58,6 @@ function App() {
               <Route path="/overview" element={<Navigate to="/" replace />} />
               <Route path="/trading" element={<Navigate to="/?tab=trading" replace />} />
               <Route path="/trade" element={<Navigate to="/?tab=trading" replace />} />
-              <Route path="/audit" element={<Navigate to="/?tab=events" replace />} />
               <Route path="/positions" element={<Navigate to="/" replace />} />
 
               {/* Legacy routes with PageLayout (kept for transition) */}

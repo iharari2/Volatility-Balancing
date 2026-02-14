@@ -21,8 +21,6 @@ from application.use_cases.submit_order_uc import SubmitOrderUC
 from application.use_cases.execute_order_uc import ExecuteOrderUC
 from application.dto.orders import CreateOrderRequest, FillOrderRequest
 from domain.errors import GuardrailBreach
-from application.ports.event_logger import IEventLogger
-from application.events import EventType
 
 
 @dataclass
@@ -171,12 +169,6 @@ class ContinuousTradingService:
         callback: Optional[Callable[[str, Dict], None]] = None,
     ):
         """Monitor a position in a background thread."""
-        # Get unified event logger from container for audit trail
-        # Access it via the orchestrator which has the logger injected
-        event_logger: Optional[IEventLogger] = None
-        if hasattr(container, "live_trading_orchestrator"):
-            event_logger = container.live_trading_orchestrator.event_logger
-
         eval_uc = EvaluatePositionUC(
             positions=container.positions,
             events=container.events,
@@ -272,50 +264,12 @@ class ContinuousTradingService:
                 try:
                     print(f"🔍 Evaluating position {position_id} at price ${current_price:.2f}")
 
-                    # Generate trace_id for this evaluation cycle
-                    import uuid
-
-                    trace_id = str(uuid.uuid4())
-                    price_event = None
-                    trigger_event = None
-
-                    # Log price event to audit trail
-                    if event_logger:
-                        price_event = event_logger.log(
-                            EventType.PRICE_EVENT,
-                            asset_id=position.asset_symbol,  # Use asset_symbol instead of ticker
-                            trace_id=trace_id,
-                            source="continuous_trading",
-                            payload={
-                                "position_id": position_id,
-                                "ticker": position.asset_symbol,  # Use asset_symbol instead of ticker
-                                "price": str(current_price),
-                                "timestamp": datetime.now(timezone.utc).isoformat(),
-                            },
-                        )
-
                     evaluation = eval_uc.evaluate(
                         tenant_id, portfolio_id, position_id, current_price
                     )
 
                     trigger_detected = evaluation.get("trigger_detected", False)
                     order_proposal = evaluation.get("order_proposal")
-
-                    # Log trigger evaluation to audit trail
-                    if event_logger and trigger_detected:
-                        trigger_event = event_logger.log(
-                            EventType.TRIGGER_EVALUATED,
-                            asset_id=position.asset_symbol,  # Use asset_symbol instead of ticker
-                            trace_id=trace_id,
-                            parent_event_id=price_event.event_id if price_event else None,
-                            source="continuous_trading",
-                            payload={
-                                "position_id": position_id,
-                                "triggered": True,
-                                "direction": order_proposal.get("side") if order_proposal else None,
-                                "reason": evaluation.get("reasoning", ""),
-                            },
-                        )
 
                     print(f"   Trigger detected: {trigger_detected}")
                     if order_proposal:
@@ -379,26 +333,6 @@ class ContinuousTradingService:
                                     fill_qty = abs(order_proposal["trimmed_qty"])
                                     fill_commission = order_proposal.get("commission", 0.0)
 
-                                    # Log order creation to audit trail
-                                    order_event = None
-                                    if event_logger:
-                                        order_event = event_logger.log(
-                                            EventType.ORDER_CREATED,
-                                            asset_id=position.asset_symbol,
-                                            trace_id=trace_id,
-                                            parent_event_id=(
-                                                trigger_event.event_id if trigger_event else None
-                                            ),
-                                            source="continuous_trading",
-                                            payload={
-                                                "position_id": position_id,
-                                                "order_id": submit_response.order_id,
-                                                "direction": order_proposal["side"],
-                                                "quantity": trimmed_qty,
-                                                "price": current_price,
-                                                "commission_est": fill_commission,
-                                            },
-                                        )
                                     print(
                                         f"   Filling order: qty={fill_qty:.4f}, price=${current_price:.2f}, commission=${fill_commission:.4f}"
                                     )
@@ -422,77 +356,6 @@ class ContinuousTradingService:
                                         print(
                                             f"✅ Auto-trade executed: {order_proposal['side']} {order_proposal['trimmed_qty']:.4f} @ ${current_price:.2f}"
                                         )
-
-                                        # Log execution event
-                                        execution_event = None
-                                        if event_logger:
-                                            execution_event = event_logger.log(
-                                                EventType.EXECUTION_RECORDED,
-                                                asset_id=position.asset_symbol,
-                                                trace_id=trace_id,
-                                                parent_event_id=order_event.event_id
-                                                if order_event
-                                                else None,
-                                                source="continuous_trading",
-                                                payload={
-                                                    "position_id": position_id,
-                                                    "order_id": submit_response.order_id,
-                                                    "trade_id": fill_response.trade_id,
-                                                    "filled_qty": fill_response.filled_qty,
-                                                    "price": current_price,
-                                                    "status": fill_response.status,
-                                                },
-                                            )
-
-                                        # Reload position to get updated state for position update event
-                                        updated_position = container.positions.get(
-                                            tenant_id=tenant_id,
-                                            portfolio_id=portfolio_id,
-                                            position_id=position_id,
-                                        )
-
-                                        # Calculate pre-trade state (reverse the changes)
-                                        if order_proposal["side"] == "BUY":
-                                            pre_trade_cash = (
-                                                updated_position.cash
-                                                + (fill_response.filled_qty * current_price)
-                                                + fill_commission
-                                            )
-                                            pre_trade_qty = (
-                                                updated_position.qty - fill_response.filled_qty
-                                            )
-                                        else:  # SELL
-                                            pre_trade_cash = (
-                                                updated_position.cash
-                                                - (fill_response.filled_qty * current_price)
-                                                + fill_commission
-                                            )
-                                            pre_trade_qty = (
-                                                updated_position.qty + fill_response.filled_qty
-                                            )
-
-                                        # Log position update event
-                                        if event_logger and updated_position:
-                                            event_logger.log(
-                                                EventType.POSITION_UPDATED,
-                                                asset_id=position.asset_symbol,
-                                                trace_id=trace_id,
-                                                parent_event_id=execution_event.event_id
-                                                if execution_event
-                                                else None,
-                                                source="continuous_trading",
-                                                payload={
-                                                    "position_id": position_id,
-                                                    "pre_trade_cash": pre_trade_cash,
-                                                    "pre_trade_qty": pre_trade_qty,
-                                                    "post_trade_cash": updated_position.cash,
-                                                    "post_trade_qty": updated_position.qty,
-                                                    "cash_change": updated_position.cash
-                                                    - pre_trade_cash,
-                                                    "qty_change": updated_position.qty
-                                                    - pre_trade_qty,
-                                                },
-                                            )
 
                                         if callback:
                                             callback(
@@ -577,23 +440,6 @@ class ContinuousTradingService:
                     print(f"⚠️  Error evaluating position: {e}")
                     status.total_errors += 1
                     status.last_error = str(e)
-
-                    # Log error event to audit trail
-                    if event_logger:
-                        try:
-                            event_logger.log(
-                                EventType.TRIGGER_EVALUATED,
-                                asset_id=position.asset_symbol if position else "UNKNOWN",
-                                trace_id=trace_id if "trace_id" in locals() else None,
-                                source="continuous_trading",
-                                payload={
-                                    "position_id": position_id,
-                                    "error": str(e),
-                                    "error_type": type(e).__name__,
-                                },
-                            )
-                        except Exception:
-                            pass  # Don't fail if event logging fails
 
             except Exception as e:
                 print(f"⚠️  Unexpected error in monitoring loop: {e}")
