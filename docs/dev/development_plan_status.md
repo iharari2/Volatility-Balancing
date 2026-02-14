@@ -1,11 +1,11 @@
 # Development Plan Status
 
-**Last Updated**: February 12, 2026
+**Last Updated**: February 14, 2026
 **Project**: Volatility Balancing System
 
 ---
 
-## Completed Iterations (1-8)
+## Completed Iterations (1-10)
 
 | # | Iteration | Commit | Summary |
 |---|-----------|--------|---------|
@@ -17,51 +17,10 @@
 | 6 | Unified Trade Tracking (Backend) | `069e326` | Order/trade enrichment, pagination, explainability API |
 | 7 | Trade Tracking Frontend + Guardrail Fix | `45e926f`, `6eddece` | Guardrail defaults 25%/75%, server-side pagination, order status filter |
 | 8 | Monitoring & Alerting | `1d0af9d` | Alert system (6 conditions), webhook delivery, enhanced health, structured logging |
+| 9 | Fix Pre-existing Test Failures | `87512d6` | Fixed all 24 pre-existing failures + 3 errors across 5 test files; 118 integration tests passing |
+| 10 | Remove Redundant Audit Trail | `d1ad201` | Deleted 10 files (JSONL logger, event ports, audit route, UI page, docs), cleaned event_logger from orchestrators/services/DI; net -2,383 lines |
 
-**Test suite**: 534 passed, 24 pre-existing failures (orders API, cancel/status, gate1 deterministic), 11 skipped
-
----
-
-## Iteration 9: Fix Pre-existing Test Failures
-
-**Priority**: High
-**Effort**: Medium
-
-The test suite has 24 pre-existing failures and 3 errors across 4 test files. These block CI/CD adoption and mask real regressions.
-
-| Test File | Failures | Root Cause |
-|-----------|----------|------------|
-| `test_orders_api.py` | 14 failures + 3 errors | Route paths changed, endpoints return 404 |
-| `test_orders_cancel_status.py` | 9 failures | Same route/endpoint mismatch |
-| `test_orders_list.py` | 1 failure | Same route/endpoint mismatch |
-| `test_gate1_deterministic_ticks.py` | 2 failures | SQLite NOT NULL constraint on `dividend_applied` column |
-| `test_main_app.py` | 1 failure | `test_endpoint_discovery` expects removed `/v1/orders/{order_id}/fill` path |
-
-**Tasks**:
-- Fix or remove order API integration tests to match current route structure
-- Fix gate1 deterministic tick test (missing `dividend_applied` column in INSERT)
-- Update endpoint discovery test to reflect current API surface
-- Target: 0 failures, green CI
-
----
-
-## Iteration 10: Wire Audit Trail API to UI
-
-**Priority**: Medium
-**Ref**: FEAT-2
-
-**Current State**:
-- `AuditTrailPage` UI exists with filtering (asset, date range, event type, source, trace ID)
-- Backend `/v1/audit/traces` endpoint exists
-- UI currently shows placeholder / "under migration to real-time logs"
-
-**Tasks**:
-- Wire `AuditTrailPage` to fetch from `/v1/audit/traces` API
-- Implement trace list pagination
-- Enable trace detail expansion with full event payloads
-- Verify JSON export per trace works end-to-end
-
-**Files**: `frontend/src/features/audit/AuditTrailPage.tsx`, `backend/app/routes/audit.py`
+**Test suite**: 443 unit passed (2 skipped), 118 integration passed (1 skipped), ruff clean, frontend builds clean
 
 ---
 
@@ -162,7 +121,7 @@ The test suite has 24 pre-existing failures and 3 errors across 4 test files. Th
 | ID | Feature | Priority | Status |
 |----|---------|----------|--------|
 | FEAT-1 | Dividend tracker (view + export) | Medium | Planned (Iteration 11) |
-| FEAT-2 | Wire Audit Trail API to UI | Medium | Planned (Iteration 10) |
+| ~~FEAT-2~~ | ~~Wire Audit Trail API to UI~~ | ~~Medium~~ | Removed — audit trail deleted in Iteration 10; evaluation timeline is the canonical source |
 | FEAT-3 | Wire Dividends API to UI + export | Medium | Planned (Iteration 11) |
 
 ---
