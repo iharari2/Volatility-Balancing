@@ -69,7 +69,7 @@ async def announce_dividend(
 
 
 @router.post(
-    "/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/process-ex-dividend"
+    "/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/process-ex-dividend"
 )
 async def process_ex_dividend_date(
     tenant_id: str,
@@ -115,7 +115,7 @@ async def process_ex_dividend_date(
 
 
 @router.post(
-    "/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/process-payment"
+    "/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/process-payment"
 )
 async def process_dividend_payment(
     tenant_id: str,
@@ -148,7 +148,7 @@ async def process_dividend_payment(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/status")
+@router.get("/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/status")
 async def get_dividend_status(
     tenant_id: str,
     portfolio_id: str,

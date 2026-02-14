@@ -23,6 +23,15 @@ from application.services.broker_integration_service import BrokerIntegrationSer
 
 logger = logging.getLogger(__name__)
 
+
+def _ensure_aware(dt: Optional[datetime]) -> Optional[datetime]:
+    """Ensure a datetime is timezone-aware (assume UTC if naive)."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
 # Statuses considered "pending" (still in-flight at broker)
 PENDING_STATUSES = {"pending", "working", "partial"}
 
@@ -111,7 +120,7 @@ class OrderStatusWorker:
                 continue
             if order.broker_order_id:
                 continue  # has broker id — not stuck
-            age = now - order.created_at
+            age = now - _ensure_aware(order.created_at)
             if age < timeout:
                 continue
 
@@ -193,7 +202,7 @@ class OrderStatusWorker:
 
             elif tif in ("ioc", "fok"):
                 # IOC/FOK should fill/reject almost immediately
-                submitted_at = order.submitted_to_broker_at or order.created_at
+                submitted_at = _ensure_aware(order.submitted_to_broker_at or order.created_at)
                 age = now - submitted_at
                 if age.total_seconds() > IOC_FOK_STALE_SECONDS:
                     logger.info(
@@ -215,7 +224,7 @@ class OrderStatusWorker:
         - Market is not open AND
         - It was submitted on a previous calendar day
         """
-        submitted_at = order.submitted_to_broker_at or order.created_at
+        submitted_at = _ensure_aware(order.submitted_to_broker_at or order.created_at)
         submitted_date = submitted_at.date()
         today = now.date()
 

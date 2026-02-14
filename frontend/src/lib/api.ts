@@ -377,7 +377,7 @@ export const dividendApi = {
       body: JSON.stringify(data),
     }),
 
-  getPositionStatus: (positionId: string) =>
+  getPositionStatus: (tenantId: string, portfolioId: string, positionId: string) =>
     request<{
       position_id: string;
       pending_receivables: Array<{
@@ -397,7 +397,7 @@ export const dividendApi = {
         dps: number;
         status: string;
       }>;
-    }>(`/dividends/positions/${positionId}/status`),
+    }>(`/dividends/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/status`),
 
   getMarketInfo: (ticker: string) =>
     request<{
@@ -424,7 +424,7 @@ export const dividendApi = {
       }>;
     }>(`/dividends/market/${ticker}/upcoming`),
 
-  processExDividend: (positionId: string) =>
+  processExDividend: (tenantId: string, portfolioId: string, positionId: string) =>
     request<{
       position_id: string;
       processed: boolean;
@@ -440,18 +440,18 @@ export const dividendApi = {
         receivable_id: string;
       };
       message: string;
-    }>(`/dividends/positions/${positionId}/process-ex-dividend`, {
+    }>(`/dividends/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/process-ex-dividend`, {
       method: 'POST',
     }),
 
-  processPayment: (positionId: string, receivableId: string) =>
+  processPayment: (tenantId: string, portfolioId: string, positionId: string, receivableId: string) =>
     request<{
       position_id: string;
       receivable_id: string;
       amount_received: number;
       cash_updated: number;
       message: string;
-    }>(`/dividends/positions/${positionId}/process-payment`, {
+    }>(`/dividends/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/process-payment`, {
       method: 'POST',
       body: JSON.stringify({ receivable_id: receivableId }),
     }),

@@ -10,12 +10,14 @@ import EventTimeline from '../components/EventTimeline';
 import DividendManagement from '../components/DividendManagement';
 import TradingConfigPanel from '../components/TradingConfigPanel';
 import { useConfiguration } from '../contexts/ConfigurationContext';
+import { useTenantPortfolio } from '../contexts/TenantPortfolioContext';
 
 export default function PositionDetail() {
   const { id } = useParams<{ id: string }>();
   const [showAnchorForm, setShowAnchorForm] = useState(false);
   const [anchorPrice, setAnchorPrice] = useState<number>(0);
   const { configuration } = useConfiguration();
+  const { selectedTenantId, selectedPortfolioId } = useTenantPortfolio();
   const [activeTab, setActiveTab] = useState<'trading' | 'dividends' | 'config'>('trading');
 
   const { data: position, isLoading: positionLoading } = usePosition(id!);
@@ -237,7 +239,7 @@ export default function PositionDetail() {
           )}
 
           {activeTab === 'dividends' && (
-            <DividendManagement positionId={position.id} ticker={position.ticker} />
+            <DividendManagement tenantId={selectedTenantId || 'default'} portfolioId={selectedPortfolioId || 'default'} positionId={position.id} ticker={position.ticker} />
           )}
 
           {activeTab === 'config' && (

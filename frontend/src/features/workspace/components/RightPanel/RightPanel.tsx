@@ -8,6 +8,7 @@ import EventsTab from '../tabs/EventsTab';
 import StrategyTab from '../tabs/StrategyTab';
 import ExplainabilityTab from '../tabs/ExplainabilityTab';
 import OrdersTab from '../tabs/OrdersTab';
+import DividendsTab from '../tabs/DividendsTab';
 
 export default function RightPanel() {
   const { selectedPosition, positions, activeTab, setSelectedPositionId } = useWorkspace();
@@ -51,6 +52,7 @@ export default function RightPanel() {
         {activeTab === 'strategy' && <StrategyTab />}
         {activeTab === 'explainability' && <ExplainabilityTab />}
         {activeTab === 'orders' && <OrdersTab />}
+        {activeTab === 'dividends' && <DividendsTab />}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 # Development Plan Status
 
-**Last Updated**: February 14, 2026
+**Last Updated**: February 15, 2026
 **Project**: Volatility Balancing System
 
 ---
@@ -19,29 +19,45 @@
 | 8 | Monitoring & Alerting | `1d0af9d` | Alert system (6 conditions), webhook delivery, enhanced health, structured logging |
 | 9 | Fix Pre-existing Test Failures | `87512d6` | Fixed all 24 pre-existing failures + 3 errors across 5 test files; 118 integration tests passing |
 | 10 | Remove Redundant Audit Trail | `d1ad201` | Deleted 10 files (JSONL logger, event ports, audit route, UI page, docs), cleaned event_logger from orchestrators/services/DI; net -2,383 lines |
+| 11 | Wire Dividends API to UI + Workspace Tab | — | Fixed backend route paths, wired frontend dividendApi with tenant/portfolio params, added Dividends workspace tab, deleted skeleton DividendsTab, fixed naive-vs-aware datetime bug in OrderStatusWorker |
 
-**Test suite**: 443 unit passed (2 skipped), 118 integration passed (1 skipped), ruff clean, frontend builds clean
+**Test suite**: 561 passed (13 skipped), ruff clean, TypeScript clean, frontend builds clean
 
 ---
 
-## Iteration 11: Wire Dividends API to UI + Export
+## Iteration 11: Wire Dividends API to UI + Workspace Tab — COMPLETE
 
 **Priority**: Medium
 **Ref**: FEAT-1, FEAT-3
 
-**Current State**:
-- `DividendsTab` UI exists with upcoming/history sections
-- Returns empty mock data (TODO comment indicates API fetch needed)
-- Backend has dividend entities and processing logic but no dedicated listing endpoint
+**What was done**:
+- **Backend route fix**: Removed `/api` prefix from 3 dividend sub-paths (`status`, `process-ex-dividend`, `process-payment`) so full URLs follow `GET /v1/dividends/tenants/{t}/portfolios/{p}/positions/{pos}/status`
+- **Frontend API layer**: Updated `dividendApi` methods (`getPositionStatus`, `processExDividend`, `processPayment`) to accept `tenantId`/`portfolioId` and construct correct URL paths
+- **React Query hooks**: Updated all position-scoped hooks in `useDividends.ts` to pass tenant/portfolio params
+- **DividendManagement component**: Added `tenantId`/`portfolioId` to props, threaded through to hooks; also fixed usage in legacy `PositionDetail.tsx`
+- **Workspace Dividends tab**: Added `'dividends'` to `WorkspaceTab` union, added tab with `DollarSign` icon in `DetailTabBar`, created new `DividendsTab` wrapper in workspace tabs, wired rendering in `RightPanel`
+- **Deleted skeleton**: Removed old `DividendsTab.tsx` (mock data) from `features/positions/`, cleaned up import in `PositionsPage.tsx`
+- **Test fixes**: Updated integration tests (`test_dividend_api.py`, `test_main_app.py`) to use new route paths
+- **Bug fix**: Fixed `TypeError: can't subtract offset-naive and offset-aware datetimes` in `OrderStatusWorker` — added `_ensure_aware()` helper applied at all 3 datetime arithmetic sites (Phase 1 stuck orders, Phase 3 IOC/FOK, stale DAY order check)
 
-**Tasks**:
-- Create backend `GET /v1/positions/{id}/dividends` endpoint (or portfolio-scoped)
-- Query dividend events from position_evaluation_timeline or dividend tables
-- Wire `DividendsTab` to fetch from API
-- Add dividend tracker dashboard (upcoming ex-dates, received payments)
-- Add Excel/CSV export button for dividend history
+**Files modified** (10 files):
+- `backend/app/routes/dividends.py` — route path fix
+- `backend/application/services/order_status_worker.py` — datetime bug fix
+- `backend/tests/integration/test_dividend_api.py` — test URL updates
+- `backend/tests/integration/test_main_app.py` — test URL updates
+- `frontend/src/lib/api.ts` — dividendApi URL + params
+- `frontend/src/hooks/useDividends.ts` — hook params
+- `frontend/src/components/DividendManagement.tsx` — props
+- `frontend/src/pages/PositionDetail.tsx` — plumb tenant/portfolio to DividendManagement
+- `frontend/src/features/workspace/WorkspaceContext.tsx` — tab type
+- `frontend/src/features/workspace/components/RightPanel/DetailTabBar.tsx` — tab entry
+- `frontend/src/features/workspace/components/RightPanel/RightPanel.tsx` — tab rendering
 
-**Files**: `frontend/src/features/positions/DividendsTab.tsx`, dividend routes
+**Files created** (1):
+- `frontend/src/features/workspace/components/tabs/DividendsTab.tsx`
+
+**Files deleted** (1):
+- `frontend/src/features/positions/DividendsTab.tsx`
 
 ---
 
@@ -120,9 +136,9 @@
 
 | ID | Feature | Priority | Status |
 |----|---------|----------|--------|
-| FEAT-1 | Dividend tracker (view + export) | Medium | Planned (Iteration 11) |
+| ~~FEAT-1~~ | ~~Dividend tracker (view + export)~~ | ~~Medium~~ | Done — Iteration 11 (UI wired to API, workspace tab added) |
 | ~~FEAT-2~~ | ~~Wire Audit Trail API to UI~~ | ~~Medium~~ | Removed — audit trail deleted in Iteration 10; evaluation timeline is the canonical source |
-| FEAT-3 | Wire Dividends API to UI + export | Medium | Planned (Iteration 11) |
+| ~~FEAT-3~~ | ~~Wire Dividends API to UI + export~~ | ~~Medium~~ | Done — Iteration 11 (API connected, Excel export TBD as backlog) |
 
 ---
 

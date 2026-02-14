@@ -17,18 +17,20 @@ import {
 import { format } from 'date-fns';
 
 interface DividendManagementProps {
+  tenantId: string;
+  portfolioId: string;
   positionId: string;
   ticker: string;
 }
 
-export default function DividendManagement({ positionId, ticker }: DividendManagementProps) {
+export default function DividendManagement({ tenantId, portfolioId, positionId, ticker }: DividendManagementProps) {
   const [activeTab, setActiveTab] = useState<'status' | 'market' | 'upcoming'>('status');
 
   const {
     data: positionStatus,
     isLoading: statusLoading,
     error: statusError,
-  } = useDividendPositionStatus(positionId);
+  } = useDividendPositionStatus(tenantId, portfolioId, positionId);
   const {
     data: marketInfo,
     isLoading: marketLoading,
@@ -40,8 +42,8 @@ export default function DividendManagement({ positionId, ticker }: DividendManag
     error: upcomingError,
   } = useUpcomingDividends(ticker);
 
-  const processExDividend = useProcessExDividend(positionId);
-  const processPayment = useProcessDividendPayment(positionId);
+  const processExDividend = useProcessExDividend(tenantId, portfolioId, positionId);
+  const processPayment = useProcessDividendPayment(tenantId, portfolioId, positionId);
 
   const handleProcessExDividend = async () => {
     try {

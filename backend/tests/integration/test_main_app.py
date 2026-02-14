@@ -177,7 +177,7 @@ class TestMainApp:
             # Legacy dividend endpoint may be deprecated
             # "/v1/dividends/positions/{position_id}/status",
             # New portfolio-scoped endpoint:
-            "/v1/dividends/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/status",
+            "/v1/dividends/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/status",
         ]
 
         for path in expected_paths:

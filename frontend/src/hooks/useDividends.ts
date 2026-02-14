@@ -1,11 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dividendApi } from '../lib/api';
 
-export const useDividendPositionStatus = (positionId: string) => {
+export const useDividendPositionStatus = (tenantId: string, portfolioId: string, positionId: string) => {
   return useQuery({
-    queryKey: ['dividends', 'position', positionId],
-    queryFn: () => dividendApi.getPositionStatus(positionId),
-    enabled: !!positionId,
+    queryKey: ['dividends', 'position', tenantId, portfolioId, positionId],
+    queryFn: () => dividendApi.getPositionStatus(tenantId, portfolioId, positionId),
+    enabled: !!tenantId && !!portfolioId && !!positionId,
   });
 };
 
@@ -38,7 +38,6 @@ export const useAnnounceDividend = () => {
       withholding_tax_rate: number;
     }) => dividendApi.announce(data),
     onSuccess: (_, variables) => {
-      // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: ['dividends', 'market', variables.ticker] });
       queryClient.invalidateQueries({ queryKey: ['dividends', 'upcoming', variables.ticker] });
       queryClient.invalidateQueries({ queryKey: ['dividends', 'position'] });
@@ -46,26 +45,26 @@ export const useAnnounceDividend = () => {
   });
 };
 
-export const useProcessExDividend = (positionId: string) => {
+export const useProcessExDividend = (tenantId: string, portfolioId: string, positionId: string) => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () => dividendApi.processExDividend(positionId),
+    mutationFn: () => dividendApi.processExDividend(tenantId, portfolioId, positionId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dividends', 'position', positionId] });
+      queryClient.invalidateQueries({ queryKey: ['dividends', 'position', tenantId, portfolioId, positionId] });
       queryClient.invalidateQueries({ queryKey: ['position', positionId] });
       queryClient.invalidateQueries({ queryKey: ['positions'] });
     },
   });
 };
 
-export const useProcessDividendPayment = (positionId: string) => {
+export const useProcessDividendPayment = (tenantId: string, portfolioId: string, positionId: string) => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (receivableId: string) => dividendApi.processPayment(positionId, receivableId),
+    mutationFn: (receivableId: string) => dividendApi.processPayment(tenantId, portfolioId, positionId, receivableId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dividends', 'position', positionId] });
+      queryClient.invalidateQueries({ queryKey: ['dividends', 'position', tenantId, portfolioId, positionId] });
       queryClient.invalidateQueries({ queryKey: ['position', positionId] });
       queryClient.invalidateQueries({ queryKey: ['positions'] });
     },

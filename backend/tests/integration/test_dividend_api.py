@@ -74,7 +74,7 @@ class TestDividendAPI:
     def test_get_dividend_status_success(self, client, tenant_id, portfolio_id, position_id):
         """Test getting dividend status for existing position."""
         response = client.get(
-            f"/v1/dividends/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/status"
+            f"/v1/dividends/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/status"
         )
 
         assert response.status_code == 200
@@ -93,7 +93,7 @@ class TestDividendAPI:
         """Test processing ex-dividend when no dividend today."""
         # Try the path with /v1/dividends prefix (since dividends router has that prefix)
         response = client.post(
-            f"/v1/dividends/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/process-ex-dividend"
+            f"/v1/dividends/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/process-ex-dividend"
         )
         assert response.status_code == 200
 
@@ -164,7 +164,7 @@ class TestDividendAPI:
 
         # 3. Check dividend status
         response = client.get(
-            f"/v1/dividends/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/status"
+            f"/v1/dividends/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/status"
         )
         assert response.status_code == 200
         status = response.json()
@@ -195,7 +195,7 @@ class TestDividendAPI:
 
         # Check status
         response = client.get(
-            f"/v1/dividends/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/status"
+            f"/v1/dividends/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/status"
         )
         assert response.status_code == 200
 
@@ -259,14 +259,14 @@ class TestDividendAPI:
         """Test that dividend endpoints return consistent data."""
         # Get initial status
         response1 = client.get(
-            f"/v1/dividends/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/status"
+            f"/v1/dividends/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/status"
         )
         assert response1.status_code == 200
         status1 = response1.json()
 
         # Get status again
         response2 = client.get(
-            f"/v1/dividends/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/status"
+            f"/v1/dividends/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/status"
         )
         assert response2.status_code == 200
         status2 = response2.json()

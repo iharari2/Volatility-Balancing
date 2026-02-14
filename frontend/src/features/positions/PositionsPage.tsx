@@ -4,12 +4,10 @@ import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import PositionsTable from './PositionsTable';
 import CashConfigForm from './CashConfigForm';
 import StrategyConfigForm from './StrategyConfigForm';
-import DividendsTab from './DividendsTab';
-
 export default function PositionsPage() {
   const { positions, loading } = usePortfolio();
   const { selectedPortfolio } = useTenantPortfolio();
-  const [activeTab, setActiveTab] = useState<'positions' | 'cash' | 'strategy' | 'dividends'>(
+  const [activeTab, setActiveTab] = useState<'positions' | 'cash' | 'strategy'>(
     'positions',
   );
 
@@ -17,7 +15,6 @@ export default function PositionsPage() {
     { id: 'positions' as const, name: 'Positions' },
     { id: 'cash' as const, name: 'Cash & Limits' },
     { id: 'strategy' as const, name: 'Strategy Config' },
-    { id: 'dividends' as const, name: 'Dividends' },
   ];
 
   if (!selectedPortfolio) {
@@ -73,7 +70,6 @@ export default function PositionsPage() {
         )}
         {activeTab === 'cash' && <CashConfigForm />}
         {activeTab === 'strategy' && <StrategyConfigForm />}
-        {activeTab === 'dividends' && <DividendsTab />}
       </div>
     </div>
   );
