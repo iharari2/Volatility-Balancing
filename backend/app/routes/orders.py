@@ -68,7 +68,7 @@ def submit_order(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/orders/{order_id}/fill", response_model=FillOrderResponse)
+@router.post("/v1/orders/{order_id}/fill", response_model=FillOrderResponse)
 def fill_order(order_id: str, payload: FillOrderRequest) -> FillOrderResponse:
     uc = ExecuteOrderUC(
         positions=container.positions,
@@ -320,10 +320,68 @@ def list_trades(
     return {"position_id": position_id, "trades": [asdict(t) for t in trades]}
 
 
-@router.get("/orders/{order_id}/trades")
+@router.get("/v1/orders/{order_id}/trades")
 def list_trades_for_order(order_id: str) -> Dict[str, Any]:
     """List trades for a specific order."""
     if not container.orders.get(order_id):
         raise HTTPException(404, detail="order_not_found")
     trades = container.trades.list_for_order(order_id)
     return {"order_id": order_id, "trades": [asdict(t) for t in trades]}
+
+
+@router.post("/v1/orders/{order_id}/cancel")
+def cancel_order(order_id: str) -> Dict[str, Any]:
+    """Cancel an order."""
+    order = container.orders.get(order_id)
+    if not order:
+        raise HTTPException(404, detail="order_not_found")
+
+    # Already in a terminal state
+    if order.status in ("filled", "rejected", "cancelled"):
+        return {
+            "order_id": order.id,
+            "cancelled": False,
+            "status": order.status,
+            "message": f"Order already {order.status}",
+        }
+
+    # No broker submission — cancel locally
+    if not order.broker_order_id:
+        order.status = "cancelled"
+        container.orders.save(order)
+        return {"order_id": order.id, "cancelled": True, "status": "cancelled"}
+
+    # Try to cancel at broker
+    success = container.broker.cancel_order(order.broker_order_id)
+    if success:
+        order.status = "cancelled"
+        container.orders.save(order)
+        return {"order_id": order.id, "cancelled": True, "status": "cancelled"}
+
+    return {
+        "order_id": order.id,
+        "cancelled": False,
+        "message": "Broker could not cancel order",
+    }
+
+
+@router.get("/v1/orders/{order_id}/status")
+def get_order_status(order_id: str) -> Dict[str, Any]:
+    """Get current status of an order."""
+    order = container.orders.get(order_id)
+    if not order:
+        raise HTTPException(404, detail="order_not_found")
+
+    return {
+        "order_id": order.id,
+        "position_id": order.position_id,
+        "side": order.side,
+        "qty": order.qty,
+        "status": order.status,
+        "broker_order_id": order.broker_order_id,
+        "broker_status": order.broker_status,
+        "filled_qty": order.filled_qty,
+        "avg_fill_price": order.avg_fill_price,
+        "total_commission": order.total_commission,
+        "rejection_reason": order.rejection_reason,
+    }

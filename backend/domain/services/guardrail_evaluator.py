@@ -211,14 +211,17 @@ class GuardrailEvaluator:
 
         alloc = stock_val / total_val
 
-        # Strictly enforce guardrails: stock allocation must be within [min_stock_pct, max_stock_pct]
-        # This ensures position trades only occur within the allowed cash/stock percentage bounds
-        if config.min_stock_pct is not None and alloc < config.min_stock_pct:
+        # Enforce guardrails with tolerance for rounding: stock allocation
+        # must be within [min_stock_pct - ε, max_stock_pct + ε].
+        # A small tolerance prevents false rejections when order-qty rounding
+        # puts the post-fill allocation marginally outside the exact boundary.
+        _TOLERANCE = Decimal("0.0001")  # 0.01 %
+        if config.min_stock_pct is not None and alloc < config.min_stock_pct - _TOLERANCE:
             return (
                 False,
                 f"Stock allocation {alloc:.1%} would be below minimum {config.min_stock_pct:.1%} (violates guardrails)",
             )
-        if config.max_stock_pct is not None and alloc > config.max_stock_pct:
+        if config.max_stock_pct is not None and alloc > config.max_stock_pct + _TOLERANCE:
             return (
                 False,
                 f"Stock allocation {alloc:.1%} would exceed maximum {config.max_stock_pct:.1%} (violates guardrails)",

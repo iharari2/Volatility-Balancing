@@ -8,7 +8,7 @@ import pytest
 def order_id(client, tenant_id, portfolio_id, position_id):
     """Create a test order and return its ID."""
     response = client.post(
-        f"/v1/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders",
+        f"/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders",
         json={"side": "BUY", "qty": 10.0},
     )
     assert response.status_code == 200
@@ -21,7 +21,7 @@ class TestOrdersAPI:
     def test_submit_order_success(self, client, tenant_id, portfolio_id, position_id):
         """Test successful order submission."""
         response = client.post(
-            f"/v1/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders",
+            f"/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders",
             json={"side": "BUY", "qty": 10.0},
         )
 
@@ -36,7 +36,7 @@ class TestOrdersAPI:
         idempotency_key = "test_key_123"
 
         response = client.post(
-            f"/v1/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders",
+            f"/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders",
             json={"side": "SELL", "qty": 5.0},
             headers={"Idempotency-Key": idempotency_key},
         )
@@ -49,7 +49,7 @@ class TestOrdersAPI:
     def test_submit_order_invalid_side(self, client, tenant_id, portfolio_id, position_id):
         """Test order submission with invalid side."""
         response = client.post(
-            f"/v1/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders",
+            f"/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders",
             json={"side": "INVALID", "qty": 10.0, "price": 150.0},
         )
 
@@ -81,7 +81,7 @@ class TestOrdersAPI:
         pos_id = positions[0]["id"]
 
         response = client.post(
-            f"/v1/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{pos_id}/orders",
+            f"/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{pos_id}/orders",
             json={"side": "BUY", "qty": -10.0},
         )
 
@@ -133,7 +133,7 @@ class TestOrdersAPI:
 
         # Create a fresh order for this test
         order_response = client.post(
-            f"/v1/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders",
+            f"/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders",
             json={"side": "BUY", "qty": 10.0},
         )
         assert order_response.status_code == 200
@@ -182,7 +182,7 @@ class TestOrdersAPI:
 
         # Create a fresh order for this test
         order_response = client.post(
-            f"/v1/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders",
+            f"/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders",
             json={"side": "BUY", "qty": 10.0},
         )
         assert order_response.status_code == 200
@@ -289,7 +289,7 @@ class TestOrdersAPI:
     def test_list_orders_success(self, client, tenant_id, portfolio_id, position_id, order_id):
         """Test listing orders for a position."""
         response = client.get(
-            f"/v1/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders"
+            f"/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders"
         )
 
         assert response.status_code == 200
@@ -302,7 +302,7 @@ class TestOrdersAPI:
     def test_list_orders_with_limit(self, client, tenant_id, portfolio_id, position_id):
         """Test listing orders with limit."""
         response = client.get(
-            f"/v1/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders?limit=50"
+            f"/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders?limit=50"
         )
 
         assert response.status_code == 200
@@ -313,7 +313,7 @@ class TestOrdersAPI:
     def test_list_orders_position_not_found(self, client, tenant_id, portfolio_id):
         """Test listing orders for non-existent position."""
         response = client.get(
-            f"/v1/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/non_existent_id/orders"
+            f"/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/non_existent_id/orders"
         )
 
         assert response.status_code == 404
@@ -346,7 +346,7 @@ class TestOrdersAPI:
 
         # Submit order
         submit_response = client.post(
-            f"/v1/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{pos_id}/orders",
+            f"/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{pos_id}/orders",
             json={"side": "BUY", "qty": 20.0},
         )
         assert submit_response.status_code == 200
@@ -363,7 +363,7 @@ class TestOrdersAPI:
 
         # List orders
         list_response = client.get(
-            f"/v1/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{pos_id}/orders"
+            f"/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{pos_id}/orders"
         )
         assert list_response.status_code == 200
         orders = list_response.json()["orders"]
@@ -399,7 +399,7 @@ class TestOrdersAPI:
 
         # Submit first order
         response1 = client.post(
-            f"/v1/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{pos_id}/orders",
+            f"/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{pos_id}/orders",
             json={"side": "BUY", "qty": 10.0},
             headers={"Idempotency-Key": "test_key_1"},
         )
@@ -407,7 +407,7 @@ class TestOrdersAPI:
 
         # Submit second order
         response2 = client.post(
-            f"/v1/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{pos_id}/orders",
+            f"/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{pos_id}/orders",
             json={"side": "SELL", "qty": 5.0},
             headers={"Idempotency-Key": "test_key_2"},
         )
@@ -415,7 +415,7 @@ class TestOrdersAPI:
 
         # List orders
         list_response = client.get(
-            f"/v1/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{pos_id}/orders"
+            f"/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{pos_id}/orders"
         )
         assert list_response.status_code == 200
         orders = list_response.json()["orders"]
@@ -447,7 +447,7 @@ class TestOrdersAPI:
 
         # Test with missing required fields
         response = client.post(
-            f"/v1/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{pos_id}/orders",
+            f"/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{pos_id}/orders",
             json={
                 "side": "BUY"
                 # Missing qty

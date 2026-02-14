@@ -440,8 +440,9 @@ class ExecuteOrderUC:
                 # Anchor
                 "anchor_price": fill_price,  # New anchor after trade
                 "anchor_price_before": old_anchor,
+                "anchor_updated": old_anchor != fill_price,
                 # Trigger info (trade was triggered)
-                "trigger_detected": True,
+                "trigger_fired": True,
                 "trigger_direction": order.side,
                 "trigger_reason": f"Order {order.id} filled",
                 # Guardrail (passed since we executed)
@@ -458,6 +459,7 @@ class ExecuteOrderUC:
                 "trade_price": fill_price,
                 "trade_notional": fill_qty * fill_price,
                 "trade_commission": commission,
+                "dividend_applied": False,
             }
 
             record_id = self.evaluation_timeline_repo.save(timeline_row)
