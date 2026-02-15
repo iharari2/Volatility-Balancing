@@ -234,7 +234,7 @@ export default function OrdersTable({ tenantId, portfolioId, positionId }: Order
                         <StatusBadge status={order.status} />
                       </td>
                       <td className="px-4 py-2 font-mono text-xs">
-                        {order.filled_qty > 0
+                        {order.filled_qty != null && order.filled_qty !== 0
                           ? `${formatQty(order.filled_qty)} @ ${formatCurrency(order.avg_fill_price)}`
                           : '-'}
                       </td>
@@ -342,7 +342,7 @@ function OrderHistoryRow({ order }: { order: OrderRow }) {
           <StatusBadge status={order.status} />
         </td>
         <td className="px-4 py-2 font-mono text-xs">
-          {order.filled_qty > 0 ? formatQty(order.filled_qty) : '-'}
+          {order.filled_qty != null && order.filled_qty !== 0 ? formatQty(order.filled_qty) : '-'}
         </td>
         <td className="px-4 py-2 font-mono text-xs">{formatCurrency(order.avg_fill_price)}</td>
         <td className="px-4 py-2 font-mono text-xs">

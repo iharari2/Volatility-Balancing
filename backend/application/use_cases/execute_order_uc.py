@@ -272,6 +272,9 @@ class ExecuteOrderUC:
         # Save position with updated anchor price
         self.positions.save(pos)
 
+        order.filled_qty = q_req              # always positive (abs applied at line 99)
+        order.avg_fill_price = request.price
+        order.total_commission = commission
         order.status = "filled"
         self.orders.save(order)
 

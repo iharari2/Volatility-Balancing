@@ -266,7 +266,7 @@ class BrokerIntegrationService:
             logger.error(f"Error processing synthetic fill for order {order.id}: {e}")
             raise
 
-        order.filled_qty = order.qty
+        order.filled_qty = abs(order.qty)
         order.avg_fill_price = float(price)
         order.total_commission = float(commission)
         order.status = "filled"
