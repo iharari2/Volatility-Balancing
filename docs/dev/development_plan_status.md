@@ -19,7 +19,9 @@
 | 8 | Monitoring & Alerting | `1d0af9d` | Alert system (6 conditions), webhook delivery, enhanced health, structured logging |
 | 9 | Fix Pre-existing Test Failures | `87512d6` | Fixed all 24 pre-existing failures + 3 errors across 5 test files; 118 integration tests passing |
 | 10 | Remove Redundant Audit Trail | `d1ad201` | Deleted 10 files (JSONL logger, event ports, audit route, UI page, docs), cleaned event_logger from orchestrators/services/DI; net -2,383 lines |
-| 11 | Wire Dividends API to UI + Workspace Tab | — | Fixed backend route paths, wired frontend dividendApi with tenant/portfolio params, added Dividends workspace tab, deleted skeleton DividendsTab, fixed naive-vs-aware datetime bug in OrderStatusWorker |
+| 11 | Wire Dividends API to UI + Workspace Tab | `ccadf2e` | Fixed backend route paths, wired frontend dividendApi with tenant/portfolio params, added Dividends workspace tab, deleted skeleton DividendsTab, fixed naive-vs-aware datetime bug in OrderStatusWorker |
+| — | Bug Fix: Order fill persistence | `8ffca72` | Fixed `filled_qty`/`avg_fill_price` not persisted on orders after execution; frontend Orders table now displays fill info correctly |
+| 13 | Monitoring Frontend Dashboard | — | System health cards, alerts table with ack/resolve, webhook config UI, auto-refresh 30s |
 
 **Test suite**: 561 passed (13 skipped), ruff clean, TypeScript clean, frontend builds clean
 
@@ -78,20 +80,31 @@
 
 ---
 
-## Iteration 13: Monitoring Frontend Dashboard
+## Iteration 13: Monitoring Frontend Dashboard — COMPLETE
 
 **Priority**: Medium
 
-**Current State**:
-- Backend monitoring endpoints complete (Iteration 8): `/v1/system/status`, `/v1/alerts`, webhook config
-- No frontend dashboard
+**What was done**:
+- **API layer**: Added `monitoringApi` namespace to `api.ts` with typed methods for system status, alerts (list/acknowledge/resolve), and webhook config (get/set)
+- **React Query hooks**: `useMonitoring.ts` with `useSystemStatus`, `useAlerts`, `useAcknowledgeAlert`, `useResolveAlert`, `useWebhookConfig`, `useSetWebhookConfig` — all with 30s auto-refresh and cache invalidation
+- **SystemHealthCards**: 4-column grid showing overall status (healthy/degraded/unhealthy with color), uptime (formatted d/h/m), worker status (running/stopped/disabled), active alert count
+- **AlertsTable**: Filterable table (All/Active/Acknowledged/Resolved tabs), severity color coding (critical=red, warning=amber), acknowledge/resolve action buttons per row
+- **WebhookConfig**: Current status display, masked URL, update/remove URL actions
+- **MonitoringPage**: Unified page composing all three sections with auto-refresh indicator
+- **Routing**: Added `/monitoring` route in `App.tsx`
+- **Navigation**: Added "Monitoring" entry with Activity icon in sidebar before Settings
 
-**Tasks**:
-- Create system status dashboard page showing component health, uptime, worker status
-- Alert list with acknowledge/resolve actions
-- Webhook configuration UI
-- Auto-refresh with configurable interval
-- Visual indicators for healthy/degraded/unhealthy states
+**Files created** (4):
+- `frontend/src/hooks/useMonitoring.ts`
+- `frontend/src/features/monitoring/MonitoringPage.tsx`
+- `frontend/src/features/monitoring/components/SystemHealthCards.tsx`
+- `frontend/src/features/monitoring/components/AlertsTable.tsx`
+- `frontend/src/features/monitoring/components/WebhookConfig.tsx`
+
+**Files modified** (3):
+- `frontend/src/lib/api.ts` — added `monitoringApi` + types
+- `frontend/src/App.tsx` — added monitoring route
+- `frontend/src/components/layout/Sidebar.tsx` — added nav entry
 
 ---
 

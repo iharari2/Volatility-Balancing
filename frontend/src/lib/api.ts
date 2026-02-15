@@ -508,6 +508,75 @@ export const healthApi = {
   check: () => request<{ status: string; timestamp: string }>('/healthz'),
 };
 
+// Monitoring API Types
+export interface SystemStatusResponse {
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  components: Record<string, string>;
+  uptime_seconds: number;
+  active_alerts: AlertResponse[];
+  active_alert_count: number;
+  worker: {
+    running: boolean;
+    enabled: boolean;
+    interval_seconds: number;
+  };
+  last_evaluation_time: string | null;
+  timestamp: string;
+}
+
+export interface AlertResponse {
+  id: string;
+  condition: string;
+  severity: 'warning' | 'critical';
+  status: 'active' | 'acknowledged' | 'resolved';
+  title: string;
+  detail: string;
+  created_at: string;
+  resolved_at: string | null;
+  acknowledged_at: string | null;
+  metadata?: Record<string, any>;
+}
+
+export interface AlertsListResponse {
+  alerts: AlertResponse[];
+  total: number;
+}
+
+export interface WebhookConfigResponse {
+  configured: boolean;
+  url: string | null;
+}
+
+// Monitoring API
+export const monitoringApi = {
+  getSystemStatus: () =>
+    request<SystemStatusResponse>('/v1/system/status'),
+
+  getAlerts: (status?: 'active' | 'acknowledged' | 'resolved') =>
+    request<AlertsListResponse>(
+      `/v1/alerts${status ? `?status=${status}` : ''}`,
+    ),
+
+  acknowledgeAlert: (id: string) =>
+    request<AlertResponse>(`/v1/alerts/${id}/acknowledge`, {
+      method: 'POST',
+    }),
+
+  resolveAlert: (id: string) =>
+    request<AlertResponse>(`/v1/alerts/${id}/resolve`, {
+      method: 'POST',
+    }),
+
+  getWebhookConfig: () =>
+    request<WebhookConfigResponse>('/v1/alerts/webhook'),
+
+  setWebhookConfig: (url: string | null) =>
+    request<WebhookConfigResponse>('/v1/alerts/webhook', {
+      method: 'PUT',
+      body: JSON.stringify({ url }),
+    }),
+};
+
 // Portfolio API - All methods require tenantId and portfolioId
 export interface CreatePortfolioRequest {
   name: string;
