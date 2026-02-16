@@ -22,6 +22,7 @@ const navigation = [
   { name: 'Portfolios', href: '/portfolios', icon: Briefcase },
   { name: 'Simulation Lab', href: '/simulation', icon: PlaySquare },
   { name: 'Analytics & Reports', href: '/analytics', icon: BarChart3 },
+  { name: 'Optimization', href: '/optimization', icon: FileSearch },
   { name: 'Monitoring', href: '/monitoring', icon: Activity },
   { name: 'Settings', href: '/settings', icon: Cog },
 ];

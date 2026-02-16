@@ -213,8 +213,14 @@ export interface HeatmapRequest {
   metric: OptimizationMetric;
 }
 
+export interface MetricInfo {
+  value: string;
+  name: string;
+  description: string;
+}
+
 export interface MetricsResponse {
-  metrics: OptimizationMetric[];
+  metrics: MetricInfo[];
 }
 
 export interface ParameterTypeInfo {

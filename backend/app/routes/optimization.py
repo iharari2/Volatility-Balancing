@@ -146,6 +146,9 @@ class OptimizationConfigResponse(BaseModel):
     max_combinations: Optional[int]
     batch_size: int
     total_combinations: int
+    parameter_ranges: dict
+    optimization_criteria: dict
+    constraints: list
     created_at: datetime
     updated_at: datetime
 
@@ -164,6 +167,30 @@ class OptimizationConfigResponse(BaseModel):
             max_combinations=config.max_combinations,
             batch_size=config.batch_size,
             total_combinations=config.calculate_total_combinations(),
+            parameter_ranges={
+                name: {
+                    "parameter_type": pr.parameter_type.value,
+                    "min_value": pr.min_value,
+                    "max_value": pr.max_value,
+                    "step_size": pr.step_size,
+                    "name": pr.name,
+                    "description": pr.description,
+                }
+                for name, pr in config.parameter_ranges.items()
+            },
+            optimization_criteria={
+                "primary_metric": config.optimization_criteria.primary_metric.value,
+                "secondary_metrics": [m.value for m in config.optimization_criteria.secondary_metrics],
+                "minimize": config.optimization_criteria.minimize,
+            },
+            constraints=[
+                {
+                    "metric": c.metric.value,
+                    "constraint_type": c.constraint_type.value,
+                    "value": c.value,
+                }
+                for c in config.optimization_criteria.constraints
+            ],
             created_at=config.created_at,
             updated_at=config.updated_at,
         )

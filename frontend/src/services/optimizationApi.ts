@@ -147,8 +147,8 @@ class OptimizationApiService {
     }
 
     const data: MetricsResponse = await response.json();
-    // Return the metrics array directly (already OptimizationMetric[])
-    return data.metrics;
+    // Backend returns {value, name, description} objects — extract enum values
+    return data.metrics.map((m) => m.value as OptimizationMetric);
   }
 
   async getParameterTypes(): Promise<ParameterTypeInfo[]> {

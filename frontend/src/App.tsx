@@ -20,6 +20,7 @@ import TradeCockpitPage from './features/trading/TradeCockpitPage';
 import SimulationLabPage from './features/simulation/SimulationLabPage';
 import AnalyticsPage from './features/analytics/AnalyticsPage';
 import MonitoringPage from './features/monitoring/MonitoringPage';
+import OptimizationPage from './features/optimization/OptimizationPage';
 import SettingsPage from './features/settings/SettingsPage';
 import NotFound from './pages/NotFound';
 
@@ -115,6 +116,14 @@ function App() {
                 element={
                   <PageLayout mode={mode}>
                     <MonitoringPage />
+                  </PageLayout>
+                }
+              />
+              <Route
+                path="/optimization"
+                element={
+                  <PageLayout mode={mode}>
+                    <OptimizationPage />
                   </PageLayout>
                 }
               />

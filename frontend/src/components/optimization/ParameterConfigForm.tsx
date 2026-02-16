@@ -20,6 +20,23 @@ import {
   getParameterCategories,
 } from '../../data/optimizationParameters';
 
+const METRIC_LABELS: Record<string, string> = {
+  total_return: 'Total Return',
+  sharpe_ratio: 'Sharpe Ratio',
+  max_drawdown: 'Max Drawdown',
+  volatility: 'Volatility',
+  calmar_ratio: 'Calmar Ratio',
+  sortino_ratio: 'Sortino Ratio',
+  win_rate: 'Win Rate',
+  profit_factor: 'Profit Factor',
+  trade_count: 'Trade Count',
+  avg_trade_duration: 'Avg Trade Duration',
+};
+
+function formatMetricLabel(metric: string): string {
+  return METRIC_LABELS[metric] || metric.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 interface ParameterConfigFormProps {
   onConfigCreated?: (configId: string) => void;
   onCancel?: () => void;
@@ -40,7 +57,7 @@ export const ParameterConfigForm: React.FC<ParameterConfigFormProps> = ({
     parameter_ranges: {},
     optimization_criteria: {
       primary_metric: OptimizationMetric.TOTAL_RETURN,
-      secondary_metrics: [],
+      secondary_metrics: [OptimizationMetric.SHARPE_RATIO],
       minimize: false,
     },
     constraints: [],
@@ -55,6 +72,7 @@ export const ParameterConfigForm: React.FC<ParameterConfigFormProps> = ({
   const [parameterCategories] = useState<string[]>(getParameterCategories());
   const [metricWeights, setMetricWeights] = useState<Record<string, number>>({
     [OptimizationMetric.TOTAL_RETURN]: 1.0,
+    [OptimizationMetric.SHARPE_RATIO]: 0.5,
   });
 
   // Get available secondary metrics (excluding primary metric)
@@ -494,7 +512,7 @@ export const ParameterConfigForm: React.FC<ParameterConfigFormProps> = ({
               >
                 {availableMetrics.map((metric, index) => (
                   <option key={`${metric}-${index}`} value={metric}>
-                    {metric.toString()}
+                    {formatMetricLabel(metric)}
                   </option>
                 ))}
               </select>
@@ -523,16 +541,18 @@ export const ParameterConfigForm: React.FC<ParameterConfigFormProps> = ({
           {/* Secondary Metrics */}
           <div className="mt-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Secondary Metrics (Optional)
+              Secondary Metrics <span className="text-red-500">*</span>
+              <span className="text-xs text-gray-400 ml-1">(at least one required)</span>
             </label>
             <div className="space-y-2">
               {formData.optimization_criteria.secondary_metrics.map((metric, index) => (
                 <div key={index} className="flex items-center space-x-2">
                   <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
-                    {metric.toString()}
+                    {formatMetricLabel(metric)}
                   </span>
                   <button
                     type="button"
+                    disabled={formData.optimization_criteria.secondary_metrics.length <= 1}
                     onClick={() => {
                       setFormData((prev) => {
                         const newFormData = {
@@ -555,7 +575,7 @@ export const ParameterConfigForm: React.FC<ParameterConfigFormProps> = ({
                         return newFormData;
                       });
                     }}
-                    className="text-red-600 hover:text-red-800 text-sm"
+                    className="text-red-600 hover:text-red-800 text-sm disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     Remove
                   </button>
@@ -598,7 +618,7 @@ export const ParameterConfigForm: React.FC<ParameterConfigFormProps> = ({
                 <option value="">Add secondary metric...</option>
                 {getAvailableSecondaryMetrics().map((metric, index) => (
                   <option key={`${metric}-${index}`} value={metric}>
-                    {metric.toString()}
+                    {formatMetricLabel(metric)}
                   </option>
                 ))}
               </select>
@@ -615,11 +635,11 @@ export const ParameterConfigForm: React.FC<ParameterConfigFormProps> = ({
                     <label className="block text-sm font-medium text-gray-700">
                       {metric === formData.optimization_criteria.primary_metric ? (
                         <span>
-                          {metric.toString()} <span className="text-blue-600">(Primary)</span>
+                          {formatMetricLabel(metric)} <span className="text-blue-600">(Primary)</span>
                         </span>
                       ) : (
                         <span>
-                          {metric.toString()} <span className="text-gray-500">(Secondary)</span>
+                          {formatMetricLabel(metric)} <span className="text-gray-500">(Secondary)</span>
                         </span>
                       )}
                     </label>
@@ -692,7 +712,7 @@ export const ParameterConfigForm: React.FC<ParameterConfigFormProps> = ({
                     >
                       {availableMetrics.map((metric, index) => (
                         <option key={`constraint-${metric}-${index}`} value={metric}>
-                          {metric.toString()}
+                          {formatMetricLabel(metric)}
                         </option>
                       ))}
                     </select>

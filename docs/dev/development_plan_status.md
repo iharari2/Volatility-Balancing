@@ -21,7 +21,8 @@
 | 10 | Remove Redundant Audit Trail | `d1ad201` | Deleted 10 files (JSONL logger, event ports, audit route, UI page, docs), cleaned event_logger from orchestrators/services/DI; net -2,383 lines |
 | 11 | Wire Dividends API to UI + Workspace Tab | `ccadf2e` | Fixed backend route paths, wired frontend dividendApi with tenant/portfolio params, added Dividends workspace tab, deleted skeleton DividendsTab, fixed naive-vs-aware datetime bug in OrderStatusWorker |
 | — | Bug Fix: Order fill persistence | `8ffca72` | Fixed `filled_qty`/`avg_fill_price` not persisted on orders after execution; frontend Orders table now displays fill info correctly |
-| 13 | Monitoring Frontend Dashboard | — | System health cards, alerts table with ack/resolve, webhook config UI, auto-refresh 30s |
+| 12 | Optimization & Heatmap Page | — | Optimization page composing existing components, route + nav entry |
+| 13 | Monitoring Frontend Dashboard | `1fd6dcb` | System health cards, alerts table with ack/resolve, webhook config UI, auto-refresh 30s |
 
 **Test suite**: 561 passed (13 skipped), ruff clean, TypeScript clean, frontend builds clean
 
@@ -63,20 +64,28 @@
 
 ---
 
-## Iteration 12: Heatmap Visualization
+## Iteration 12: Optimization & Heatmap Page — COMPLETE
 
 **Priority**: Medium
 
-**Current State**:
-- Backend heatmap data structures and API endpoints exist (70% complete)
-- No frontend visualization component
+**What was done**:
+- **OptimizationPage**: Created main page at `features/optimization/OptimizationPage.tsx` composing all existing optimization components (ParameterConfigForm, OptimizationResults, OptimizationProgress, HeatMapVisualization)
+- **Config list view**: Loads configs on mount via `optimizationApi.getAllConfigs()`, displays card list with name, ticker, status badge, date range, parameter count, combination count
+- **Config actions**: "Start" button for PENDING/FAILED configs, "Results" and "Heatmap" buttons for COMPLETED configs
+- **Create flow**: "New Config" button opens inline ParameterConfigForm with cancel support
+- **Results view**: Renders OptimizationResults table with data from context
+- **Heatmap view**: Renders HeatMapVisualization with configId and available parameters derived from config's parameter_ranges
+- **Progress display**: Running optimizations show OptimizationProgress inline at top of page
+- **Routing**: Added `/optimization` route in App.tsx with PageLayout wrapper
+- **Navigation**: Added "Optimization" entry with FileSearch icon in sidebar before Monitoring
 
-**Tasks**:
-- Create interactive heatmap visualization component (e.g., D3.js or recharts)
-- Wire to existing `/v1/optimization/configs/{id}/heatmap` endpoint
-- Parameter sensitivity display with color-coded cells
-- Hover tooltips showing metric values
-- Axis labels for parameter ranges
+**Files created** (1):
+- `frontend/src/features/optimization/OptimizationPage.tsx`
+
+**Files modified** (3):
+- `frontend/src/App.tsx` — added import + route
+- `frontend/src/components/layout/Sidebar.tsx` — added nav entry
+- `docs/dev/development_plan_status.md` — marked iteration 12 complete
 
 ---
 
