@@ -40,6 +40,9 @@ class OptimizationConfig:
     description: Optional[str] = None
     max_combinations: Optional[int] = None
     batch_size: int = 10
+    initial_cash: float = 10000.0
+    intraday_interval_minutes: int = 30
+    include_after_hours: bool = False
 
     def __post_init__(self):
         """Validate the configuration after initialization."""
@@ -97,6 +100,9 @@ class OptimizationConfig:
         description: Optional[str] = None,
         max_combinations: Optional[int] = None,
         batch_size: int = 10,
+        initial_cash: float = 10000.0,
+        intraday_interval_minutes: int = 30,
+        include_after_hours: bool = False,
     ) -> "OptimizationConfig":
         """Create a new optimization configuration."""
         now = datetime.now(timezone.utc)
@@ -116,4 +122,7 @@ class OptimizationConfig:
             description=description,
             max_combinations=max_combinations,
             batch_size=batch_size,
+            initial_cash=initial_cash,
+            intraday_interval_minutes=intraday_interval_minutes,
+            include_after_hours=include_after_hours,
         )

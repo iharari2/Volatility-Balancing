@@ -64,6 +64,7 @@ export enum OptimizationMetric {
 }
 
 export enum OptimizationStatus {
+  DRAFT = 'draft',
   PENDING = 'pending',
   RUNNING = 'running',
   COMPLETED = 'completed',
@@ -147,6 +148,9 @@ export interface CreateConfigRequest {
   parameter_ranges: Record<string, ParameterRangeRequest>;
   optimization_criteria: OptimizationCriteriaRequest;
   constraints: ConstraintRequest[];
+  initial_cash?: number;
+  intraday_interval_minutes?: number;
+  include_after_hours?: boolean;
 }
 
 export interface ParameterRangeRequest {
@@ -183,6 +187,9 @@ export interface ConfigResponse {
   total_combinations: number;
   created_at: string;
   updated_at: string;
+  initial_cash: number;
+  intraday_interval_minutes: number;
+  include_after_hours: boolean;
 }
 
 export interface StartResponse {

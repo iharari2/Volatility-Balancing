@@ -317,11 +317,24 @@ class _Container:
         self.portfolio_cash_repo = _DummyPortfolioCashRepo()
 
         # Initialize use cases (after repos and events/idempotency are set)
+        # Initialize simulation use case first (needed by optimization UC)
+        from application.use_cases.simulation_unified_uc import SimulationUnifiedUC
+
+        self.simulation_uc = SimulationUnifiedUC(
+            market_data=self.market_data,
+            positions=self.positions,
+            events=self.events,
+            clock=self.clock,
+            dividend_market_data=self.dividend_market_data,
+            simulation_repo=self.simulation,
+            evaluation_timeline_repo=None,  # Will be set after timeline init
+        )
+
         self.parameter_optimization_uc = ParameterOptimizationUC(
             config_repo=self.optimization_config,
             result_repo=self.optimization_result,
             heatmap_repo=self.heatmap_data,
-            simulation_repo=self.simulation,
+            simulation_uc=self.simulation_uc,
         )
 
         self.evaluate_position_uc = EvaluatePositionUC(
@@ -335,18 +348,8 @@ class _Container:
             orders_repo=self.orders,
         )
 
-        # Initialize simulation use case
-        from application.use_cases.simulation_unified_uc import SimulationUnifiedUC
-
-        self.simulation_uc = SimulationUnifiedUC(
-            market_data=self.market_data,
-            positions=self.positions,
-            events=self.events,
-            clock=self.clock,
-            dividend_market_data=self.dividend_market_data,
-            simulation_repo=self.simulation,
-            evaluation_timeline_repo=self.evaluation_timeline,
-        )
+        # Update simulation UC with evaluation timeline now that it's initialized
+        self.simulation_uc.evaluation_timeline_repo = self.evaluation_timeline
 
         # --- New Clean Architecture: Adapters and Orchestrators ---
         # Create adapters

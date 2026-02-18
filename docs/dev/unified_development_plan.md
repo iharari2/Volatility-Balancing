@@ -1,7 +1,7 @@
 ---
 owner: Development Team
 status: active
-last_updated: 2025-09-20
+last_updated: 2026-02-18
 related:
   - [
       '../product/volatility_trading_spec_v1.md',
@@ -24,12 +24,16 @@ We have successfully completed Phase 1 of the development plan, delivering a ful
 
 - **Complete API**: 8 REST endpoints for optimization management
 - **Database Integration**: Full SQLAlchemy schema with optimization tables
-- **Mock Simulation**: Realistic parameter-based metrics generation
+- **Real Simulation**: Each parameter combination runs the full trading algorithm via `SimulationUnifiedUC.run_simulation_with_data()` with lightweight mode
+- **Market Data Prefetch**: Historical data fetched once and reused across all combinations
+- **10 Real Metrics**: TOTAL_RETURN, SHARPE_RATIO, MAX_DRAWDOWN, VOLATILITY, TRADE_COUNT, CALMAR_RATIO, SORTINO_RATIO, WIN_RATE, PROFIT_FACTOR, AVG_TRADE_DURATION
+- **Non-Blocking Execution**: Background thread pool with progress polling
+- **Configurable Resolution**: Initial cash, intraday interval (5/15/30/60 min), after-hours toggle
 - **Heatmap Visualization**: Multi-dimensional parameter analysis
 - **Progress Tracking**: Real-time optimization monitoring
-- **Frontend Integration**: React error fixes and null safety
+- **Frontend Integration**: Simulation settings form, React error fixes and null safety
 
-**Demo Results**: Successfully processed 20 parameter combinations with realistic Sharpe ratios, returns, and drawdowns. The system is production-ready and can be extended with real simulation processing.
+**Status**: Fully operational with real simulation engine. Parameter combinations produce meaningful, varying metrics based on actual algorithm behavior against historical data.
 
 ## Current State: Phase 1 Complete ✅
 
@@ -89,9 +93,9 @@ We have successfully completed Phase 1 of the development plan, delivering a ful
 | Simulation                  | 100% ✅    |
 | Excel Export                | 100% ✅    |
 | Refresh Configuration       | 100% ✅    |
-| Optimization Infrastructure | 70% 🟡     |
+| Optimization Infrastructure | 100% ✅    |
 | Event Tracking              | 10% ❌     |
-| Heat Map Visualization      | 30% ❌     |
+| Heat Map Visualization      | 100% ✅    |
 | Real-time Data UI           | 20% ⏸️ (Low Priority) |
 
 ---
@@ -133,11 +137,12 @@ We have successfully completed Phase 1 of the development plan, delivering a ful
 
 ### **✅ Success Criteria for Phase 1 - ACHIEVED**
 
-- **✅ Algorithm Performance**: Mock simulation provides realistic performance metrics
-- **✅ Parameter Combinations**: Support for unlimited parameter combinations (tested with 20-50)
-- **✅ Completion Time**: <1 minute for standard parameter sweeps (20 combinations)
-- **✅ Optimization Rate**: 100% completion rate with mock processing
+- **✅ Algorithm Performance**: Real simulation engine produces actual performance metrics per combination
+- **✅ Parameter Combinations**: Support for unlimited parameter combinations with market data prefetch
+- **✅ Completion Time**: Background execution with per-combination progress tracking
+- **✅ Optimization Rate**: Combination-level error isolation — individual failures don't abort the run
 - **✅ Export Functionality**: Complete API for data export and heatmap generation
+- **✅ Configurable Resolution**: Initial cash, intraday interval, after-hours support
 
 ---
 

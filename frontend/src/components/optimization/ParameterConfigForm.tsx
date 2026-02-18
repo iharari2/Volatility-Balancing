@@ -74,6 +74,10 @@ export const ParameterConfigForm: React.FC<ParameterConfigFormProps> = ({
     [OptimizationMetric.TOTAL_RETURN]: 1.0,
     [OptimizationMetric.SHARPE_RATIO]: 0.5,
   });
+  const [simSettingsOpen, setSimSettingsOpen] = useState(false);
+  const [initialCash, setInitialCash] = useState(10000);
+  const [intradayInterval, setIntradayInterval] = useState(30);
+  const [includeAfterHours, setIncludeAfterHours] = useState(false);
 
   // Get available secondary metrics (excluding primary metric)
   const getAvailableSecondaryMetrics = () => {
@@ -249,6 +253,9 @@ export const ParameterConfigForm: React.FC<ParameterConfigFormProps> = ({
         description: `Optimization for ${formData.ticker}`,
         max_combinations: 1000, // Default limit
         batch_size: 10,
+        initial_cash: initialCash,
+        intraday_interval_minutes: intradayInterval,
+        include_after_hours: includeAfterHours,
       };
 
       const config = await createConfig(configData as any);
@@ -317,6 +324,63 @@ export const ParameterConfigForm: React.FC<ParameterConfigFormProps> = ({
               required
             />
           </div>
+        </div>
+
+        {/* Simulation Settings (collapsible) */}
+        <div className="border border-gray-200 rounded-lg">
+          <button
+            type="button"
+            onClick={() => setSimSettingsOpen(!simSettingsOpen)}
+            className="w-full flex justify-between items-center px-4 py-3 text-left"
+          >
+            <h3 className="text-lg font-semibold text-gray-900">Simulation Settings</h3>
+            <span className="text-gray-500">{simSettingsOpen ? '\u25B2' : '\u25BC'}</span>
+          </button>
+          {simSettingsOpen && (
+            <div className="px-4 pb-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Initial Cash ($)
+                </label>
+                <input
+                  type="number"
+                  value={initialCash}
+                  onChange={(e) => setInitialCash(parseFloat(e.target.value) || 10000)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min={100}
+                  step={1000}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Data Resolution
+                </label>
+                <select
+                  value={intradayInterval}
+                  onChange={(e) => setIntradayInterval(parseInt(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value={5}>5 minutes</option>
+                  <option value={15}>15 minutes</option>
+                  <option value={30}>30 minutes (default)</option>
+                  <option value={60}>60 minutes</option>
+                </select>
+              </div>
+
+              <div className="flex items-end">
+                <label className="flex items-center space-x-2 pb-2">
+                  <input
+                    type="checkbox"
+                    checked={includeAfterHours}
+                    onChange={(e) => setIncludeAfterHours(e.target.checked)}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Include After-Hours</span>
+                </label>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Parameter Ranges */}

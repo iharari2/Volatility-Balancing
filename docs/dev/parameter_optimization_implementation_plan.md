@@ -1,7 +1,7 @@
 ---
 owner: Development Team
 status: completed
-last_updated: 2025-09-20
+last_updated: 2026-02-18
 related:
   ['../product/parameter_optimization_prd.md', '../architecture/parameter_optimization_arch.md']
 ---
@@ -19,6 +19,18 @@ This document outlines the detailed implementation plan for the Parameter Optimi
 ## 🎉 **Implementation Status: COMPLETE**
 
 The Parameter Optimization System has been successfully implemented and is fully functional. All planned features have been delivered and tested.
+
+### February 2026 Update: Real Simulation Engine Wired
+
+The optimization system was upgraded from mock/random metrics to **real simulation execution**:
+- Each parameter combination runs the full trading algorithm via `SimulationUnifiedUC.run_simulation_with_data()`
+- Market data (price + dividends) is fetched once and reused across all combinations
+- `lightweight=True` mode skips heavy collections (time_series, trigger_analysis, debug) for performance
+- 10 real metrics computed: TOTAL_RETURN, SHARPE_RATIO, MAX_DRAWDOWN, VOLATILITY, TRADE_COUNT, CALMAR_RATIO, SORTINO_RATIO, WIN_RATE, PROFIT_FACTOR, AVG_TRADE_DURATION
+- Non-blocking `/start` endpoint (ThreadPoolExecutor), existing progress polling works unchanged
+- Configurable simulation settings: initial_cash, intraday_interval_minutes (5/15/30/60), include_after_hours
+- Combination-level error isolation: individual failures don't abort the entire optimization run
+- See `docs/optimization_metrics.md` for metric formulas and interpretation
 
 ## 2. Current System Analysis
 

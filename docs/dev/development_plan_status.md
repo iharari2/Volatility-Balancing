@@ -1,6 +1,6 @@
 # Development Plan Status
 
-**Last Updated**: February 15, 2026
+**Last Updated**: February 18, 2026
 **Project**: Volatility Balancing System
 
 ---
@@ -23,6 +23,7 @@
 | — | Bug Fix: Order fill persistence | `8ffca72` | Fixed `filled_qty`/`avg_fill_price` not persisted on orders after execution; frontend Orders table now displays fill info correctly |
 | 12 | Optimization & Heatmap Page | — | Optimization page composing existing components, route + nav entry |
 | 13 | Monitoring Frontend Dashboard | `1fd6dcb` | System health cards, alerts table with ack/resolve, webhook config UI, auto-refresh 30s |
+| 14 | Wire Optimization to Real Simulation | — | Replaced mock metrics with real SimulationUnifiedUC runs; prefetch market data once, lightweight mode, 10 real metrics, non-blocking start endpoint, configurable resolution/cash/after-hours |
 
 **Test suite**: 561 passed (13 skipped), ruff clean, TypeScript clean, frontend builds clean
 
@@ -117,7 +118,39 @@
 
 ---
 
-## Iteration 14: CI/CD Pipeline
+## Iteration 14: Wire Optimization to Real Simulation Engine — COMPLETE
+
+**Priority**: High
+
+**What was done**:
+- **Real simulation engine**: Replaced all mock/random metric generation in `_process_parameter_combinations` with calls to `SimulationUnifiedUC.run_simulation_with_data()`
+- **Data prefetch**: New `_prefetch_market_data()` fetches historical price data and dividends once for the entire date range, reused across all parameter combinations
+- **Lightweight mode**: New `run_simulation_with_data()` method on `SimulationUnifiedUC` accepts pre-fetched data and `lightweight=True` flag to skip time_series_data, trigger_analysis, price_data, debug info, and repo persistence — dramatically reduces memory/CPU per combination
+- **Real metrics**: `_map_simulation_result_to_metrics()` computes 10 metrics from real simulation results: TOTAL_RETURN, SHARPE_RATIO, MAX_DRAWDOWN, VOLATILITY, TRADE_COUNT, CALMAR_RATIO, SORTINO_RATIO, WIN_RATE, PROFIT_FACTOR, AVG_TRADE_DURATION
+- **Non-blocking start**: `/start` endpoint uses `ThreadPoolExecutor` to run optimization in background, returns immediately with `{"status": "running"}`; existing progress polling works as-is
+- **Simulation config**: Added `initial_cash`, `intraday_interval_minutes`, `include_after_hours` fields through the full stack (entity → UC → API model → frontend form)
+- **Frontend**: Collapsible "Simulation Settings" section in ParameterConfigForm with Initial Cash, Data Resolution dropdown (5/15/30/60 min), Include After-Hours checkbox
+- **Error handling**: Combination-level try/except (marks individual results FAILED, continues); config-level try/except (marks entire config FAILED on unrecoverable errors like data fetch failure)
+- **Documentation**: Created `docs/optimization_metrics.md` with metric formulas, units, interpretation, data resolution impact
+
+**Files modified** (7):
+- `backend/domain/entities/optimization_config.py` — simulation config fields
+- `backend/application/use_cases/parameter_optimization_uc.py` — core rewrite (inject sim UC, real processing, metric mapping)
+- `backend/application/use_cases/simulation_unified_uc.py` — `run_simulation_with_data()` + lightweight mode
+- `backend/app/di.py` — wire SimulationUnifiedUC into ParameterOptimizationUC
+- `backend/app/routes/optimization.py` — background execution + new config fields in API models
+- `frontend/src/types/optimization.ts` — new config fields
+- `frontend/src/components/optimization/ParameterConfigForm.tsx` — simulation settings section
+
+**Files created** (1):
+- `docs/optimization_metrics.md` — metric documentation
+
+**Tests updated** (1):
+- `backend/tests/unit/application/test_parameter_optimization_uc.py` — updated for new `simulation_uc` parameter
+
+---
+
+## Iteration 15: CI/CD Pipeline
 
 **Priority**: High
 
@@ -135,7 +168,7 @@
 
 ---
 
-## Iteration 15: Broker Integration (Alpaca)
+## Iteration 16: Broker Integration (Alpaca)
 
 **Priority**: High
 **Ref**: PRD Goal #7

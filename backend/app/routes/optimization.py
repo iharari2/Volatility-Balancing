@@ -5,6 +5,8 @@
 from typing import List, Optional
 from uuid import UUID
 from datetime import datetime
+import concurrent.futures
+import traceback
 
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
@@ -14,7 +16,7 @@ from application.use_cases.parameter_optimization_uc import (
     CreateOptimizationRequest,
     OptimizationProgress,
 )
-from domain.entities.optimization_config import OptimizationConfig
+from domain.entities.optimization_config import OptimizationConfig, OptimizationStatus
 from domain.entities.optimization_result import OptimizationResult
 from domain.value_objects.parameter_range import ParameterRange, ParameterType
 from domain.value_objects.optimization_criteria import (
@@ -26,6 +28,9 @@ from domain.value_objects.optimization_criteria import (
 from app.di import get_parameter_optimization_uc
 
 router = APIRouter(prefix="/v1/optimization", tags=["optimization"])
+
+# Thread pool for background optimization runs
+_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
 
 
 # Pydantic models for API requests/responses
@@ -110,6 +115,9 @@ class CreateOptimizationRequestModel(BaseModel):
     description: Optional[str] = None
     max_combinations: Optional[int] = None
     batch_size: int = 10
+    initial_cash: float = 10000.0
+    intraday_interval_minutes: int = 30
+    include_after_hours: bool = False
 
     def to_domain(self) -> CreateOptimizationRequest:
         """Convert to domain object."""
@@ -129,6 +137,9 @@ class CreateOptimizationRequestModel(BaseModel):
             description=self.description,
             max_combinations=self.max_combinations,
             batch_size=self.batch_size,
+            initial_cash=self.initial_cash,
+            intraday_interval_minutes=self.intraday_interval_minutes,
+            include_after_hours=self.include_after_hours,
         )
 
 
@@ -151,6 +162,9 @@ class OptimizationConfigResponse(BaseModel):
     constraints: list
     created_at: datetime
     updated_at: datetime
+    initial_cash: float
+    intraday_interval_minutes: int
+    include_after_hours: bool
 
     @classmethod
     def from_domain(cls, config: OptimizationConfig) -> "OptimizationConfigResponse":
@@ -193,6 +207,9 @@ class OptimizationConfigResponse(BaseModel):
             ],
             created_at=config.created_at,
             updated_at=config.updated_at,
+            initial_cash=config.initial_cash,
+            intraday_interval_minutes=config.intraday_interval_minutes,
+            include_after_hours=config.include_after_hours,
         )
 
 
@@ -301,7 +318,7 @@ async def get_optimization_config(
         config_uuid = UUID(config_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid config ID format")
-    
+
     try:
         config = optimization_uc.config_repo.get_by_id(config_uuid)
         if not config:
@@ -313,25 +330,50 @@ async def get_optimization_config(
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
+def _run_optimization_background(optimization_uc: ParameterOptimizationUC, config_id: UUID):
+    """Run optimization in background thread."""
+    try:
+        optimization_uc.run_optimization(config_id)
+    except Exception as e:
+        print(f"[Optimization] Background run failed: {e}")
+        traceback.print_exc()
+        # Try to mark as failed
+        try:
+            optimization_uc.config_repo.update_status(config_id, OptimizationStatus.FAILED.value)
+        except Exception:
+            pass
+
+
 @router.post("/configs/{config_id}/start")
 async def start_optimization(
     config_id: str,
     optimization_uc: ParameterOptimizationUC = Depends(get_parameter_optimization_uc),
 ):
-    """Start an optimization run."""
+    """Start an optimization run (non-blocking)."""
     try:
         config_uuid = UUID(config_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid config ID format")
-    
+
     try:
-        # Check if config exists first
+        # Check if config exists and can start
         config = optimization_uc.config_repo.get_by_id(config_uuid)
         if not config:
             raise HTTPException(status_code=404, detail="Optimization config not found")
-        
-        optimization_uc.run_optimization(config_uuid)
-        return {"message": "Optimization started successfully"}
+        if not config.can_start():
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot start optimization in status: {config.status.value}",
+            )
+
+        # Submit to background thread pool
+        _executor.submit(_run_optimization_background, optimization_uc, config_uuid)
+
+        return {
+            "status": "running",
+            "config_id": config_id,
+            "message": "Optimization started in background",
+        }
     except HTTPException:
         raise
     except ValueError as e:

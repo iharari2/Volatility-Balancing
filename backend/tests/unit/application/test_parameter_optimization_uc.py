@@ -120,13 +120,13 @@ class TestParameterOptimizationUC:
         self.mock_config_repo = Mock()
         self.mock_result_repo = Mock()
         self.mock_heatmap_repo = Mock()
-        self.mock_simulation_service = Mock()
+        self.mock_simulation_uc = Mock()
 
         self.uc = ParameterOptimizationUC(
             config_repo=self.mock_config_repo,
             result_repo=self.mock_result_repo,
             heatmap_repo=self.mock_heatmap_repo,
-            simulation_repo=self.mock_simulation_service,
+            simulation_uc=self.mock_simulation_uc,
         )
 
     def test_create_optimization_config(self):
@@ -152,15 +152,49 @@ class TestParameterOptimizationUC:
 
     def test_run_optimization(self):
         """Test running an optimization."""
+        from unittest.mock import patch
+
         # Setup
         config_id = uuid4()
         config = self._create_test_config()
         config.status = OptimizationStatus.DRAFT
         self.mock_config_repo.get_by_id.return_value = config
-        self.mock_result_repo.get_by_config.return_value = []
 
-        # Execute
-        self.uc.run_optimization(config_id)
+        # Mock simulation result
+        sim_result = Mock()
+        sim_result.algorithm_return_pct = 10.0
+        sim_result.algorithm_sharpe_ratio = 1.5
+        sim_result.algorithm_max_drawdown = 5.0
+        sim_result.algorithm_volatility = 0.15
+        sim_result.algorithm_trades = 10
+        sim_result.total_trading_days = 252
+        sim_result.daily_returns = [{"return": 0.001}] * 252
+        sim_result.trade_log = [{"commission": 0.5}] * 10
+        self.mock_simulation_uc.run_simulation_with_data.return_value = sim_result
+
+        # Track saved results so get_by_config can return them
+        pending_results = []
+
+        def track_save(result):
+            # Replace existing result with same combination_id, or add new
+            for i, r in enumerate(pending_results):
+                if r.parameter_combination.combination_id == result.parameter_combination.combination_id:
+                    pending_results[i] = result
+                    return
+            pending_results.append(result)
+
+        self.mock_result_repo.save_result.side_effect = track_save
+        self.mock_result_repo.get_by_config.side_effect = lambda cid: list(pending_results)
+
+        # Mock _prefetch_market_data to avoid real market data fetch
+        mock_historical = [Mock()]
+        mock_sim_data = Mock()
+        mock_sim_data.price_data = [Mock()]
+        with patch.object(
+            self.uc, '_prefetch_market_data',
+            return_value=(mock_historical, mock_sim_data, [])
+        ):
+            self.uc.run_optimization(config_id)
 
         # Verify
         # Should be called twice: once for running, once for completed

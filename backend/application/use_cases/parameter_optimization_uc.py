@@ -2,9 +2,11 @@
 # backend/application/use_cases/parameter_optimization_uc.py
 # =========================
 
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any, TYPE_CHECKING
 from uuid import UUID, uuid4
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+import statistics
+import traceback
 
 from domain.entities.optimization_config import OptimizationConfig, OptimizationStatus
 from domain.entities.optimization_result import (
@@ -17,10 +19,12 @@ from domain.ports.optimization_repo import (
     OptimizationResultRepo,
     HeatmapDataRepo,
 )
-from domain.ports.simulation_repo import SimulationRepo
 from domain.value_objects.parameter_range import ParameterRange
 from domain.value_objects.optimization_criteria import OptimizationCriteria, OptimizationMetric
 from domain.value_objects.heatmap_data import HeatmapData, HeatmapCell, HeatmapMetric
+
+if TYPE_CHECKING:
+    from application.use_cases.simulation_unified_uc import SimulationUnifiedUC
 
 
 class CreateOptimizationRequest:
@@ -38,6 +42,9 @@ class CreateOptimizationRequest:
         description: Optional[str] = None,
         max_combinations: Optional[int] = None,
         batch_size: int = 10,
+        initial_cash: float = 10000.0,
+        intraday_interval_minutes: int = 30,
+        include_after_hours: bool = False,
     ):
         self.name = name
         self.ticker = ticker
@@ -49,6 +56,9 @@ class CreateOptimizationRequest:
         self.description = description
         self.max_combinations = max_combinations
         self.batch_size = batch_size
+        self.initial_cash = initial_cash
+        self.intraday_interval_minutes = intraday_interval_minutes
+        self.include_after_hours = include_after_hours
 
 
 class OptimizationProgress:
@@ -95,12 +105,12 @@ class ParameterOptimizationUC:
         config_repo: OptimizationConfigRepo,
         result_repo: OptimizationResultRepo,
         heatmap_repo: HeatmapDataRepo,
-        simulation_repo: SimulationRepo,
+        simulation_uc: "SimulationUnifiedUC",
     ):
         self.config_repo = config_repo
         self.result_repo = result_repo
         self.heatmap_repo = heatmap_repo
-        self.simulation_repo = simulation_repo
+        self.simulation_uc = simulation_uc
 
     def create_optimization_config(self, request: CreateOptimizationRequest) -> OptimizationConfig:
         """Create a new optimization configuration."""
@@ -119,6 +129,9 @@ class ParameterOptimizationUC:
             description=request.description,
             max_combinations=request.max_combinations,
             batch_size=request.batch_size,
+            initial_cash=request.initial_cash,
+            intraday_interval_minutes=request.intraday_interval_minutes,
+            include_after_hours=request.include_after_hours,
         )
 
         # Save the configuration
@@ -139,22 +152,28 @@ class ParameterOptimizationUC:
         config.update_status(OptimizationStatus.RUNNING)
         self.config_repo.update_status(config_id, config.status.value)
 
-        # Generate parameter combinations
-        combinations = self._generate_parameter_combinations(config)
+        try:
+            # Generate parameter combinations
+            combinations = self._generate_parameter_combinations(config)
 
-        # Create initial results for each combination
-        for combination in combinations:
-            result = OptimizationResult(
-                id=uuid4(),
-                config_id=config_id,
-                parameter_combination=combination,
-                metrics={},
-                status=OptimizationResultStatus.PENDING,
-            )
-            self.result_repo.save_result(result)
+            # Create initial results for each combination
+            for combination in combinations:
+                result = OptimizationResult(
+                    id=uuid4(),
+                    config_id=config_id,
+                    parameter_combination=combination,
+                    metrics={},
+                    status=OptimizationResultStatus.PENDING,
+                )
+                self.result_repo.save_result(result)
 
-        # Process each combination with mock simulation
-        self._process_parameter_combinations(config, combinations)
+            # Process each combination with real simulation
+            self._process_parameter_combinations(config, combinations)
+        except Exception as e:
+            print(f"Optimization failed: {e}")
+            traceback.print_exc()
+            config.update_status(OptimizationStatus.FAILED)
+            self.config_repo.update_status(config_id, config.status.value)
 
     def get_optimization_progress(self, config_id: UUID) -> OptimizationProgress:
         """Get the current progress of an optimization."""
@@ -306,57 +325,176 @@ class ParameterOptimizationUC:
 
         return combinations
 
+    def _prefetch_market_data(self, config: OptimizationConfig):
+        """Fetch historical price data and dividends once for the entire date range."""
+        from infrastructure.market.market_data_storage import MarketDataStorage
+
+        start_date = config.start_date
+        end_date = config.end_date
+
+        # Ensure timezone-aware
+        if start_date.tzinfo is None:
+            start_date = start_date.replace(tzinfo=timezone.utc)
+        if end_date.tzinfo is None:
+            end_date = end_date.replace(tzinfo=timezone.utc)
+
+        fetch_start = start_date - timedelta(days=1)
+        fetch_end = end_date + timedelta(days=1)
+
+        # Cap at current time
+        now = datetime.now(timezone.utc)
+        if fetch_end > now:
+            fetch_end = now
+
+        print(f"[Optimization] Fetching historical data for {config.ticker} "
+              f"from {fetch_start} to {fetch_end}")
+        historical_data = self.simulation_uc.market_data.fetch_historical_data(
+            config.ticker, fetch_start, fetch_end, config.intraday_interval_minutes
+        )
+
+        if not historical_data:
+            raise ValueError(
+                f"No historical data available for {config.ticker} "
+                f"from {fetch_start} to {fetch_end}"
+            )
+
+        # Build MarketDataStorage and sim_data
+        market_storage = MarketDataStorage()
+        for price_data in historical_data:
+            market_storage.store_price_data(config.ticker, price_data)
+
+        sim_data = market_storage.get_simulation_data(
+            config.ticker, fetch_start, fetch_end, config.include_after_hours
+        )
+
+        print(f"[Optimization] Fetched {len(historical_data)} data points, "
+              f"{len(sim_data.price_data)} simulation points")
+
+        # Fetch dividend history
+        dividend_history = []
+        if self.simulation_uc.dividend_market_data:
+            try:
+                dividend_history = self.simulation_uc.dividend_market_data.get_dividend_history(
+                    config.ticker, fetch_start, fetch_end
+                )
+                print(f"[Optimization] Found {len(dividend_history)} dividend events")
+            except Exception as e:
+                print(f"[Optimization] Warning: Failed to fetch dividends: {e}")
+
+        return historical_data, sim_data, dividend_history
+
+    def _build_position_config(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Map flat optimization parameters to nested position_config dict."""
+        position_config = {
+            "trigger_threshold_pct": params.get("trigger_threshold_pct", 0.03),
+            "rebalance_ratio": params.get("rebalance_ratio", 1.6667),
+            "commission_rate": params.get("commission_rate", 0.0001),
+            "min_notional": params.get("min_notional", 100.0),
+            "allow_after_hours": params.get("allow_after_hours", True),
+            "guardrails": {
+                "min_stock_alloc_pct": params.get("min_stock_alloc_pct", 0.25),
+                "max_stock_alloc_pct": params.get("max_stock_alloc_pct", 0.75),
+            },
+        }
+
+        # Handle max_orders_per_day if specified
+        if "max_orders_per_day" in params:
+            position_config["guardrails"]["max_orders_per_day"] = int(params["max_orders_per_day"])
+
+        # Handle min_qty if specified
+        if "min_qty" in params:
+            position_config["min_qty"] = params["min_qty"]
+
+        return position_config
+
+    def _map_simulation_result_to_metrics(self, sim_result) -> Dict[OptimizationMetric, float]:
+        """Convert SimulationResult fields to optimization metrics."""
+        metrics = {}
+
+        # Direct mappings
+        metrics[OptimizationMetric.TOTAL_RETURN] = sim_result.algorithm_return_pct
+        metrics[OptimizationMetric.SHARPE_RATIO] = sim_result.algorithm_sharpe_ratio
+        metrics[OptimizationMetric.MAX_DRAWDOWN] = sim_result.algorithm_max_drawdown
+        metrics[OptimizationMetric.VOLATILITY] = sim_result.algorithm_volatility
+        metrics[OptimizationMetric.TRADE_COUNT] = float(sim_result.algorithm_trades)
+
+        # Calmar Ratio: annualized_return / abs(max_drawdown)
+        annualized_return = sim_result.algorithm_return_pct
+        max_dd = abs(sim_result.algorithm_max_drawdown)
+        if max_dd > 0:
+            metrics[OptimizationMetric.CALMAR_RATIO] = annualized_return / max_dd
+        else:
+            metrics[OptimizationMetric.CALMAR_RATIO] = 0.0
+
+        # Sortino Ratio: (mean_return - rf) / downside_deviation
+        daily_returns_list = [r["return"] for r in sim_result.daily_returns]
+        if len(daily_returns_list) >= 2:
+            mean_ret = statistics.mean(daily_returns_list)
+            downside = [r for r in daily_returns_list if r < 0]
+            if len(downside) >= 2:
+                downside_dev = statistics.stdev(downside) * (252 ** 0.5)
+                if downside_dev > 0:
+                    metrics[OptimizationMetric.SORTINO_RATIO] = (mean_ret * 252) / downside_dev
+                else:
+                    metrics[OptimizationMetric.SORTINO_RATIO] = 0.0
+            else:
+                metrics[OptimizationMetric.SORTINO_RATIO] = 0.0
+        else:
+            metrics[OptimizationMetric.SORTINO_RATIO] = 0.0
+
+        # Win Rate: profitable_trades / total_trades from trade_log
+        trade_log = sim_result.trade_log
+        if trade_log:
+            profitable = sum(1 for t in trade_log if t.get("commission", 0) >= 0)
+            # Simple: count trades where sell price > buy price
+            # Since we don't track individual P&L per trade easily,
+            # use daily_returns positive days as proxy
+            positive_days = sum(1 for r in daily_returns_list if r > 0)
+            total_days = len(daily_returns_list)
+            metrics[OptimizationMetric.WIN_RATE] = (
+                positive_days / total_days if total_days > 0 else 0.0
+            )
+        else:
+            metrics[OptimizationMetric.WIN_RATE] = 0.0
+
+        # Profit Factor: sum(gains) / abs(sum(losses)) from daily_returns
+        gains = sum(r for r in daily_returns_list if r > 0)
+        losses = sum(r for r in daily_returns_list if r < 0)
+        if losses < 0:
+            metrics[OptimizationMetric.PROFIT_FACTOR] = gains / abs(losses)
+        else:
+            metrics[OptimizationMetric.PROFIT_FACTOR] = float("inf") if gains > 0 else 0.0
+
+        # Avg Trade Duration: total_trading_days / trade_count
+        if sim_result.algorithm_trades > 0:
+            metrics[OptimizationMetric.AVG_TRADE_DURATION] = (
+                sim_result.total_trading_days / sim_result.algorithm_trades
+            )
+        else:
+            metrics[OptimizationMetric.AVG_TRADE_DURATION] = float(sim_result.total_trading_days)
+
+        return metrics
+
     def _process_parameter_combinations(
         self, config: OptimizationConfig, combinations: List[ParameterCombination]
     ) -> None:
-        """Process parameter combinations with mock simulation results."""
-        import random
-        import time
+        """Process parameter combinations using real simulation engine."""
+        # Prefetch market data once
+        try:
+            historical_data, sim_data, dividend_history = self._prefetch_market_data(config)
+        except Exception as e:
+            print(f"[Optimization] Failed to prefetch market data: {e}")
+            traceback.print_exc()
+            config.update_status(OptimizationStatus.FAILED)
+            self.config_repo.update_status(config.id, config.status.value)
+            return
 
+        total = len(combinations)
         for i, combination in enumerate(combinations):
-            # Simulate processing time
-            time.sleep(0.1)  # Small delay to simulate processing
+            print(f"[Optimization] Processing combination {i + 1}/{total}: "
+                  f"{combination.parameters}")
 
-            # Generate mock metrics based on parameters
-            # This creates realistic-looking results that vary with parameters
-            base_return = 0.10 + random.uniform(-0.05, 0.05)
-            base_sharpe = 1.0 + random.uniform(-0.3, 0.3)
-            base_drawdown = -0.05 + random.uniform(-0.02, 0.02)
-
-            # Add some parameter-based variation
-            if "trigger_threshold_pct" in combination.parameters:
-                threshold = combination.parameters["trigger_threshold_pct"]
-                # Higher thresholds might lead to better risk-adjusted returns
-                base_sharpe += (threshold - 0.03) * 10  # Scale factor
-                base_return += (threshold - 0.03) * 2
-
-            if "rebalance_ratio" in combination.parameters:
-                ratio = combination.parameters["rebalance_ratio"]
-                # Higher ratios might lead to more trades but potentially better returns
-                base_return += (ratio - 1.75) * 0.5
-                base_sharpe += (ratio - 1.75) * 0.2
-
-            # Generate mock metrics
-            metrics = {
-                OptimizationMetric.TOTAL_RETURN: max(
-                    0.0, base_return + random.uniform(-0.02, 0.02)
-                ),
-                OptimizationMetric.SHARPE_RATIO: max(0.0, base_sharpe + random.uniform(-0.1, 0.1)),
-                OptimizationMetric.MAX_DRAWDOWN: min(
-                    0.0, base_drawdown + random.uniform(-0.01, 0.01)
-                ),
-                OptimizationMetric.VOLATILITY: max(0.05, 0.12 + random.uniform(-0.03, 0.03)),
-                OptimizationMetric.CALMAR_RATIO: max(
-                    0.0, base_return / abs(base_drawdown) + random.uniform(-0.5, 0.5)
-                ),
-                OptimizationMetric.SORTINO_RATIO: max(0.0, base_sharpe + random.uniform(-0.2, 0.2)),
-                OptimizationMetric.WIN_RATE: max(0.0, min(1.0, 0.6 + random.uniform(-0.1, 0.1))),
-                OptimizationMetric.PROFIT_FACTOR: max(0.0, 1.5 + random.uniform(-0.3, 0.3)),
-                OptimizationMetric.TRADE_COUNT: max(1, int(20 + random.uniform(-5, 10))),
-                OptimizationMetric.AVG_TRADE_DURATION: max(1.0, 5.0 + random.uniform(-2, 3)),
-            }
-
-            # Get the result and update it
+            # Find the result for this combination
             results = self.result_repo.get_by_config(config.id)
             result = next(
                 (
@@ -367,12 +505,47 @@ class ParameterOptimizationUC:
                 None,
             )
 
-            if result:
+            if not result:
+                continue
+
+            try:
+                # Build position config from flat parameters
+                position_config = self._build_position_config(combination.parameters)
+
+                # Run real simulation with pre-fetched data
+                sim_result = self.simulation_uc.run_simulation_with_data(
+                    ticker=config.ticker,
+                    start_date=config.start_date,
+                    end_date=config.end_date,
+                    historical_data=historical_data,
+                    sim_data=sim_data,
+                    dividend_history=dividend_history,
+                    initial_cash=config.initial_cash,
+                    position_config=position_config,
+                    lightweight=True,
+                )
+
+                # Map simulation result to optimization metrics
+                metrics = self._map_simulation_result_to_metrics(sim_result)
+
                 result.metrics = metrics
                 result.status = OptimizationResultStatus.COMPLETED
+                result.completed_at = datetime.now(timezone.utc)
+                self.result_repo.save_result(result)
+
+                print(f"[Optimization] Combination {i + 1}/{total} completed: "
+                      f"return={metrics.get(OptimizationMetric.TOTAL_RETURN, 0):.2f}%, "
+                      f"sharpe={metrics.get(OptimizationMetric.SHARPE_RATIO, 0):.3f}")
+
+            except Exception as e:
+                print(f"[Optimization] Combination {i + 1}/{total} failed: {e}")
+                traceback.print_exc()
+                result.status = OptimizationResultStatus.FAILED
+                result.error_message = str(e)
                 result.completed_at = datetime.now(timezone.utc)
                 self.result_repo.save_result(result)
 
         # Update config status to completed
         config.update_status(OptimizationStatus.COMPLETED)
         self.config_repo.update_status(config.id, config.status.value)
+        print(f"[Optimization] Optimization completed for config {config.id}")

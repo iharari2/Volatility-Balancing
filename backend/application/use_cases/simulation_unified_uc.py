@@ -410,6 +410,113 @@ class SimulationUnifiedUC:
 
         return result
 
+    def run_simulation_with_data(
+        self,
+        ticker: str,
+        start_date: datetime,
+        end_date: datetime,
+        historical_data: list,
+        sim_data: SimulationData,
+        dividend_history: list,
+        initial_cash: float = 10000.0,
+        position_config: Optional[Dict[str, Any]] = None,
+        lightweight: bool = False,
+    ) -> SimulationResult:
+        """Run simulation with pre-fetched market data.
+
+        This avoids redundant data fetching when running multiple simulations
+        over the same date range (e.g., parameter optimization).
+
+        When lightweight=True, skips heavy collections (time_series_data,
+        trigger_analysis, price_data, debug info) and does not save to repo.
+        """
+        # Default position configuration
+        if position_config is None:
+            position_config = {
+                "trigger_threshold_pct": 0.03,
+                "rebalance_ratio": 1.6667,
+                "commission_rate": 0.0001,
+                "min_notional": 100.0,
+                "allow_after_hours": True,
+                "guardrails": {
+                    "min_stock_alloc_pct": 0.25,
+                    "max_stock_alloc_pct": 0.75,
+                },
+            }
+
+        # Ensure timezone-aware datetimes
+        if start_date.tzinfo is None:
+            start_date = start_date.replace(tzinfo=timezone.utc)
+        if end_date.tzinfo is None:
+            end_date = end_date.replace(tzinfo=timezone.utc)
+
+        if not sim_data.price_data:
+            raise ValueError(f"No price data available for {ticker} in the specified date range")
+
+        # Build a fresh MarketDataStorage from the provided historical data
+        market_storage = MarketDataStorage()
+        for price_point in historical_data:
+            market_storage.store_price_data(ticker, price_point)
+
+        # Run algorithm simulation
+        algo_result = self._simulate_algorithm_unified(
+            sim_data,
+            initial_cash,
+            position_config,
+            dividend_history,
+            market_storage,
+            detailed_trigger_analysis=not lightweight,
+            report_progress=None,
+            simulation_id=None,
+            ticker=ticker,
+        )
+
+        # Run buy & hold simulation
+        buy_hold_result = self._simulate_buy_hold(sim_data, initial_cash)
+
+        # Calculate comparison metrics
+        excess_return = algo_result["algorithm_return_pct"] - buy_hold_result["buy_hold_return_pct"]
+        alpha = excess_return
+        beta = 1.0
+        information_ratio = (
+            excess_return / algo_result["algorithm_volatility"]
+            if algo_result["algorithm_volatility"] > 0
+            else 0
+        )
+
+        trigger_analysis = algo_result.pop("trigger_analysis", [])
+        time_series_data = algo_result.pop("time_series_data", [])
+        debug_info = algo_result.pop("debug_info", [])
+
+        # In lightweight mode, discard heavy collections
+        if lightweight:
+            trigger_analysis = []
+            time_series_data = []
+            debug_info = []
+
+        result = SimulationResult(
+            ticker=ticker,
+            start_date=start_date,
+            end_date=end_date,
+            total_trading_days=sim_data.total_trading_days,
+            initial_cash=initial_cash,
+            price_data=[],  # Skip in lightweight
+            trigger_analysis=trigger_analysis,
+            time_series_data=time_series_data,
+            debug_storage_info=None,
+            debug_retrieval_info=None,
+            debug_info=debug_info,
+            **algo_result,
+            **buy_hold_result,
+            excess_return=excess_return,
+            alpha=alpha,
+            beta=beta,
+            information_ratio=information_ratio,
+            dividend_analysis=None,  # Skip expensive dividend re-fetch
+        )
+
+        return result
+
     def _simulate_algorithm_unified(
         self,
         sim_data: SimulationData,
@@ -907,9 +1014,10 @@ class SimulationUnifiedUC:
                         trigger_info["execution_error"] = "Order blocked by guardrails (no valid order proposal)"
                 else:
                     # No trigger - check why
-                    if abs(trigger_info["price_change_pct"]) < trigger_info["trigger_threshold"]:
+                    threshold = trigger_info.get("trigger_threshold", threshold_pct)
+                    if abs(trigger_info["price_change_pct"]) < threshold:
                         trigger_info["reason"] = (
-                            f"Price change {trigger_info['price_change_pct']:.2f}% below threshold {trigger_info['trigger_threshold']:.2f}%"
+                            f"Price change {trigger_info['price_change_pct']:.2f}% below threshold {threshold:.2f}%"
                         )
                     else:
                         trigger_info["reason"] = "Other evaluation conditions not met"
