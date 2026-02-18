@@ -144,6 +144,9 @@ class EvaluatePositionUC:
                 price_timestamp=self.clock.now(),
             )
             trigger_result["order_proposal"] = order_proposal
+        elif rebalance_proposal:
+            # Use the auto-rebalance proposal directly
+            order_proposal = rebalance_proposal
 
         # Log event
         self._log_evaluation_event(tenant_id, portfolio_id, position, current_price, trigger_result)

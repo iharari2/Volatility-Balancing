@@ -384,16 +384,33 @@ class ParameterOptimizationUC:
         return historical_data, sim_data, dividend_history
 
     def _build_position_config(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Map flat optimization parameters to nested position_config dict."""
+        """Map flat optimization parameters to nested position_config dict.
+
+        Parameter values from optimization are in user-friendly percentage units:
+        - trigger_threshold_pct: percentage (e.g., 3.0 = 3%). Converted to fraction (0.03)
+          because OrderPolicy stores fractions internally.
+        - min/max_stock_alloc_pct: percentage (e.g., 25.0 = 25%). Converted to fraction (0.25).
+        - rebalance_ratio, commission_rate, min_notional: used as-is.
+        """
+        # Convert percentage inputs to fractions for OrderPolicy/GuardrailPolicy
+        trigger_pct = params.get("trigger_threshold_pct", 3.0)
+        trigger_fraction = trigger_pct / 100.0
+
+        min_alloc_pct = params.get("min_stock_alloc_pct", 25.0)
+        min_alloc_fraction = min_alloc_pct / 100.0 if min_alloc_pct > 1.0 else min_alloc_pct
+
+        max_alloc_pct = params.get("max_stock_alloc_pct", 75.0)
+        max_alloc_fraction = max_alloc_pct / 100.0 if max_alloc_pct > 1.0 else max_alloc_pct
+
         position_config = {
-            "trigger_threshold_pct": params.get("trigger_threshold_pct", 0.03),
+            "trigger_threshold_pct": trigger_fraction,
             "rebalance_ratio": params.get("rebalance_ratio", 1.6667),
             "commission_rate": params.get("commission_rate", 0.0001),
             "min_notional": params.get("min_notional", 100.0),
             "allow_after_hours": params.get("allow_after_hours", True),
             "guardrails": {
-                "min_stock_alloc_pct": params.get("min_stock_alloc_pct", 0.25),
-                "max_stock_alloc_pct": params.get("max_stock_alloc_pct", 0.75),
+                "min_stock_alloc_pct": min_alloc_fraction,
+                "max_stock_alloc_pct": max_alloc_fraction,
             },
         }
 
