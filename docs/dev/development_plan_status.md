@@ -1,6 +1,6 @@
 # Development Plan Status
 
-**Last Updated**: February 18, 2026
+**Last Updated**: February 19, 2026
 **Project**: Volatility Balancing System
 
 ---
@@ -24,8 +24,9 @@
 | 12 | Optimization & Heatmap Page | — | Optimization page composing existing components, route + nav entry |
 | 13 | Monitoring Frontend Dashboard | `1fd6dcb` | System health cards, alerts table with ack/resolve, webhook config UI, auto-refresh 30s |
 | 14 | Wire Optimization to Real Simulation | — | Replaced mock metrics with real SimulationUnifiedUC runs; prefetch market data once, lightweight mode, 10 real metrics, non-blocking start endpoint, configurable resolution/cash/after-hours |
+| 15 | Persist Configs, Excel Export, Parallel Tests, Dividend Fix | — | SQL optimization repos, Excel export wired to 6 tables, pytest-xdist parallel, dividend double-counting fix |
 
-**Test suite**: 561 passed (13 skipped), ruff clean, TypeScript clean, frontend builds clean
+**Test suite**: 561 passed (13 skipped), ruff clean, TypeScript clean, frontend builds clean, pytest-xdist parallel enabled
 
 ---
 
@@ -150,7 +151,60 @@
 
 ---
 
-## Iteration 15: CI/CD Pipeline
+## Iteration 15: Persist Configs, Wire Excel Export, Parallel Tests, Dividend Bug Fix — COMPLETE
+
+**Priority**: Medium/High
+
+**What was done**:
+
+### Bug Fix: Dividend Double-Counting in Simulation
+- **Root cause**: Dividend processing ran inside the intraday tick loop with no deduplication — on an ex-dividend date with 30-min intervals, the same dividend was applied ~13 times
+- **Fix**: Added `processed_dividend_keys` set in `_simulate_algorithm_unified()` to ensure each dividend is applied exactly once per ex-date, regardless of intraday tick count
+- Dividend data remains 100% real market data from yfinance
+
+### Persist Optimization Configs to Database
+- **Created** `infrastructure/persistence/sql/optimization_repo_sql.py` with three SQL repo implementations: `SQLOptimizationConfigRepo`, `SQLOptimizationResultRepo`, `SQLHeatmapDataRepo`
+- Full JSON serialization for `ParameterRange`, `OptimizationCriteria`, and `OptimizationMetric` dicts
+- **Added** 3 missing columns to `OptimizationConfigModel`: `initial_cash`, `intraday_interval_minutes`, `include_after_hours`
+- **Updated** `di.py` to wire SQL repos when `APP_PERSISTENCE=sql`, in-memory otherwise (previously hardcoded to in-memory)
+- **Fixed** `excel_export.py` attribute name mismatches (`optimization_config_repo` → `optimization_config`, etc.)
+
+### Wire Excel Export to All Tables
+- **Created** `frontend/src/utils/exportToExcel.ts` — reusable fetch-blob-download utility using `VITE_API_BASE_URL`
+- **Fixed** `ExcelExport.tsx` env var (`VITE_API_URL` → `VITE_API_BASE_URL`)
+- **Fixed** `ExcelExportIntegration.tsx` hardcoded `localhost:8001` → `VITE_API_BASE_URL`
+- **Wired** export buttons into 6 table components: PositionsTable, SimulationResults, AnalyticsEventTables, OptimizationResults (with configId prop), OrdersTable, AlertsTable
+
+### Enable pytest-xdist Parallel Execution
+- Per-worker SQLite files via `PYTEST_XDIST_WORKER` env var in `conftest.py`
+- Added `-n auto --dist worksteal` to `pyproject.toml` addopts
+- Session-scoped cleanup fixture for worker DB files
+- All 561 tests pass in parallel
+
+**Files created** (2):
+- `backend/infrastructure/persistence/sql/optimization_repo_sql.py`
+- `frontend/src/utils/exportExcel.ts`
+
+**Files modified** (14):
+- `backend/application/use_cases/simulation_unified_uc.py` — dividend dedup fix
+- `backend/infrastructure/persistence/sql/models.py` — 3 new columns
+- `backend/app/di.py` — SQL optimization repo wiring
+- `backend/app/routes/excel_export.py` — attribute name fix
+- `backend/tests/conftest.py` — per-worker SQLite, cleanup fixture
+- `pyproject.toml` — xdist addopts
+- `frontend/src/components/ExcelExport.tsx` — env var fix
+- `frontend/src/components/ExcelExportIntegration.tsx` — env var fix
+- `frontend/src/components/optimization/OptimizationResults.tsx` — configId prop + export button
+- `frontend/src/features/optimization/OptimizationPage.tsx` — pass configId
+- `frontend/src/features/positions/PositionsTable.tsx` — export via utility
+- `frontend/src/features/simulation/SimulationResults.tsx` — export via utility
+- `frontend/src/features/analytics/AnalyticsEventTables.tsx` — Excel export button
+- `frontend/src/components/trading/OrdersTable.tsx` — export button
+- `frontend/src/features/monitoring/components/AlertsTable.tsx` — export button
+
+---
+
+## Iteration 16 (next): CI/CD Pipeline
 
 **Priority**: High
 
@@ -168,7 +222,7 @@
 
 ---
 
-## Iteration 16: Broker Integration (Alpaca)
+## Iteration 17: Broker Integration (Alpaca)
 
 **Priority**: High
 **Ref**: PRD Goal #7

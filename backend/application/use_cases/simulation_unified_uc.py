@@ -640,6 +640,7 @@ class SimulationUnifiedUC:
         daily_returns = []
         dividend_events = []
         total_dividends_received = 0.0
+        processed_dividend_keys: set = set()
         current_simulation_day = None
         trigger_analysis = []  # Track all trigger evaluations
         debug_info = []  # Track debug information
@@ -746,7 +747,11 @@ class SimulationUnifiedUC:
             if dividend_history:
                 current_date = current_time.date()
                 for dividend in dividend_history:
+                    div_key = (dividend.ex_date.date(), float(dividend.dps))
+                    if div_key in processed_dividend_keys:
+                        continue
                     if dividend.ex_date.date() == current_date and position.qty > 0:
+                        processed_dividend_keys.add(div_key)
                         # Process ex-dividend date
                         old_anchor = position.anchor_price
                         position.adjust_anchor_for_dividend(float(dividend.dps))

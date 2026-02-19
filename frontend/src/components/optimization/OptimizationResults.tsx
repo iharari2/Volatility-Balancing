@@ -2,11 +2,15 @@
 // Displays optimization results in a table format with sorting and filtering
 
 import React, { useState, useMemo } from 'react';
+import { Download } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { OptimizationResult, OptimizationMetric, TradeLogEntry, DividendEvent } from '../../types/optimization';
+import { exportToExcel } from '../../utils/exportExcel';
 
 interface OptimizationResultsProps {
   results: OptimizationResult[];
   loading?: boolean;
+  configId?: string;
   onResultClick?: (result: OptimizationResult) => void;
 }
 
@@ -37,6 +41,7 @@ const COLUMN_TOOLTIPS: Record<string, string> = {
 export const OptimizationResults: React.FC<OptimizationResultsProps> = ({
   results,
   loading = false,
+  configId,
   onResultClick,
 }) => {
   const [sortField, setSortField] = useState<SortField>('sharpe_ratio');
@@ -204,7 +209,7 @@ export const OptimizationResults: React.FC<OptimizationResultsProps> = ({
           </h3>
 
           {/* Filters */}
-          <div className="flex space-x-4">
+          <div className="flex space-x-4 items-center">
             <select
               value={filterMetric}
               onChange={(e) => setFilterMetric(e.target.value as OptimizationMetric | 'all')}
@@ -225,6 +230,26 @@ export const OptimizationResults: React.FC<OptimizationResultsProps> = ({
                 className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 step="0.01"
               />
+            )}
+
+            {configId && (
+              <button
+                onClick={async () => {
+                  try {
+                    await exportToExcel(
+                      `/v1/excel/optimization/${configId}/export`,
+                      `optimization_${configId}_${new Date().toISOString().split('T')[0]}.xlsx`,
+                    );
+                    toast.success('Optimization results exported');
+                  } catch (err) {
+                    toast.error(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+                  }
+                }}
+                className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+              >
+                <Download className="h-4 w-4 mr-1" />
+                Excel
+              </button>
             )}
           </div>
         </div>

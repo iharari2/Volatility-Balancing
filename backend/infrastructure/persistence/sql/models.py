@@ -679,6 +679,9 @@ class OptimizationConfigModel(Base):
     description: Mapped[str] = mapped_column(Text, nullable=True)
     max_combinations: Mapped[int] = mapped_column(Integer, nullable=True)
     batch_size: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
+    initial_cash: Mapped[float] = mapped_column(Float, nullable=False, default=10000.0)
+    intraday_interval_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
+    include_after_hours: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )

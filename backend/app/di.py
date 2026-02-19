@@ -62,6 +62,11 @@ from infrastructure.persistence.memory.optimization_repo_mem import (
 )
 from infrastructure.persistence.memory.simulation_repo_mem import InMemorySimulationRepo
 from infrastructure.persistence.sql.simulation_repo_sql import SQLSimulationRepo
+from infrastructure.persistence.sql.optimization_repo_sql import (
+    SQLOptimizationConfigRepo,
+    SQLOptimizationResultRepo,
+    SQLHeatmapDataRepo,
+)
 from infrastructure.persistence.memory.alert_repo_mem import InMemoryAlertRepo
 
 # Use cases
@@ -183,10 +188,7 @@ class _Container:
         self.dividend_receivable = InMemoryDividendReceivableRepo()
         # ConfigRepo will be set based on persistence backend below
 
-        # Initialize optimization repositories
-        self.optimization_config = InMemoryOptimizationConfigRepo()
-        self.optimization_result = InMemoryOptimizationResultRepo()
-        self.heatmap_data = InMemoryHeatmapDataRepo()
+        # Optimization and simulation repos will be set based on persistence backend below
         self.simulation = InMemorySimulationRepo()  # Will be overridden if SQL is used
 
         persistence = os.getenv("APP_PERSISTENCE", "memory").lower()
@@ -213,6 +215,10 @@ class _Container:
             self.simulation = SQLSimulationRepo(Session)
             # Use SQL ConfigRepo when SQL persistence is enabled
             self.config = SQLConfigRepo(Session)
+            # Use SQL optimization repositories
+            self.optimization_config = SQLOptimizationConfigRepo(Session)
+            self.optimization_result = SQLOptimizationResultRepo(Session)
+            self.heatmap_data = SQLHeatmapDataRepo(Session)
         else:
             self.positions = InMemoryPositionsRepo()
             # For in-memory positions, we still use SQL portfolio repo for persistence
@@ -230,6 +236,10 @@ class _Container:
             # Keep in-memory simulation repository for memory persistence
             # Use in-memory ConfigRepo for memory persistence
             self.config = InMemoryConfigRepo()
+            # Use in-memory optimization repositories
+            self.optimization_config = InMemoryOptimizationConfigRepo()
+            self.optimization_result = InMemoryOptimizationResultRepo()
+            self.heatmap_data = InMemoryHeatmapDataRepo()
 
         # --- Events backend (can be independent of positions/orders) ---
         if events_backend == "sql":

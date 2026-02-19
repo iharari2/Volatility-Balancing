@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { CheckCircle, Eye } from 'lucide-react';
+import { CheckCircle, Eye, Download } from 'lucide-react';
+import toast from 'react-hot-toast';
 import type { AlertResponse } from '../../../lib/api';
+import { exportToExcel } from '../../../utils/exportExcel';
 
 type StatusFilter = 'all' | 'active' | 'acknowledged' | 'resolved';
 
@@ -53,7 +55,7 @@ export default function AlertsTable({
         <h3 className="text-sm font-bold text-gray-900">
           Alerts <span className="text-gray-400 font-normal">({total})</span>
         </h3>
-        <div className="flex gap-1">
+        <div className="flex gap-1 items-center">
           {tabs.map((tab) => (
             <button
               key={tab.key}
@@ -67,6 +69,23 @@ export default function AlertsTable({
               {tab.label}
             </button>
           ))}
+          <button
+            onClick={async () => {
+              try {
+                await exportToExcel(
+                  '/v1/excel/trading/export?format=xlsx',
+                  `alerts_${new Date().toISOString().split('T')[0]}.xlsx`,
+                );
+                toast.success('Alerts exported');
+              } catch (err) {
+                toast.error(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+              }
+            }}
+            className="ml-2 inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+          >
+            <Download className="h-3 w-3 mr-1" />
+            Excel
+          </button>
         </div>
       </div>
 

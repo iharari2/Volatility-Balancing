@@ -73,6 +73,7 @@ export default function OptimizationPage() {
 
   const getStatusBadge = (status: OptimizationStatus) => {
     const styles: Record<OptimizationStatus, string> = {
+      [OptimizationStatus.DRAFT]: 'bg-gray-100 text-gray-600',
       [OptimizationStatus.PENDING]: 'bg-gray-100 text-gray-700',
       [OptimizationStatus.RUNNING]: 'bg-blue-100 text-blue-700',
       [OptimizationStatus.COMPLETED]: 'bg-green-100 text-green-700',
@@ -220,7 +221,8 @@ export default function OptimizationPage() {
                     </div>
 
                     <div className="flex items-center gap-2 ml-4">
-                      {(config.status === OptimizationStatus.PENDING ||
+                      {(config.status === OptimizationStatus.DRAFT ||
+                        config.status === OptimizationStatus.PENDING ||
                         config.status === OptimizationStatus.FAILED) && (
                         <button
                           onClick={() => handleStart(config)}
@@ -281,6 +283,7 @@ export default function OptimizationPage() {
           <OptimizationResults
             results={state.results.get(selectedConfig.id) || []}
             loading={state.loading}
+            configId={selectedConfig.id}
           />
         </div>
       )}

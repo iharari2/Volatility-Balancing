@@ -1,6 +1,7 @@
 # =========================
 # backend/tests/conftest.py
 # =========================
+import glob as globmod
 import os
 import pytest
 import asyncio
@@ -9,11 +10,14 @@ from concurrent.futures import ThreadPoolExecutor
 import starlette.concurrency
 import fastapi.routing
 
+# Per-worker SQLite for pytest-xdist parallel execution
+_worker_id = os.environ.get("PYTEST_XDIST_WORKER", "gw0")
+
 # Make sure tests use in-memory for faster execution
 os.environ.setdefault("APP_PERSISTENCE", "memory")
 os.environ.setdefault("APP_EVENTS", "memory")
 os.environ.setdefault("APP_IDEMPOTENCY", "memory")
-os.environ.setdefault("SQL_URL", "sqlite:///./vb_test.sqlite")
+os.environ.setdefault("SQL_URL", f"sqlite:///./vb_test_{_worker_id}.sqlite")
 os.environ.setdefault("APP_AUTO_CREATE", "1")  # Create tables for portfolio repo
 os.environ.setdefault("TICK_DETERMINISTIC", "true")
 
@@ -87,6 +91,17 @@ def position_id():
         anchor_price=None,
     )
     return pos.id
+
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_worker_dbs():
+    """Clean up per-worker SQLite files after the test session."""
+    yield
+    for db_file in globmod.glob("vb_test_gw*.sqlite"):
+        try:
+            os.remove(db_file)
+        except OSError:
+            pass
 
 
 @pytest.fixture()

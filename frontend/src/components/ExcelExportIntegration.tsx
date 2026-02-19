@@ -15,7 +15,7 @@ const ExcelExportIntegration: React.FC<ExcelExportIntegrationProps> = ({ classNa
   const [exportStatus, setExportStatus] = useState<ExportStatus>({});
   const [lastExport, setLastExport] = useState<string | null>(null);
 
-  const API_BASE = 'http://localhost:8001/v1/excel';
+  const API_BASE = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/v1/excel`;
 
   const exportData = async (endpoint: string, exportName: string) => {
     setExportStatus((prev) => ({ ...prev, [exportName]: 'loading' }));

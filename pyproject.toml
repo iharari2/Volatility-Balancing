@@ -38,7 +38,7 @@ line-length = 100
 [tool.pytest.ini_options]
 pythonpath = ["backend"]
 testpaths = ["backend/tests"]
-addopts = "-q --tb=short -m 'not e2e and not online'"
+addopts = "-q --tb=short -m 'not e2e and not online' -n auto --dist worksteal"
 markers = [
     "e2e: requires a live server and real network access",
     "online: requires live network access (market data, exports)",

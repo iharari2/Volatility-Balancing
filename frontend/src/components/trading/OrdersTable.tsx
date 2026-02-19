@@ -13,7 +13,10 @@ import {
   ChevronLeft,
   Zap,
   Filter,
+  Download,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { exportToExcel } from '../../utils/exportExcel';
 import { ordersApi } from '../../lib/api';
 import { OrderRow, TradeRow, OrderStatus, PENDING_STATUSES } from '../../types/orders';
 
@@ -261,6 +264,23 @@ export default function OrdersTable({ tenantId, portfolioId, positionId }: Order
           <span className="text-xs font-medium text-gray-600">
             Order History — showing {pagedOrders.length} of {filteredOrders.length}
           </span>
+          <button
+            onClick={async () => {
+              try {
+                await exportToExcel(
+                  '/v1/excel/trading/export?format=xlsx',
+                  `orders_${new Date().toISOString().split('T')[0]}.xlsx`,
+                );
+                toast.success('Orders exported');
+              } catch (err) {
+                toast.error(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+              }
+            }}
+            className="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200 rounded transition-colors"
+          >
+            <Download className="h-3 w-3 mr-1" />
+            Excel
+          </button>
           {totalPages > 1 && (
             <div className="flex items-center gap-2">
               <button

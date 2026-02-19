@@ -106,9 +106,9 @@ def get_excel_export_service() -> ExcelExportService:
 def get_parameter_optimization_uc() -> ParameterOptimizationUC:
     """Get parameter optimization use case instance."""
     return ParameterOptimizationUC(
-        config_repo=container.optimization_config_repo,
-        result_repo=container.optimization_result_repo,
-        heatmap_repo=container.heatmap_repo,
+        config_repo=container.optimization_config,
+        result_repo=container.optimization_result,
+        heatmap_repo=container.heatmap_data,
         simulation_uc=container.simulation_uc,
     )
 

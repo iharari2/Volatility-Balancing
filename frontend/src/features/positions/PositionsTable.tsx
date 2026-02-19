@@ -1,7 +1,8 @@
-import { usePortfolio } from '../../contexts/PortfolioContext';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import { Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { exportToExcel } from '../../utils/exportExcel';
+import toast from 'react-hot-toast';
 
 interface PositionsTableProps {
   positions: any[];
@@ -16,12 +17,19 @@ export default function PositionsTable({ positions, cashBalance, onExport }: Pos
   const totalStockValue = positions.reduce((sum, pos) => sum + pos.marketValue, 0);
   const totalPortfolioValue = totalStockValue + cashBalance;
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (onExport) {
       onExport();
     } else {
-      // Default export behavior
-      window.open('/api/v1/excel/positions/export?format=xlsx', '_blank');
+      try {
+        await exportToExcel(
+          '/v1/excel/trading/export?format=xlsx',
+          `positions_${new Date().toISOString().split('T')[0]}.xlsx`,
+        );
+        toast.success('Positions exported');
+      } catch (err) {
+        toast.error(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      }
     }
   };
 

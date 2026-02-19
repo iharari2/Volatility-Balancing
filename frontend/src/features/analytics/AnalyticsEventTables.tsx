@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
-import { Download, ArrowUpDown, TrendingUp, DollarSign } from 'lucide-react';
+import { Download, FileSpreadsheet, ArrowUpDown, TrendingUp, DollarSign } from 'lucide-react';
+import toast from 'react-hot-toast';
 import type { AnalyticsEvent } from '../../services/portfolioScopedApi';
+import { exportToExcel } from '../../utils/exportExcel';
 
 interface AnalyticsEventTablesProps {
   events: AnalyticsEvent[];
@@ -255,14 +257,33 @@ export default function AnalyticsEventTables({ events }: AnalyticsEventTablesPro
             </div>
           </button>
         </div>
-        <button
-          onClick={activeTab === 'trades' ? exportTradesToCsv : exportDividendsToCsv}
-          className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-          disabled={activeTab === 'trades' ? tradeEvents.length === 0 : dividendEvents.length === 0}
-        >
-          <Download className="h-3 w-3 mr-1" />
-          Export CSV
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={activeTab === 'trades' ? exportTradesToCsv : exportDividendsToCsv}
+            className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+            disabled={activeTab === 'trades' ? tradeEvents.length === 0 : dividendEvents.length === 0}
+          >
+            <Download className="h-3 w-3 mr-1" />
+            CSV
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                await exportToExcel(
+                  '/v1/excel/trading/export?format=xlsx',
+                  `trading_${new Date().toISOString().split('T')[0]}.xlsx`,
+                );
+                toast.success('Excel exported');
+              } catch (err) {
+                toast.error(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+              }
+            }}
+            className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+          >
+            <FileSpreadsheet className="h-3 w-3 mr-1" />
+            Excel
+          </button>
+        </div>
       </div>
 
       {/* Trades Tab */}

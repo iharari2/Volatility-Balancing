@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Download, Play, Filter, Clock, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { exportToExcel } from '../../utils/exportExcel';
 import {
   ComposedChart,
   Line,
@@ -121,13 +122,21 @@ export default function SimulationResults({ result }: SimulationResultsProps) {
     : timelineEvents;
   const triggeredCount = timelineEvents.filter((e) => e.triggered).length;
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (!result?.simulation_id) {
       toast.error('No simulation ID available. Please run a simulation first.');
       return;
     }
-    const ticker = result.ticker || '';
-    window.open(`/api/v1/excel/simulation/${result.simulation_id}/export?format=xlsx&ticker=${ticker}`, '_blank');
+    try {
+      const ticker = result.ticker || '';
+      await exportToExcel(
+        `/v1/excel/simulation/${result.simulation_id}/export?format=xlsx&ticker=${ticker}`,
+        `simulation_${result.simulation_id}_${new Date().toISOString().split('T')[0]}.xlsx`,
+      );
+      toast.success('Simulation exported');
+    } catch (err) {
+      toast.error(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
   };
 
   const handleExportJSON = () => {
