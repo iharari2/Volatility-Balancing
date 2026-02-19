@@ -1,10 +1,14 @@
 name: ci-cd
 on:
-  pull_request: { branches: [main] }
-  push: { branches: [main] }
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
 
-concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: true }
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   PY_VERSION: "3.12"
@@ -38,9 +42,11 @@ jobs:
       - name: Install deps
         run: |
           pip install -r backend/requirements.txt
-          pip install pytest pytest-cov
+          pip install pytest pytest-cov pytest-xdist
       - name: Unit tests
-        run: pytest backend/tests/unit --cov=app --cov-report=term-missing --cov-fail-under=70
+        env:
+          PYTHONPATH: backend
+        run: pytest backend/tests/unit --cov=backend/app --cov-report=term-missing --cov-fail-under=70 -n auto --dist worksteal
 
   frontend-build:
     runs-on: ubuntu-latest
@@ -74,9 +80,11 @@ jobs:
       - name: Install deps
         run: |
           pip install -r backend/requirements.txt
-          pip install pytest
+          pip install pytest pytest-xdist
       - name: Integration tests
-        run: pytest backend/tests/integration -q --tb=short
+        env:
+          PYTHONPATH: backend
+        run: pytest backend/tests/integration -q --tb=short -n auto --dist worksteal
 
   # Production deployment — only on push to main
   deploy-production:
