@@ -481,10 +481,7 @@ class ParameterOptimizationUC:
         # Win Rate: profitable_trades / total_trades from trade_log
         trade_log = sim_result.trade_log
         if trade_log:
-            profitable = sum(1 for t in trade_log if t.get("commission", 0) >= 0)
-            # Simple: count trades where sell price > buy price
-            # Since we don't track individual P&L per trade easily,
-            # use daily_returns positive days as proxy
+            # Use daily_returns positive days as proxy for win rate
             positive_days = sum(1 for r in daily_returns_list if r > 0)
             total_days = len(daily_returns_list)
             metrics[OptimizationMetric.WIN_RATE] = (

@@ -2,7 +2,6 @@
 # backend/infrastructure/persistence/sql/optimization_repo_sql.py
 # =========================
 
-import json
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
