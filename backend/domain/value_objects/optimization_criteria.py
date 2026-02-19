@@ -20,6 +20,8 @@ class OptimizationMetric(Enum):
     PROFIT_FACTOR = "profit_factor"
     TRADE_COUNT = "trade_count"
     AVG_TRADE_DURATION = "avg_trade_duration"
+    BUY_HOLD_RETURN = "buy_hold_return"
+    TOTAL_COMMISSIONS = "total_commissions"
 
 
 class ConstraintType(Enum):

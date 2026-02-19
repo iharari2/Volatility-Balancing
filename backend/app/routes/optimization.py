@@ -255,6 +255,7 @@ class OptimizationResultResponse(BaseModel):
     created_at: datetime
     completed_at: Optional[datetime]
     execution_time_seconds: Optional[float]
+    simulation_result: Optional[dict] = None
 
     @classmethod
     def from_domain(cls, result: OptimizationResult) -> "OptimizationResultResponse":
@@ -273,6 +274,7 @@ class OptimizationResultResponse(BaseModel):
             created_at=result.created_at,
             completed_at=result.completed_at,
             execution_time_seconds=result.execution_time_seconds,
+            simulation_result=result.simulation_result,
         )
 
 

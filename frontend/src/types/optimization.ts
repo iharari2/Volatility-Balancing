@@ -61,6 +61,8 @@ export enum OptimizationMetric {
   PROFIT_FACTOR = 'profit_factor',
   TRADE_COUNT = 'trade_count',
   AVG_TRADE_DURATION = 'avg_trade_duration',
+  BUY_HOLD_RETURN = 'buy_hold_return',
+  TOTAL_COMMISSIONS = 'total_commissions',
 }
 
 export enum OptimizationStatus {
@@ -72,6 +74,16 @@ export enum OptimizationStatus {
   CANCELLED = 'cancelled',
 }
 
+export interface TradeLogEntry {
+  timestamp: string;
+  side: string;
+  qty: number;
+  price: number;
+  commission: number;
+  cash_after: number;
+  shares_after: number;
+}
+
 export interface OptimizationResult {
   id: string;
   config_id: string;
@@ -80,6 +92,11 @@ export interface OptimizationResult {
   status: OptimizationResultStatus;
   created_at: string;
   completed_at?: string;
+  simulation_result?: {
+    trade_log: TradeLogEntry[];
+    initial_cash: number;
+    algorithm_pnl: number;
+  };
   // Additional properties for display
   parameters?: Record<string, any>;
   return?: number;

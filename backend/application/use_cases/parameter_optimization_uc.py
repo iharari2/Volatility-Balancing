@@ -425,21 +425,35 @@ class ParameterOptimizationUC:
         return position_config
 
     def _map_simulation_result_to_metrics(self, sim_result) -> Dict[OptimizationMetric, float]:
-        """Convert SimulationResult fields to optimization metrics."""
+        """Convert SimulationResult fields to optimization metrics.
+
+        algorithm_return_pct and algorithm_max_drawdown are already percentages
+        (e.g. 202.45 for 202.45%). We convert to fractions (2.0245) so the
+        frontend can uniformly multiply by 100 for display.
+        """
         metrics = {}
 
-        # Direct mappings
-        metrics[OptimizationMetric.TOTAL_RETURN] = sim_result.algorithm_return_pct
+        # Convert percentage fields to fractions for uniform frontend handling
+        metrics[OptimizationMetric.TOTAL_RETURN] = sim_result.algorithm_return_pct / 100.0
         metrics[OptimizationMetric.SHARPE_RATIO] = sim_result.algorithm_sharpe_ratio
-        metrics[OptimizationMetric.MAX_DRAWDOWN] = sim_result.algorithm_max_drawdown
+        metrics[OptimizationMetric.MAX_DRAWDOWN] = sim_result.algorithm_max_drawdown / -100.0
         metrics[OptimizationMetric.VOLATILITY] = sim_result.algorithm_volatility
         metrics[OptimizationMetric.TRADE_COUNT] = float(sim_result.algorithm_trades)
 
-        # Calmar Ratio: annualized_return / abs(max_drawdown)
-        annualized_return = sim_result.algorithm_return_pct
-        max_dd = abs(sim_result.algorithm_max_drawdown)
-        if max_dd > 0:
-            metrics[OptimizationMetric.CALMAR_RATIO] = annualized_return / max_dd
+        # Buy & Hold return (also percentage → fraction)
+        metrics[OptimizationMetric.BUY_HOLD_RETURN] = sim_result.buy_hold_return_pct / 100.0
+
+        # Total commissions from trade log
+        trade_log = sim_result.trade_log
+        metrics[OptimizationMetric.TOTAL_COMMISSIONS] = sum(
+            t.get("commission", 0) for t in trade_log
+        )
+
+        # Calmar Ratio: return_fraction / abs(drawdown_fraction)
+        return_fraction = sim_result.algorithm_return_pct / 100.0
+        dd_fraction = abs(sim_result.algorithm_max_drawdown / 100.0)
+        if dd_fraction > 0:
+            metrics[OptimizationMetric.CALMAR_RATIO] = return_fraction / dd_fraction
         else:
             metrics[OptimizationMetric.CALMAR_RATIO] = 0.0
 
@@ -546,6 +560,11 @@ class ParameterOptimizationUC:
                 metrics = self._map_simulation_result_to_metrics(sim_result)
 
                 result.metrics = metrics
+                result.simulation_result = {
+                    "trade_log": sim_result.trade_log,
+                    "initial_cash": sim_result.initial_cash,
+                    "algorithm_pnl": sim_result.algorithm_pnl,
+                }
                 result.status = OptimizationResultStatus.COMPLETED
                 result.completed_at = datetime.now(timezone.utc)
                 self.result_repo.save_result(result)

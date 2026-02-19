@@ -2,7 +2,7 @@
 // Displays optimization results in a table format with sorting and filtering
 
 import React, { useState, useMemo } from 'react';
-import { OptimizationResult, OptimizationMetric } from '../../types/optimization';
+import { OptimizationResult, OptimizationMetric, TradeLogEntry } from '../../types/optimization';
 
 interface OptimizationResultsProps {
   results: OptimizationResult[];
@@ -13,11 +13,24 @@ interface OptimizationResultsProps {
 type SortField =
   | 'sharpe_ratio'
   | 'total_return'
+  | 'buy_hold_return'
   | 'max_drawdown'
   | 'volatility'
   | 'win_rate'
-  | 'trade_count';
+  | 'trade_count'
+  | 'total_commissions';
 type SortDirection = 'asc' | 'desc';
+
+const COLUMN_TOOLTIPS: Record<string, string> = {
+  sharpe_ratio: 'Risk-adjusted return. Higher is better. >1 good, >2 excellent.',
+  total_return: "Algorithm's total percentage gain/loss over the simulation period.",
+  buy_hold_return: 'Baseline return from simply buying and holding the stock.',
+  max_drawdown: 'Largest peak-to-trough decline. Closer to 0% is better.',
+  volatility: 'Annualized standard deviation of daily returns. Lower = less risky.',
+  win_rate: 'Percentage of trading days with positive returns.',
+  trade_count: 'Total number of trades executed by the algorithm.',
+  total_commissions: 'Total trading commissions paid across all trades.',
+};
 
 export const OptimizationResults: React.FC<OptimizationResultsProps> = ({
   results,
@@ -28,6 +41,7 @@ export const OptimizationResults: React.FC<OptimizationResultsProps> = ({
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [filterMetric, setFilterMetric] = useState<OptimizationMetric | 'all'>('all');
   const [filterValue, setFilterValue] = useState<string>('');
+  const [selectedResult, setSelectedResult] = useState<OptimizationResult | null>(null);
 
   // Sort and filter results
   const processedResults = useMemo(() => {
@@ -75,6 +89,7 @@ export const OptimizationResults: React.FC<OptimizationResultsProps> = ({
 
     switch (metric) {
       case OptimizationMetric.TOTAL_RETURN:
+      case OptimizationMetric.BUY_HOLD_RETURN:
       case OptimizationMetric.MAX_DRAWDOWN:
       case OptimizationMetric.VOLATILITY:
         return `${(value * 100).toFixed(2)}%`;
@@ -87,6 +102,8 @@ export const OptimizationResults: React.FC<OptimizationResultsProps> = ({
         return `${(value * 100).toFixed(1)}%`;
       case OptimizationMetric.TRADE_COUNT:
         return Math.round(value).toString();
+      case OptimizationMetric.TOTAL_COMMISSIONS:
+        return `$${value.toFixed(2)}`;
       case OptimizationMetric.AVG_TRADE_DURATION:
         return `${value.toFixed(1)} days`;
       default:
@@ -106,11 +123,12 @@ export const OptimizationResults: React.FC<OptimizationResultsProps> = ({
       case OptimizationMetric.WIN_RATE:
         return value > 1 ? 'text-green-600' : value > 0.5 ? 'text-yellow-600' : 'text-red-600';
       case OptimizationMetric.TOTAL_RETURN:
-        return value > 0.1 ? 'text-green-600' : value > 0 ? 'text-yellow-600' : 'text-red-600';
+      case OptimizationMetric.BUY_HOLD_RETURN:
+        return value > 0.10 ? 'text-green-600' : value > 0 ? 'text-yellow-600' : 'text-red-600';
       case OptimizationMetric.MAX_DRAWDOWN:
-        return value > -0.05 ? 'text-green-600' : value > -0.1 ? 'text-yellow-600' : 'text-red-600';
+        return value > -0.05 ? 'text-green-600' : value > -0.10 ? 'text-yellow-600' : 'text-red-600';
       case OptimizationMetric.VOLATILITY:
-        return value < 0.1 ? 'text-green-600' : value < 0.2 ? 'text-yellow-600' : 'text-red-600';
+        return value < 0.10 ? 'text-green-600' : value < 0.20 ? 'text-yellow-600' : 'text-red-600';
       case OptimizationMetric.TRADE_COUNT:
         return value > 50 ? 'text-green-600' : value > 20 ? 'text-yellow-600' : 'text-red-600';
       default:
@@ -121,7 +139,29 @@ export const OptimizationResults: React.FC<OptimizationResultsProps> = ({
   // Sort indicator
   const SortIndicator: React.FC<{ field: SortField }> = ({ field }) => {
     if (sortField !== field) return null;
-    return <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>;
+    return <span className="ml-1">{sortDirection === 'asc' ? '\u2191' : '\u2193'}</span>;
+  };
+
+  // Sortable header with tooltip
+  const SortableHeader: React.FC<{ field: SortField; label: string }> = ({ field, label }) => (
+    <th
+      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+      onClick={() => handleSort(field)}
+    >
+      <span
+        title={COLUMN_TOOLTIPS[field]}
+        className="cursor-help border-b border-dotted border-gray-400"
+      >
+        {label}
+      </span>
+      <SortIndicator field={field} />
+    </th>
+  );
+
+  // Handle row click — open detail modal
+  const handleRowClick = (result: OptimizationResult) => {
+    setSelectedResult(result);
+    onResultClick?.(result);
   };
 
   if (loading) {
@@ -168,9 +208,9 @@ export const OptimizationResults: React.FC<OptimizationResultsProps> = ({
               className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">All Results</option>
-              <option value={OptimizationMetric.SHARPE_RATIO}>Sharpe Ratio ≥</option>
-              <option value={OptimizationMetric.TOTAL_RETURN}>Total Return ≥</option>
-              <option value={OptimizationMetric.WIN_RATE}>Win Rate ≥</option>
+              <option value={OptimizationMetric.SHARPE_RATIO}>Sharpe Ratio &ge;</option>
+              <option value={OptimizationMetric.TOTAL_RETURN}>Total Return &ge;</option>
+              <option value={OptimizationMetric.WIN_RATE}>Win Rate &ge;</option>
             </select>
 
             {filterMetric !== 'all' && (
@@ -194,48 +234,14 @@ export const OptimizationResults: React.FC<OptimizationResultsProps> = ({
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Rank
                 </th>
-                <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  onClick={() => handleSort('sharpe_ratio')}
-                >
-                  Sharpe Ratio
-                  <SortIndicator field="sharpe_ratio" />
-                </th>
-                <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  onClick={() => handleSort('total_return')}
-                >
-                  Total Return
-                  <SortIndicator field="total_return" />
-                </th>
-                <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  onClick={() => handleSort('max_drawdown')}
-                >
-                  Max Drawdown
-                  <SortIndicator field="max_drawdown" />
-                </th>
-                <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  onClick={() => handleSort('volatility')}
-                >
-                  Volatility
-                  <SortIndicator field="volatility" />
-                </th>
-                <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  onClick={() => handleSort('win_rate')}
-                >
-                  Win Rate
-                  <SortIndicator field="win_rate" />
-                </th>
-                <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  onClick={() => handleSort('trade_count')}
-                >
-                  Trades
-                  <SortIndicator field="trade_count" />
-                </th>
+                <SortableHeader field="sharpe_ratio" label="Sharpe Ratio" />
+                <SortableHeader field="total_return" label="Total Return" />
+                <SortableHeader field="buy_hold_return" label="Buy & Hold" />
+                <SortableHeader field="max_drawdown" label="Max Drawdown" />
+                <SortableHeader field="volatility" label="Volatility" />
+                <SortableHeader field="win_rate" label="Win Rate" />
+                <SortableHeader field="trade_count" label="Trades" />
+                <SortableHeader field="total_commissions" label="Commissions" />
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Parameters
                 </th>
@@ -245,8 +251,8 @@ export const OptimizationResults: React.FC<OptimizationResultsProps> = ({
               {processedResults.map((result, index) => (
                 <tr
                   key={result.id}
-                  className={`hover:bg-gray-50 ${onResultClick ? 'cursor-pointer' : ''}`}
-                  onClick={() => onResultClick?.(result)}
+                  className="hover:bg-gray-50 cursor-pointer"
+                  onClick={() => handleRowClick(result)}
                 >
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     #{index + 1}
@@ -274,6 +280,19 @@ export const OptimizationResults: React.FC<OptimizationResultsProps> = ({
                       {formatMetricValue(
                         result.metrics.total_return,
                         OptimizationMetric.TOTAL_RETURN,
+                      )}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <span
+                      className={getMetricColorClass(
+                        result.metrics.buy_hold_return,
+                        OptimizationMetric.BUY_HOLD_RETURN,
+                      )}
+                    >
+                      {formatMetricValue(
+                        result.metrics.buy_hold_return,
+                        OptimizationMetric.BUY_HOLD_RETURN,
                       )}
                     </span>
                   </td>
@@ -323,6 +342,12 @@ export const OptimizationResults: React.FC<OptimizationResultsProps> = ({
                       )}
                     </span>
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                    {formatMetricValue(
+                      result.metrics.total_commissions,
+                      OptimizationMetric.TOTAL_COMMISSIONS,
+                    )}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     <div className="max-w-xs truncate">
                       {Object.entries(result.parameter_combination.parameters).map(
@@ -369,6 +394,127 @@ export const OptimizationResults: React.FC<OptimizationResultsProps> = ({
               )}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Detail Modal */}
+      {selectedResult && (
+        <DetailModal result={selectedResult} onClose={() => setSelectedResult(null)} formatMetricValue={formatMetricValue} />
+      )}
+    </div>
+  );
+};
+
+// Detail modal component
+interface DetailModalProps {
+  result: OptimizationResult;
+  onClose: () => void;
+  formatMetricValue: (value: number, metric: OptimizationMetric) => string;
+}
+
+const DetailModal: React.FC<DetailModalProps> = ({ result, onClose, formatMetricValue }) => {
+  const tradeLog: TradeLogEntry[] = result.simulation_result?.trade_log || [];
+
+  return (
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="p-6 border-b border-gray-200 flex justify-between items-start">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Simulation Detail</h3>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {Object.entries(result.parameter_combination.parameters).map(([key, value]) => (
+                <span key={key} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                  {key}={typeof value === 'number' ? (value as number).toFixed(4) : String(value)}
+                </span>
+              ))}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+          >
+            &times;
+          </button>
+        </div>
+
+        {/* Metrics Grid */}
+        <div className="p-6 border-b border-gray-200">
+          <h4 className="text-sm font-medium text-gray-500 mb-3">Metrics</h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {([
+              [OptimizationMetric.SHARPE_RATIO, 'Sharpe Ratio'],
+              [OptimizationMetric.TOTAL_RETURN, 'Total Return'],
+              [OptimizationMetric.BUY_HOLD_RETURN, 'Buy & Hold'],
+              [OptimizationMetric.MAX_DRAWDOWN, 'Max Drawdown'],
+              [OptimizationMetric.VOLATILITY, 'Volatility'],
+              [OptimizationMetric.WIN_RATE, 'Win Rate'],
+              [OptimizationMetric.TRADE_COUNT, 'Trades'],
+              [OptimizationMetric.TOTAL_COMMISSIONS, 'Commissions'],
+              [OptimizationMetric.CALMAR_RATIO, 'Calmar Ratio'],
+              [OptimizationMetric.SORTINO_RATIO, 'Sortino Ratio'],
+              [OptimizationMetric.PROFIT_FACTOR, 'Profit Factor'],
+            ] as [OptimizationMetric, string][]).map(([metric, label]) => {
+              const val = result.metrics[metric];
+              if (val === undefined) return null;
+              return (
+                <div key={metric} className="bg-gray-50 p-3 rounded">
+                  <div className="text-xs text-gray-500">{label}</div>
+                  <div className="text-sm font-semibold">{formatMetricValue(val, metric)}</div>
+                </div>
+              );
+            })}
+            {result.simulation_result && (
+              <div className="bg-gray-50 p-3 rounded">
+                <div className="text-xs text-gray-500">Algorithm P&L</div>
+                <div className="text-sm font-semibold">${result.simulation_result.algorithm_pnl.toFixed(2)}</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Trade Log */}
+        <div className="flex-1 overflow-auto p-6">
+          <h4 className="text-sm font-medium text-gray-500 mb-3">
+            Trade Log ({tradeLog.length} trades)
+          </h4>
+          {tradeLog.length === 0 ? (
+            <div className="text-gray-400 text-sm">No trade log available for this result.</div>
+          ) : (
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Side</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Price</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Commission</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Cash After</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Shares After</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {tradeLog.map((trade, i) => (
+                  <tr key={i} className="hover:bg-gray-50">
+                    <td className="px-4 py-1.5 text-gray-600">{trade.timestamp}</td>
+                    <td className="px-4 py-1.5">
+                      <span className={trade.side === 'BUY' ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
+                        {trade.side}
+                      </span>
+                    </td>
+                    <td className="px-4 py-1.5 text-right">{Math.abs(trade.qty)}</td>
+                    <td className="px-4 py-1.5 text-right">${(trade.price || 0).toFixed(2)}</td>
+                    <td className="px-4 py-1.5 text-right">${(trade.commission || 0).toFixed(4)}</td>
+                    <td className="px-4 py-1.5 text-right">${(trade.cash_after || 0).toFixed(2)}</td>
+                    <td className="px-4 py-1.5 text-right">{trade.shares_after ?? '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>
