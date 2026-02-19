@@ -124,6 +124,9 @@ claude mcp add playwright npx @playwright/mcp@latest
 
 <!-- Document the coding standards and patterns used in this project -->
 
+### General
+- **Never use fake, mock, or randomly generated data in production code.** All features must operate on real data (real market prices, real simulation results, real computations). Stubs and mocks are only acceptable in tests.
+
 ### Backend
 -
 
