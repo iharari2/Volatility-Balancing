@@ -631,10 +631,35 @@ def get_engine(url: str) -> Engine:
         return create_engine(url, future=True)
 
 
+def _migrate_add_missing_columns(engine: Engine) -> None:
+    """Add columns that were added after initial table creation (lightweight migration)."""
+    from sqlalchemy import inspect as sa_inspect, text
+
+    inspector = sa_inspect(engine)
+    migrations: list[tuple[str, str, str]] = [
+        # (table, column, ALTER TABLE DDL)
+        ("optimization_configs", "initial_cash",
+         "ALTER TABLE optimization_configs ADD COLUMN initial_cash FLOAT NOT NULL DEFAULT 10000.0"),
+        ("optimization_configs", "intraday_interval_minutes",
+         "ALTER TABLE optimization_configs ADD COLUMN intraday_interval_minutes INTEGER NOT NULL DEFAULT 30"),
+        ("optimization_configs", "include_after_hours",
+         "ALTER TABLE optimization_configs ADD COLUMN include_after_hours BOOLEAN NOT NULL DEFAULT 0"),
+    ]
+    for table, column, ddl in migrations:
+        if table not in inspector.get_table_names():
+            continue
+        existing = [c["name"] for c in inspector.get_columns(table)]
+        if column not in existing:
+            with engine.begin() as conn:
+                conn.execute(text(ddl))
+            print(f"Migration: added {table}.{column}")
+
+
 def create_all(engine: Engine) -> None:
     """Create all tables and indexes, ignoring existing ones."""
     try:
         Base.metadata.create_all(engine)
+        _migrate_add_missing_columns(engine)
     except Exception as e:
         # If there are index conflicts, try to create tables without indexes first
         if "already exists" in str(e).lower():
