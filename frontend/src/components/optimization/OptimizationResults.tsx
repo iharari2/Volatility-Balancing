@@ -2,7 +2,7 @@
 // Displays optimization results in a table format with sorting and filtering
 
 import React, { useState, useMemo } from 'react';
-import { OptimizationResult, OptimizationMetric, TradeLogEntry } from '../../types/optimization';
+import { OptimizationResult, OptimizationMetric, TradeLogEntry, DividendEvent } from '../../types/optimization';
 
 interface OptimizationResultsProps {
   results: OptimizationResult[];
@@ -18,7 +18,8 @@ type SortField =
   | 'volatility'
   | 'win_rate'
   | 'trade_count'
-  | 'total_commissions';
+  | 'total_commissions'
+  | 'total_dividends';
 type SortDirection = 'asc' | 'desc';
 
 const COLUMN_TOOLTIPS: Record<string, string> = {
@@ -30,6 +31,7 @@ const COLUMN_TOOLTIPS: Record<string, string> = {
   win_rate: 'Percentage of trading days with positive returns.',
   trade_count: 'Total number of trades executed by the algorithm.',
   total_commissions: 'Total trading commissions paid across all trades.',
+  total_dividends: 'Net dividends received after withholding tax.',
 };
 
 export const OptimizationResults: React.FC<OptimizationResultsProps> = ({
@@ -103,6 +105,7 @@ export const OptimizationResults: React.FC<OptimizationResultsProps> = ({
       case OptimizationMetric.TRADE_COUNT:
         return Math.round(value).toString();
       case OptimizationMetric.TOTAL_COMMISSIONS:
+      case OptimizationMetric.TOTAL_DIVIDENDS:
         return `$${value.toFixed(2)}`;
       case OptimizationMetric.AVG_TRADE_DURATION:
         return `${value.toFixed(1)} days`;
@@ -242,6 +245,7 @@ export const OptimizationResults: React.FC<OptimizationResultsProps> = ({
                 <SortableHeader field="win_rate" label="Win Rate" />
                 <SortableHeader field="trade_count" label="Trades" />
                 <SortableHeader field="total_commissions" label="Commissions" />
+                <SortableHeader field="total_dividends" label="Dividends" />
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Parameters
                 </th>
@@ -348,6 +352,12 @@ export const OptimizationResults: React.FC<OptimizationResultsProps> = ({
                       OptimizationMetric.TOTAL_COMMISSIONS,
                     )}
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-green-700">
+                    {formatMetricValue(
+                      result.metrics.total_dividends,
+                      OptimizationMetric.TOTAL_DIVIDENDS,
+                    )}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     <div className="max-w-xs truncate">
                       {Object.entries(result.parameter_combination.parameters).map(
@@ -414,6 +424,7 @@ interface DetailModalProps {
 
 const DetailModal: React.FC<DetailModalProps> = ({ result, onClose, formatMetricValue }) => {
   const tradeLog: TradeLogEntry[] = result.simulation_result?.trade_log || [];
+  const dividendEvents: DividendEvent[] = result.simulation_result?.dividend_events || [];
 
   return (
     <div
@@ -457,6 +468,7 @@ const DetailModal: React.FC<DetailModalProps> = ({ result, onClose, formatMetric
               [OptimizationMetric.CALMAR_RATIO, 'Calmar Ratio'],
               [OptimizationMetric.SORTINO_RATIO, 'Sortino Ratio'],
               [OptimizationMetric.PROFIT_FACTOR, 'Profit Factor'],
+              [OptimizationMetric.TOTAL_DIVIDENDS, 'Total Dividends'],
             ] as [OptimizationMetric, string][]).map(([metric, label]) => {
               const val = result.metrics[metric];
               if (val === undefined) return null;
@@ -514,6 +526,39 @@ const DetailModal: React.FC<DetailModalProps> = ({ result, onClose, formatMetric
                 ))}
               </tbody>
             </table>
+          )}
+
+          {/* Dividend Events */}
+          {dividendEvents.length > 0 && (
+            <>
+              <h4 className="text-sm font-medium text-gray-500 mb-3 mt-6">
+                Dividend Events ({dividendEvents.length})
+              </h4>
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">DPS</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Shares</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Net Amount</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Anchor Adj.</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {dividendEvents.map((evt, i) => (
+                    <tr key={i} className="hover:bg-gray-50">
+                      <td className="px-4 py-1.5 text-gray-600">{evt.date}</td>
+                      <td className="px-4 py-1.5 text-right">${evt.dps.toFixed(4)}</td>
+                      <td className="px-4 py-1.5 text-right">{evt.shares}</td>
+                      <td className="px-4 py-1.5 text-right text-green-700">${evt.net_amount.toFixed(2)}</td>
+                      <td className="px-4 py-1.5 text-right text-gray-500">
+                        ${evt.old_anchor.toFixed(2)} &rarr; ${evt.new_anchor.toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
           )}
         </div>
       </div>

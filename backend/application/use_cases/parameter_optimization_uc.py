@@ -449,6 +449,11 @@ class ParameterOptimizationUC:
             t.get("commission", 0) for t in trade_log
         )
 
+        # Total dividends received (net of withholding tax)
+        metrics[OptimizationMetric.TOTAL_DIVIDENDS] = getattr(
+            sim_result, "total_dividends_received", 0.0
+        )
+
         # Calmar Ratio: return_fraction / abs(drawdown_fraction)
         return_fraction = sim_result.algorithm_return_pct / 100.0
         dd_fraction = abs(sim_result.algorithm_max_drawdown / 100.0)
@@ -564,6 +569,8 @@ class ParameterOptimizationUC:
                     "trade_log": sim_result.trade_log,
                     "initial_cash": sim_result.initial_cash,
                     "algorithm_pnl": sim_result.algorithm_pnl,
+                    "total_dividends_received": getattr(sim_result, "total_dividends_received", 0.0),
+                    "dividend_events": getattr(sim_result, "dividend_events", []),
                 }
                 result.status = OptimizationResultStatus.COMPLETED
                 result.completed_at = datetime.now(timezone.utc)

@@ -63,6 +63,7 @@ export enum OptimizationMetric {
   AVG_TRADE_DURATION = 'avg_trade_duration',
   BUY_HOLD_RETURN = 'buy_hold_return',
   TOTAL_COMMISSIONS = 'total_commissions',
+  TOTAL_DIVIDENDS = 'total_dividends',
 }
 
 export enum OptimizationStatus {
@@ -72,6 +73,18 @@ export enum OptimizationStatus {
   COMPLETED = 'completed',
   FAILED = 'failed',
   CANCELLED = 'cancelled',
+}
+
+export interface DividendEvent {
+  date: string;
+  ex_date: string;
+  dps: number;
+  shares: number;
+  gross_amount: number;
+  net_amount: number;
+  withholding_tax: number;
+  old_anchor: number;
+  new_anchor: number;
 }
 
 export interface TradeLogEntry {
@@ -96,6 +109,8 @@ export interface OptimizationResult {
     trade_log: TradeLogEntry[];
     initial_cash: number;
     algorithm_pnl: number;
+    total_dividends_received?: number;
+    dividend_events?: DividendEvent[];
   };
   // Additional properties for display
   parameters?: Record<string, any>;
