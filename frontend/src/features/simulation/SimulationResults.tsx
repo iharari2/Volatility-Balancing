@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Play, Filter, Clock, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
+import { Download, Play, Filter, Clock, TrendingUp, TrendingDown, DollarSign, RotateCcw, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { exportToExcel } from '../../utils/exportExcel';
 import {
@@ -47,6 +47,8 @@ interface DividendEvent {
 }
 
 interface SimulationResultsProps {
+  onRerun?: (params: { asset: string; startDate: string; endDate: string }) => void;
+  onDelete?: (simulationId: string) => void;
   result: {
     simulation_id?: string;
     ticker?: string;
@@ -97,7 +99,7 @@ interface SimulationResultsProps {
   } | null;
 }
 
-export default function SimulationResults({ result }: SimulationResultsProps) {
+export default function SimulationResults({ result, onRerun, onDelete }: SimulationResultsProps) {
   const [showTriggersOnly, setShowTriggersOnly] = useState(true);
   const [activeTab, setActiveTab] = useState<'trades' | 'timeline' | 'dividends'>('timeline');
 
@@ -233,6 +235,38 @@ export default function SimulationResults({ result }: SimulationResultsProps) {
       <div className="flex items-center justify-between pb-4 border-b border-gray-100">
         <h2 className="text-xl font-bold text-gray-900">Simulation Results</h2>
         <div className="flex gap-2">
+          {onRerun && (
+            <button
+              onClick={() => {
+                // Extract params from the result's time_series_data
+                const events = result.time_series_data || [];
+                const firstDate = events.length > 0 ? events[0].date : '';
+                const lastDate = events.length > 0 ? events[events.length - 1].date : '';
+                onRerun({
+                  asset: result.ticker || '',
+                  startDate: firstDate,
+                  endDate: lastDate,
+                });
+              }}
+              className="btn btn-secondary py-1.5 text-xs flex items-center"
+            >
+              <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+              Rerun
+            </button>
+          )}
+          {onDelete && result.simulation_id && (
+            <button
+              onClick={() => {
+                if (window.confirm('Delete this simulation result?')) {
+                  onDelete(result.simulation_id!);
+                }
+              }}
+              className="btn btn-secondary py-1.5 text-xs flex items-center text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+              Delete
+            </button>
+          )}
           <button
             onClick={handleExportExcel}
             className="btn btn-secondary py-1.5 text-xs flex items-center"

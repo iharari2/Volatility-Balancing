@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Play } from 'lucide-react';
 import { usePortfolio } from '../../contexts/PortfolioContext';
 
 interface SimulationSetupProps {
   onRun: (config: SimulationConfig) => void;
   isRunning: boolean;
+  initialConfig?: Partial<SimulationConfig>;
 }
 
 interface SimulationConfig {
@@ -23,9 +24,11 @@ interface SimulationConfig {
   comparisonTicker: string;
 }
 
-export default function SimulationSetup({ onRun, isRunning }: SimulationSetupProps) {
+export { type SimulationConfig };
+
+export default function SimulationSetup({ onRun, isRunning, initialConfig }: SimulationSetupProps) {
   const { positions } = usePortfolio();
-  const [config, setConfig] = useState<SimulationConfig>({
+  const defaults: SimulationConfig = {
     asset: positions[0]?.ticker || 'AAPL',
     startDate: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
@@ -36,7 +39,15 @@ export default function SimulationSetup({ onRun, isRunning }: SimulationSetupPro
     triggerThresholdPct: 3,
     initialCash: 10000,
     comparisonTicker: '',
-  });
+  };
+  const [config, setConfig] = useState<SimulationConfig>({ ...defaults, ...initialConfig });
+
+  // Update config when initialConfig changes (e.g., rerun with modified params)
+  useEffect(() => {
+    if (initialConfig) {
+      setConfig(prev => ({ ...prev, ...initialConfig }));
+    }
+  }, [initialConfig]);
 
   const handleRun = () => {
     onRun(config);

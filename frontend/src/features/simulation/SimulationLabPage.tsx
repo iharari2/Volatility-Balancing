@@ -1,17 +1,21 @@
-import { useState } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Play, Download, ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { usePortfolio } from '../../contexts/PortfolioContext';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import SimulationResults from './SimulationResults';
-import SimulationSetup from './SimulationSetup';
+import SimulationSetup, { type SimulationConfig } from './SimulationSetup';
 import { simulationApi } from '../../lib/api';
+import toast from 'react-hot-toast';
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 export default function SimulationLabPage() {
   const { selectedPortfolio } = useTenantPortfolio();
   const [simulationResult, setSimulationResult] = useState<any>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rerunConfig, setRerunConfig] = useState<Partial<SimulationConfig> | undefined>(undefined);
 
   const handleRunSimulation = async (config: any) => {
     setIsRunning(true);
@@ -290,6 +294,28 @@ export default function SimulationLabPage() {
     }
   };
 
+  const handleRerun = useCallback((params: { asset: string; startDate: string; endDate: string }) => {
+    setRerunConfig({
+      asset: params.asset,
+      startDate: params.startDate,
+      endDate: params.endDate,
+    });
+    // Scroll to top so user can see the setup form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    toast.success('Parameters loaded into setup form. Modify and click Run.');
+  }, []);
+
+  const handleDelete = useCallback(async (simulationId: string) => {
+    try {
+      const resp = await fetch(`${API_BASE}/v1/simulations/${simulationId}`, { method: 'DELETE' });
+      if (!resp.ok) throw new Error(`Delete failed: ${resp.statusText}`);
+      setSimulationResult(null);
+      toast.success('Simulation deleted');
+    } catch (err: any) {
+      toast.error(`Delete failed: ${err.message}`);
+    }
+  }, []);
+
   if (!selectedPortfolio) {
     return (
       <div className="text-center py-12">
@@ -344,12 +370,12 @@ export default function SimulationLabPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Panel - Simulation Setup */}
         <div className="lg:col-span-1">
-          <SimulationSetup onRun={handleRunSimulation} isRunning={isRunning} />
+          <SimulationSetup onRun={handleRunSimulation} isRunning={isRunning} initialConfig={rerunConfig} />
         </div>
 
         {/* Right Panel - Results */}
         <div className="lg:col-span-1">
-          <SimulationResults result={simulationResult} />
+          <SimulationResults result={simulationResult} onRerun={handleRerun} onDelete={handleDelete} />
         </div>
       </div>
     </div>

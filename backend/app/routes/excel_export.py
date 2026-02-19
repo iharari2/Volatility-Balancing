@@ -135,12 +135,12 @@ async def export_optimization_results(
             raise HTTPException(status_code=400, detail="Invalid config_id format")
 
         # Get optimization results
-        results = optimization_uc.get_results(config_uuid)
+        results = optimization_uc.get_optimization_results(config_uuid)
         if not results:
             raise HTTPException(status_code=404, detail="Optimization results not found")
 
         # Get configuration name
-        config = optimization_uc.get_config(config_uuid)
+        config = optimization_uc.config_repo.get_by_id(config_uuid)
         config_name = (
             getattr(config, "name", f"Optimization_{config_id}")
             if config
