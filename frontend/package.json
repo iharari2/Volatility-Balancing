@@ -24,44 +24,50 @@
     "react-router-dom": "^6.20.1",
     "recharts": "^2.8.0",
     "tailwind-merge": "^2.0.0",
+    "xlsx": "^0.18.5",
     "zustand": "^4.4.7"
   },
   "devDependencies": {
+    "@chromatic-com/storybook": "^5.0.0",
+    "@storybook/addon-a11y": "^10.1.11",
+    "@storybook/addon-docs": "^10.1.11",
+    "@storybook/addon-onboarding": "^10.1.11",
+    "@storybook/addon-vitest": "^10.1.11",
+    "@storybook/react-vite": "^10.1.11",
     "@types/react": "^18.2.37",
     "@types/react-dom": "^18.2.15",
     "@typescript-eslint/eslint-plugin": "^6.10.0",
     "@typescript-eslint/parser": "^6.10.0",
     "@vitejs/plugin-react": "^4.1.1",
+    "@vitest/browser-playwright": "^4.0.17",
+    "@vitest/coverage-v8": "^4.0.17",
     "autoprefixer": "^10.4.16",
     "baseline-browser-mapping": "^2.9.4",
     "eslint": "^8.53.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.4",
+    "eslint-plugin-storybook": "^10.1.11",
+    "playwright": "^1.57.0",
     "postcss": "^8.4.31",
+    "storybook": "^10.1.11",
     "tailwindcss": "^3.3.5",
     "typescript": "^5.2.2",
     "vite": "^7.1.5",
-    "storybook": "^10.1.11",
-    "@storybook/react-vite": "^10.1.11",
-    "@chromatic-com/storybook": "^5.0.0",
-    "@storybook/addon-vitest": "^10.1.11",
-    "@storybook/addon-a11y": "^10.1.11",
-    "@storybook/addon-docs": "^10.1.11",
-    "@storybook/addon-onboarding": "^10.1.11",
-    "eslint-plugin-storybook": "^10.1.11",
-    "vitest": "^4.0.17",
-    "playwright": "^1.57.0",
-    "@vitest/browser-playwright": "^4.0.17",
-    "@vitest/coverage-v8": "^4.0.17"
+    "vitest": "^4.0.17"
   },
   "eslintConfig": {
     "parser": "@typescript-eslint/parser",
     "parserOptions": {
       "ecmaVersion": "latest",
       "sourceType": "module",
-      "ecmaFeatures": { "jsx": true }
+      "ecmaFeatures": {
+        "jsx": true
+      }
     },
-    "plugins": ["react-refresh", "@typescript-eslint"],
+    "plugins": [
+      "react-refresh",
+      "@typescript-eslint"
+    ],
     "extends": [
       "eslint:recommended",
       "plugin:@typescript-eslint/recommended",
@@ -69,7 +75,12 @@
       "plugin:storybook/recommended"
     ],
     "rules": {
-      "react-refresh/only-export-components": ["warn", { "allowConstantExport": true }],
+      "react-refresh/only-export-components": [
+        "warn",
+        {
+          "allowConstantExport": true
+        }
+      ],
       "@typescript-eslint/no-unused-vars": "off",
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/ban-ts-comment": "off",
@@ -77,6 +88,9 @@
       "storybook/no-renderer-packages": "off",
       "react-hooks/rules-of-hooks": "warn"
     },
-    "ignorePatterns": ["dist", "node_modules"]
+    "ignorePatterns": [
+      "dist",
+      "node_modules"
+    ]
   }
 }
