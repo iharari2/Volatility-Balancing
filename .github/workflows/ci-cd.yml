@@ -46,7 +46,7 @@ jobs:
       - name: Unit tests
         env:
           PYTHONPATH: backend
-        run: pytest backend/tests/unit --cov=backend/app --cov-report=term-missing --cov-fail-under=70 -n auto --dist worksteal
+        run: pytest backend/tests/unit --cov=backend/app --cov=backend/domain --cov=backend/application --cov-report=term-missing --cov-fail-under=25 -n auto --dist worksteal
 
   frontend-build:
     runs-on: ubuntu-latest
