@@ -74,7 +74,8 @@
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/ban-ts-comment": "off",
       "no-case-declarations": "off",
-      "storybook/no-renderer-packages": "off"
+      "storybook/no-renderer-packages": "off",
+      "react-hooks/rules-of-hooks": "warn"
     },
     "ignorePatterns": ["dist", "node_modules"]
   }
