@@ -211,11 +211,12 @@ class GuardrailEvaluator:
 
         alloc = stock_val / total_val
 
-        # Enforce guardrails with tolerance for rounding: stock allocation
-        # must be within [min_stock_pct - ε, max_stock_pct + ε].
-        # A small tolerance prevents false rejections when order-qty rounding
-        # puts the post-fill allocation marginally outside the exact boundary.
-        _TOLERANCE = Decimal("0.0001")  # 0.01 %
+        # Enforce guardrails with tolerance for rounding and commission impact.
+        # The order sizing formula uses float arithmetic and targets the exact
+        # boundary, but commission reduces cash and pushes allocation slightly
+        # above/below the limit.  A 0.5 % tolerance prevents false rejections
+        # while still catching genuine breaches.
+        _TOLERANCE = Decimal("0.005")  # 0.5 %
         if config.min_stock_pct is not None and alloc < config.min_stock_pct - _TOLERANCE:
             return (
                 False,
