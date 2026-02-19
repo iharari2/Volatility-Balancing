@@ -659,7 +659,6 @@ def create_all(engine: Engine) -> None:
     """Create all tables and indexes, ignoring existing ones."""
     try:
         Base.metadata.create_all(engine)
-        _migrate_add_missing_columns(engine)
     except Exception as e:
         # If there are index conflicts, try to create tables without indexes first
         if "already exists" in str(e).lower():
@@ -684,6 +683,9 @@ def create_all(engine: Engine) -> None:
                             print(f"Warning: Could not create index {index.name}: {index_error}")
         else:
             raise e
+
+    # Always run lightweight migrations (adds missing columns to existing tables)
+    _migrate_add_missing_columns(engine)
 
 
 # Optimization System Models
