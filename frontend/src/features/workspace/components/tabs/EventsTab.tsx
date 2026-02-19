@@ -1,5 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Filter, X, List, Clock as ClockIcon } from 'lucide-react';
+import { Filter, X, List, Clock as ClockIcon, Download } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { exportToExcel } from '../../../../utils/exportExcel';
+import { useTenantPortfolio } from '../../../../contexts/TenantPortfolioContext';
 import { useWorkspace } from '../../WorkspaceContext';
 import { getPositionCockpit, CockpitResponse } from '../../../../api/cockpit';
 import DateRangeFilter, { DateRange } from '../../../../components/shared/DateRangeFilter';
@@ -28,6 +31,8 @@ type ViewMode = 'timeline' | 'table';
 
 export default function EventsTab() {
   const { selectedPosition, portfolioId } = useWorkspace();
+  const { selectedTenantId } = useTenantPortfolio();
+  const tenantId = selectedTenantId || 'default';
   const [cockpitData, setCockpitData] = useState<CockpitResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [timeWindow, setTimeWindow] = useState('7d');
@@ -148,6 +153,27 @@ export default function EventsTab() {
               <ClockIcon className="h-4 w-4" />
             </button>
           </div>
+
+          {/* Excel Export */}
+          <button
+            onClick={async () => {
+              try {
+                await exportToExcel(
+                  `/v1/excel/timeline/export?tenant_id=${tenantId}&portfolio_id=${portfolioId}`,
+                  `events_${selectedPosition?.asset_symbol || 'all'}_${new Date().toISOString().split('T')[0]}.xlsx`,
+                );
+                toast.success('Events exported');
+              } catch (err) {
+                toast.error(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+              }
+            }}
+            disabled={!portfolioId}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Export to Excel"
+          >
+            <Download className="h-4 w-4" />
+            Excel
+          </button>
 
           {/* Filter Toggle */}
           <button

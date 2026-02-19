@@ -268,7 +268,7 @@ export default function OrdersTable({ tenantId, portfolioId, positionId }: Order
             onClick={async () => {
               try {
                 await exportToExcel(
-                  '/v1/excel/trading/export?format=xlsx',
+                  `/v1/excel/trading/export?format=xlsx&position_ids=${positionId}`,
                   `orders_${new Date().toISOString().split('T')[0]}.xlsx`,
                 );
                 toast.success('Orders exported');
