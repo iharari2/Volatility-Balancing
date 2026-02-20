@@ -1404,3 +1404,79 @@ class ExcelTemplateService:
         self.workbook.save(excel_buffer)
         excel_buffer.seek(0)
         return excel_buffer.getvalue()
+
+    def create_dividend_report(
+        self,
+        receivables: List[Dict[str, Any]],
+        upcoming_dividends: List[Dict[str, Any]],
+        summary: Dict[str, Any],
+    ) -> bytes:
+        """Create a dividend report with Receivables and Upcoming sheets."""
+        self.workbook = Workbook()
+        self.workbook.remove(self.workbook.active)
+        self._define_styles()
+
+        ticker = summary.get("ticker", "UNKNOWN")
+        position_id = summary.get("position_id", "")
+
+        # --- Sheet 1: Receivables ---
+        ws = self.workbook.create_sheet("Receivables", 0)
+        ws["A1"] = f"Dividend Receivables - {ticker}"
+        ws["A1"].font = Font(size=18, bold=True, color="2F5597")
+        ws.merge_cells("A1:H1")
+        ws["A2"] = f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+        ws["A2"].font = Font(size=10, italic=True, color="666666")
+        ws.merge_cells("A2:H2")
+
+        # Summary row
+        ws["A3"] = f"Total Pending: {summary.get('total_pending', 0)} | Total Paid: {summary.get('total_paid', 0)}"
+        ws["A3"].font = Font(size=10, color="333333")
+        ws.merge_cells("A3:H3")
+
+        headers = [
+            "Status", "Ex-Date", "Pay-Date", "Shares at Record",
+            "Gross Amount", "Withholding Tax", "Net Amount", "Paid At",
+        ]
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=5, column=col, value=header)
+            cell.style = self.styles["header"]
+
+        for row_idx, rec in enumerate(receivables, 6):
+            ws.cell(row=row_idx, column=1, value=rec.get("status", ""))
+            ws.cell(row=row_idx, column=2, value=rec.get("ex_date", ""))
+            ws.cell(row=row_idx, column=3, value=rec.get("pay_date", ""))
+            ws.cell(row=row_idx, column=4, value=rec.get("shares_at_record", ""))
+            ws.cell(row=row_idx, column=5, value=rec.get("gross_amount", ""))
+            ws.cell(row=row_idx, column=6, value=rec.get("withholding_tax", ""))
+            ws.cell(row=row_idx, column=7, value=rec.get("net_amount", ""))
+            ws.cell(row=row_idx, column=8, value=rec.get("paid_at", ""))
+
+        self._safe_auto_fit_columns(ws)
+
+        # --- Sheet 2: Upcoming Dividends ---
+        ws2 = self.workbook.create_sheet("Upcoming Dividends")
+        ws2["A1"] = f"Upcoming Dividends - {ticker}"
+        ws2["A1"].font = Font(size=18, bold=True, color="2F5597")
+        ws2.merge_cells("A1:D1")
+        ws2["A2"] = f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+        ws2["A2"].font = Font(size=10, italic=True, color="666666")
+        ws2.merge_cells("A2:D2")
+
+        upcoming_headers = ["Ex-Date", "Pay-Date", "DPS", "Currency"]
+        for col, header in enumerate(upcoming_headers, 1):
+            cell = ws2.cell(row=4, column=col, value=header)
+            cell.style = self.styles["header"]
+
+        for row_idx, div in enumerate(upcoming_dividends, 5):
+            ws2.cell(row=row_idx, column=1, value=div.get("ex_date", ""))
+            ws2.cell(row=row_idx, column=2, value=div.get("pay_date", ""))
+            ws2.cell(row=row_idx, column=3, value=div.get("dps", ""))
+            ws2.cell(row=row_idx, column=4, value=div.get("currency", "USD"))
+
+        self._safe_auto_fit_columns(ws2)
+
+        # Save to bytes
+        excel_buffer = io.BytesIO()
+        self.workbook.save(excel_buffer)
+        excel_buffer.seek(0)
+        return excel_buffer.getvalue()

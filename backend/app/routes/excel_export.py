@@ -607,6 +607,97 @@ async def export_position_data(
         raise HTTPException(status_code=500, detail=f"Error exporting position data: {str(e)}")
 
 
+@router.get("/dividends/export")
+async def export_dividend_data(
+    tenant_id: str = Query(..., description="Tenant ID"),
+    portfolio_id: str = Query(..., description="Portfolio ID"),
+    position_id: str = Query(..., description="Position ID"),
+    format: str = Query("xlsx", description="Export format"),
+    excel_service: ExcelExportService = Depends(get_excel_export_service),
+):
+    """Export dividend data (receivables + upcoming) for a position to Excel."""
+    try:
+        # Look up position
+        position = container.positions.get(
+            tenant_id=tenant_id,
+            portfolio_id=portfolio_id,
+            position_id=position_id,
+        )
+        if not position:
+            raise HTTPException(status_code=404, detail="Position not found")
+
+        ticker = getattr(position, "ticker", getattr(position, "asset_symbol", "UNKNOWN"))
+
+        # Get all receivables for this position
+        receivables = list(container.dividend_receivable.get_receivables_by_position(position_id))
+
+        # Get dividends by ticker (for ex_date/pay_date lookup)
+        dividends_by_id = {}
+        all_dividends = list(container.dividend.get_dividends_by_ticker(ticker))
+        for d in all_dividends:
+            dividends_by_id[d.id] = d
+
+        # Build receivables rows (join with dividend for dates)
+        receivables_data = []
+        total_pending = 0
+        total_paid = 0
+        for rec in receivables:
+            div = dividends_by_id.get(rec.dividend_id)
+            row = {
+                "status": rec.status,
+                "ex_date": div.ex_date.strftime("%Y-%m-%d") if div else "",
+                "pay_date": div.pay_date.strftime("%Y-%m-%d") if div else "",
+                "shares_at_record": rec.shares_at_record,
+                "gross_amount": float(rec.gross_amount),
+                "withholding_tax": float(rec.withholding_tax),
+                "net_amount": float(rec.net_amount),
+                "paid_at": rec.paid_at.strftime("%Y-%m-%d %H:%M:%S") if rec.paid_at else "",
+            }
+            receivables_data.append(row)
+            if rec.status == "pending":
+                total_pending += 1
+            elif rec.status == "paid":
+                total_paid += 1
+
+        # Build upcoming dividends
+        upcoming_data = []
+        from datetime import datetime as dt_cls
+        now = dt_cls.now()
+        for d in all_dividends:
+            if d.ex_date > now:
+                upcoming_data.append({
+                    "ex_date": d.ex_date.strftime("%Y-%m-%d"),
+                    "pay_date": d.pay_date.strftime("%Y-%m-%d"),
+                    "dps": float(d.dps),
+                    "currency": d.currency,
+                })
+        # Sort upcoming by ex_date
+        upcoming_data.sort(key=lambda x: x["ex_date"])
+
+        summary = {
+            "ticker": ticker,
+            "position_id": position_id,
+            "total_pending": total_pending,
+            "total_paid": total_paid,
+        }
+
+        excel_data = excel_service.export_dividend_data(receivables_data, upcoming_data, summary)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"dividends_{ticker}_{timestamp}.xlsx"
+
+        return StreamingResponse(
+            io.BytesIO(excel_data),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error exporting dividend data: {str(e)}")
+
+
 @router.get("/export/formats")
 async def get_export_formats():
     """Get available export formats."""

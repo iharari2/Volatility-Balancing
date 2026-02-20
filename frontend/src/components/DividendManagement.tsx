@@ -13,8 +13,11 @@ import {
   CheckCircle,
   Play,
   Clock,
+  Download,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import toast from 'react-hot-toast';
+import { exportToExcel } from '../utils/exportExcel';
 
 interface DividendManagementProps {
   tenantId: string;
@@ -99,7 +102,27 @@ export default function DividendManagement({ tenantId, portfolioId, positionId, 
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900">Dividend Management</h3>
+        <div className="flex items-center gap-3">
+          <h3 className="text-lg font-semibold text-gray-900">Dividend Management</h3>
+          <button
+            onClick={async () => {
+              try {
+                await exportToExcel(
+                  `/v1/excel/dividends/export?tenant_id=${tenantId}&portfolio_id=${portfolioId}&position_id=${positionId}`,
+                  `dividends_${ticker}_${new Date().toISOString().split('T')[0]}.xlsx`,
+                );
+                toast.success('Dividends exported');
+              } catch (err) {
+                toast.error(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+            title="Export to Excel"
+          >
+            <Download className="h-4 w-4" />
+            Excel
+          </button>
+        </div>
         <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
           {tabs.map((tab) => {
             const Icon = tab.icon;

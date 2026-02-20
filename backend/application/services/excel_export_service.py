@@ -97,6 +97,18 @@ class ExcelExportService:
             position, market_data, transaction_data, simulation_data
         )
 
+    def export_dividend_data(
+        self,
+        receivables: List[Dict[str, Any]],
+        upcoming_dividends: List[Dict[str, Any]],
+        summary: Dict[str, Any],
+    ) -> bytes:
+        """Export dividend data (receivables + upcoming) to Excel format."""
+        template_service = ExcelTemplateService()
+        return template_service.create_dividend_report(
+            receivables, upcoming_dividends, summary
+        )
+
     def _create_optimization_summary_sheet(self, results: OptimizationResults, config_name: str):
         """Create optimization summary sheet."""
         ws = self.workbook.create_sheet("Summary", 0)
