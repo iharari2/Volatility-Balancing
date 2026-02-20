@@ -2,6 +2,7 @@
 # backend/app/routes/excel_export.py
 # =========================
 
+from dataclasses import asdict
 from typing import List, Optional
 from uuid import UUID
 import io
@@ -423,15 +424,21 @@ async def export_trading_data(
             # For now, return empty list
             positions_data = []
 
-        # Get trades data
+        # Get trades and orders data
         trades_data = []
-        # TODO: Fetch real trades from repository
-        # For now, return empty list instead of mock data
-
-        # Get orders data
         orders_data = []
-        # TODO: Fetch real orders from repository
-        # For now, return empty list instead of mock data
+        if position_ids:
+            for pos_id in position_ids:
+                try:
+                    pos_orders = container.orders.list_for_position(pos_id, limit=10000)
+                    for order in pos_orders:
+                        orders_data.append(asdict(order))
+                    pos_trades = container.trades.list_for_position(pos_id, limit=10000)
+                    for trade in pos_trades:
+                        trades_data.append(asdict(trade))
+                except Exception:
+                    import logging
+                    logging.warning(f"Skipping orders/trades for position {pos_id}")
 
         if format.lower() == "xlsx":
             # Export to Excel

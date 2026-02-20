@@ -34,6 +34,7 @@ from app.routes.portfolio_cockpit_api import router as portfolio_cockpit_router
 from app.routes.explainability import live_router as explainability_live_router
 from app.routes.explainability import simulation_router as explainability_sim_router
 from app.routes.monitoring import router as monitoring_router
+from app.routes.broker_status import router as broker_status_router
 from application.services.trading_worker import start_trading_worker, stop_trading_worker
 
 API_PREFIX = "/v1"
@@ -153,6 +154,7 @@ def create_app(enable_trading_worker: bool | None = None) -> FastAPI:
     app.include_router(explainability_live_router)
     app.include_router(explainability_sim_router)
     app.include_router(monitoring_router)
+    app.include_router(broker_status_router)
 
     def __sync_ping() -> dict[str, bool]:
         return {"ok": True}

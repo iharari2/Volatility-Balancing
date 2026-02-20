@@ -29,7 +29,9 @@
 
 | 17 | Broker Integration (Alpaca) | — | Wired AlpacaBrokerAdapter in DI, alpaca-py dependency, broker status endpoint, credential validation |
 | — | Fix: Workspace Excel Export | `9ff4544` | Scoped Orders export to position, added Excel export button to Events tab |
-| — | Dividend Excel Export | — | End-to-end Excel export for Dividends tab: backend endpoint + multi-sheet workbook (Receivables + Upcoming) + frontend Download button |
+| — | Dividend Excel Export | `8e9f65a` | End-to-end Excel export for Dividends tab: backend endpoint + multi-sheet workbook (Receivables + Upcoming) + frontend Download button |
+| — | Fix: Orders Excel Export | — | Wired real trades/orders data into trading Excel export (replaced TODO stubs), implemented trades + orders analysis sheets in `excel_template_service.py`, added `dataclasses.asdict` serialization |
+| — | Fix: API limits | — | Increased `listOrders`/`listTrades` default limit from 200 to 5000 in `api.ts` |
 
 **Test suite**: 561 passed (13 skipped), ruff clean, TypeScript clean, frontend builds clean, pytest-xdist parallel enabled, **CI/CD: all 4 jobs green**
 

@@ -157,12 +157,12 @@ export const ordersApi = {
       headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {},
     }),
 
-  listOrders: (tenantId: string, portfolioId: string, positionId: string, limit = 200) =>
+  listOrders: (tenantId: string, portfolioId: string, positionId: string, limit = 5000) =>
     request<{ position_id: string; orders: OrderRow[] }>(
       `/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/orders?limit=${limit}`,
     ),
 
-  listTrades: (tenantId: string, portfolioId: string, positionId: string, limit = 200) =>
+  listTrades: (tenantId: string, portfolioId: string, positionId: string, limit = 5000) =>
     request<{ position_id: string; trades: TradeRow[] }>(
       `/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/trades?limit=${limit}`,
     ),

@@ -390,9 +390,10 @@ class _Container:
             fill_mode = os.getenv("STUB_BROKER_FILL_MODE", "immediate")
             self.broker = StubBrokerAdapter(fill_mode=fill_mode)
         elif broker_backend == "alpaca":
-            # Phase 3: Alpaca integration
-            # For now, fall back to stub
-            self.broker = StubBrokerAdapter(fill_mode="immediate")
+            from infrastructure.config.broker_credentials import AlpacaCredentials
+            from infrastructure.adapters.alpaca_broker_adapter import AlpacaBrokerAdapter
+            creds = AlpacaCredentials.from_env()  # raises ValueError if env vars missing
+            self.broker = AlpacaBrokerAdapter(creds)
         else:
             # Default to stub broker
             self.broker = StubBrokerAdapter(fill_mode="immediate")

@@ -745,8 +745,33 @@ class ExcelTemplateService:
         ws["A1"].font = Font(size=16, bold=True, color="2F5597")
         ws.merge_cells("A1:H1")
 
-        # Add trades analysis content here
-        ws["A3"] = "Trades analysis will be implemented based on available trades data."
+        if not trades_data:
+            ws["A3"] = "No trades data available."
+            return
+
+        headers = ["Trade ID", "Order ID", "Position ID", "Side", "Qty", "Price", "Commission", "Status", "Executed At"]
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=col, value=header)
+            cell.font = Font(bold=True, color="FFFFFF", size=11)
+            cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        for row_idx, trade in enumerate(trades_data, 4):
+            executed_at = trade.get("executed_at", "")
+            if hasattr(executed_at, "isoformat"):
+                executed_at = executed_at.isoformat()
+            ws.cell(row=row_idx, column=1, value=trade.get("id", ""))
+            ws.cell(row=row_idx, column=2, value=trade.get("order_id", ""))
+            ws.cell(row=row_idx, column=3, value=trade.get("position_id", ""))
+            ws.cell(row=row_idx, column=4, value=trade.get("side", ""))
+            ws.cell(row=row_idx, column=5, value=trade.get("qty", 0))
+            ws.cell(row=row_idx, column=6, value=trade.get("price", 0))
+            ws.cell(row=row_idx, column=7, value=trade.get("commission", 0))
+            ws.cell(row=row_idx, column=8, value=trade.get("status", ""))
+            ws.cell(row=row_idx, column=9, value=str(executed_at))
+
+        for col in range(1, len(headers) + 1):
+            ws.column_dimensions[ws.cell(row=3, column=col).column_letter].width = 18
 
     def _create_orders_analysis(self, orders_data):
         """Create orders analysis sheet."""
@@ -756,8 +781,33 @@ class ExcelTemplateService:
         ws["A1"].font = Font(size=16, bold=True, color="2F5597")
         ws.merge_cells("A1:H1")
 
-        # Add orders analysis content here
-        ws["A3"] = "Orders analysis will be implemented based on available orders data."
+        if not orders_data:
+            ws["A3"] = "No orders data available."
+            return
+
+        headers = ["Order ID", "Position ID", "Side", "Qty", "Status", "Filled Qty", "Avg Fill Price", "Commission", "Created At"]
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=col, value=header)
+            cell.font = Font(bold=True, color="FFFFFF", size=11)
+            cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        for row_idx, order in enumerate(orders_data, 4):
+            created_at = order.get("created_at", "")
+            if hasattr(created_at, "isoformat"):
+                created_at = created_at.isoformat()
+            ws.cell(row=row_idx, column=1, value=order.get("id", ""))
+            ws.cell(row=row_idx, column=2, value=order.get("position_id", ""))
+            ws.cell(row=row_idx, column=3, value=order.get("side", ""))
+            ws.cell(row=row_idx, column=4, value=order.get("qty", 0))
+            ws.cell(row=row_idx, column=5, value=order.get("status", ""))
+            ws.cell(row=row_idx, column=6, value=order.get("filled_qty", 0))
+            ws.cell(row=row_idx, column=7, value=order.get("avg_fill_price", ""))
+            ws.cell(row=row_idx, column=8, value=order.get("total_commission", 0))
+            ws.cell(row=row_idx, column=9, value=str(created_at))
+
+        for col in range(1, len(headers) + 1):
+            ws.column_dimensions[ws.cell(row=3, column=col).column_letter].width = 18
 
     def _create_compliance_analysis(self, positions_data, trades_data, orders_data):
         """Create compliance analysis sheet."""
