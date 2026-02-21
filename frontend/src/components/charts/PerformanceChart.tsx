@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import {
   AreaChart,
   Area,
@@ -10,32 +10,114 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
+import { marketApi } from '../../lib/api';
 
 interface PerformanceChartProps {
   portfolioId: string;
   positionId: string;
   interval: string;
+  ticker?: string;
   height?: number;
   chartType?: 'area' | 'line';
 }
 
-// Simple placeholder chart that shows a "no data" state
-// In a full implementation, this would fetch price/performance data from the API
+function getDateRange(interval: string): { startDate: string; endDate: string } {
+  const now = new Date();
+  const end = now.toISOString();
+  let start: Date;
+
+  switch (interval) {
+    case '1D':
+      start = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000);
+      break;
+    case '1W':
+      start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      break;
+    case '1M':
+      start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      break;
+    case '3M':
+      start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      break;
+    case '6M':
+      start = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+      break;
+    case '1Y':
+      start = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+      break;
+    default:
+      start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  }
+
+  return { startDate: start.toISOString(), endDate: end };
+}
+
 export default function PerformanceChart({
   portfolioId,
   positionId,
   interval,
+  ticker,
   height = 200,
   chartType = 'area',
 }: PerformanceChartProps) {
-  // TODO: Fetch actual performance data from API based on portfolioId, positionId, and interval
-  // For now, show a placeholder state
-  const data = useMemo(() => {
-    // Return empty array - in a full implementation, this would come from an API call
-    return [];
-  }, [portfolioId, positionId, interval]);
+  const [data, setData] = useState<Array<{ date: string; value: number }>>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  if (data.length === 0) {
+  useEffect(() => {
+    if (!ticker) {
+      setData([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function fetchData() {
+      setLoading(true);
+      setError(null);
+      try {
+        const { startDate, endDate } = getDateRange(interval);
+        const resp = await marketApi.getHistoricalData(ticker!, startDate, endDate);
+
+        if (cancelled) return;
+
+        const mapped = resp.price_data.map((p) => ({
+          date: new Date(p.timestamp).toLocaleDateString(undefined, {
+            month: 'short',
+            day: 'numeric',
+          }),
+          value: p.price,
+        }));
+
+        setData(mapped);
+      } catch (err) {
+        if (!cancelled) {
+          setError('Failed to load price data');
+          setData([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    fetchData();
+    return () => {
+      cancelled = true;
+    };
+  }, [ticker, interval, portfolioId, positionId]);
+
+  if (loading) {
+    return (
+      <div
+        className="flex items-center justify-center bg-gray-50 rounded-lg border border-gray-200"
+        style={{ height }}
+      >
+        <p className="text-xs text-gray-500">Loading chart...</p>
+      </div>
+    );
+  }
+
+  if (error || data.length === 0) {
     return (
       <div
         className="flex items-center justify-center bg-gray-50 rounded-lg border border-gray-200"
@@ -55,7 +137,7 @@ export default function PerformanceChart({
               d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
             />
           </svg>
-          <p className="text-xs">Performance chart data not available</p>
+          <p className="text-xs">{error || 'Performance chart data not available'}</p>
         </div>
       </div>
     );
@@ -77,6 +159,7 @@ export default function PerformanceChart({
           tick={{ fontSize: 10, fill: '#9ca3af' }}
           axisLine={false}
           tickLine={false}
+          domain={['auto', 'auto']}
         />
         <Tooltip
           contentStyle={{
@@ -84,6 +167,7 @@ export default function PerformanceChart({
             border: 'none',
             boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
           }}
+          formatter={(value: number) => [`$${value.toFixed(2)}`, 'Price']}
         />
         {chartType === 'area' ? (
           <Area

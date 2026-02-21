@@ -141,6 +141,25 @@ export default function EnhancedSimulationAnalytics({ data }: EnhancedSimulation
     );
   }
 
+  // Commission drag data: cumulative commission over each trade
+  const commissionDragData = useMemo(() => {
+    if (!analytics?.trade_log?.length) return [];
+    let cumulative = 0;
+    let cumPnl = 0;
+    const firstPrice = analytics.trade_log[0].price;
+    return analytics.trade_log.map((t) => {
+      cumulative += t.commission;
+      // Rough PnL approximation: track cumulative notional change
+      cumPnl += t.side === 'SELL' ? t.qty * t.price : -(t.qty * t.price);
+      return {
+        time: new Date(t.timestamp).toLocaleDateString(),
+        cumulativeCommission: cumulative,
+        grossPnl: cumPnl,
+        commissionPct: cumPnl !== 0 ? (cumulative / Math.abs(cumPnl)) * 100 : 0,
+      };
+    });
+  }, [analytics?.trade_log]);
+
   const tabs = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'performance', label: 'Performance', icon: TrendingUp },
@@ -489,6 +508,47 @@ export default function EnhancedSimulationAnalytics({ data }: EnhancedSimulation
                 </div>
               </div>
             </div>
+
+            {/* Commission Drag Chart */}
+            {commissionDragData.length > 0 && (
+              <div className="bg-white border border-gray-200 rounded-lg p-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Cumulative Commission Drag</h3>
+                <ResponsiveContainer width="100%" height={250}>
+                  <AreaChart data={commissionDragData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${v.toFixed(0)}`} />
+                    <Tooltip formatter={(value: number, name: string) => [
+                      `$${value.toFixed(2)}`,
+                      name === 'cumulativeCommission' ? 'Cumulative Commission' : 'Gross P&L',
+                    ]} />
+                    <Legend />
+                    <Area
+                      type="monotone"
+                      dataKey="cumulativeCommission"
+                      stroke="#ef4444"
+                      fill="#ef4444"
+                      fillOpacity={0.3}
+                      name="Cumulative Commission"
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="grossPnl"
+                      stroke="#3b82f6"
+                      fill="#3b82f6"
+                      fillOpacity={0.1}
+                      name="Gross P&L"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+                <p className="text-xs text-gray-500 mt-2">
+                  Total commission: ${analytics.metrics.totalCommission.toFixed(2)}
+                  {analytics.algorithm.pnl !== 0 && (
+                    <span> ({((analytics.metrics.totalCommission / Math.abs(analytics.algorithm.pnl)) * 100).toFixed(1)}% of absolute return)</span>
+                  )}
+                </p>
+              </div>
+            )}
 
             {/* Recent Trades Table */}
             <div className="bg-white border border-gray-200 rounded-lg p-4">

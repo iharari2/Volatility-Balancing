@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Download, Play, Filter, Clock, TrendingUp, TrendingDown, DollarSign, RotateCcw, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { exportToExcel } from '../../utils/exportExcel';
+import GuardrailBandChart from '../../components/charts/GuardrailBandChart';
 import {
   ComposedChart,
   Line,
@@ -13,6 +14,8 @@ import {
   ResponsiveContainer,
   Scatter,
   Cell,
+  AreaChart,
+  Area,
 } from 'recharts';
 
 interface TimelineEvent {
@@ -563,6 +566,86 @@ export default function SimulationResults({ result, onRerun, onDelete }: Simulat
           </div>
         )}
       </div>
+
+      {/* Commission Drag Chart */}
+      {(result.trade_log && result.trade_log.length > 1) && (() => {
+        let cumComm = 0;
+        const commData = result.trade_log!.map((t) => {
+          cumComm += t.commission;
+          return {
+            date: new Date(t.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+            cumulative: cumComm,
+          };
+        });
+        return (
+          <div className="p-4 bg-white rounded-xl border border-gray-100 shadow-inner">
+            <h3 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wider">
+              Cumulative Commission Drag
+            </h3>
+            <ResponsiveContainer width="100%" height={180}>
+              <AreaChart data={commData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
+                <Tooltip formatter={(value: number) => [`$${value.toFixed(2)}`, 'Total Commission']} />
+                <Area type="monotone" dataKey="cumulative" stroke="#ef4444" fill="#ef4444" fillOpacity={0.2} strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+            <p className="text-xs text-gray-500 mt-1">
+              Total: ${cumComm.toFixed(2)} across {result.trade_log!.length} trades
+            </p>
+          </div>
+        );
+      })()}
+
+      {/* Cumulative Dividend Income Chart */}
+      {(result.dividend_events && result.dividend_events.length > 0) && (() => {
+        let cumDiv = 0;
+        const divData = result.dividend_events!.map((d) => {
+          cumDiv += d.net_amount || 0;
+          return {
+            date: d.ex_date || d.date,
+            cumulative: cumDiv,
+            net: d.net_amount || 0,
+          };
+        });
+        return (
+          <div className="p-4 bg-white rounded-xl border border-gray-100 shadow-inner">
+            <h3 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wider">
+              Cumulative Dividend Income
+            </h3>
+            <ResponsiveContainer width="100%" height={180}>
+              <AreaChart data={divData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
+                <Tooltip formatter={(value: number, name: string) => [
+                  `$${value.toFixed(2)}`,
+                  name === 'cumulative' ? 'Cumulative Net' : 'Payment',
+                ]} />
+                <Area type="stepAfter" dataKey="cumulative" stroke="#14b8a6" fill="#14b8a6" fillOpacity={0.2} strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+            <p className="text-xs text-gray-500 mt-1">
+              Total net dividends: ${cumDiv.toFixed(2)} from {result.dividend_events!.length} payment{result.dividend_events!.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+        );
+      })()}
+
+      {/* Guardrail Band Visualization */}
+      {timelineEvents.length > 0 && (
+        <div className="p-4 bg-white rounded-xl border border-gray-100 shadow-inner">
+          <h3 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wider">
+            Guardrail Analysis
+          </h3>
+          <GuardrailBandChart
+            timelineEvents={timelineEvents}
+            minStockPct={25}
+            maxStockPct={75}
+          />
+        </div>
+      )}
 
       {/* Tab Navigation */}
       <div className="pt-4 border-t border-gray-100">

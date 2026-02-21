@@ -465,6 +465,7 @@ export default function PositionWorkspace() {
                           portfolioId={currentPortfolioId}
                           positionId={selectedPositionId!}
                           interval={chartInterval}
+                          ticker={selectedPosition?.ticker || selectedPosition?.asset}
                           height={200}
                           chartType="area"
                         />

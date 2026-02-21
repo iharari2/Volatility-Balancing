@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
+import { portfolioApi, ordersApi } from '../../lib/api';
+import { TradeRow } from '../../types/orders';
 
 interface Trade {
   id: string;
@@ -14,33 +16,82 @@ interface Trade {
 }
 
 export default function RecentTradesTable() {
-  const { selectedPortfolioId } = useTenantPortfolio();
+  const { selectedTenantId, selectedPortfolioId } = useTenantPortfolio();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!selectedPortfolioId) {
+    if (!selectedTenantId || !selectedPortfolioId) {
+      setTrades([]);
       setLoading(false);
       return;
     }
 
-    // TODO: Fetch recent trades from API
-    // For now, use mock data
-    const mockTrades: Trade[] = [
-      {
-        id: '1',
-        time: '10:03',
-        symbol: 'AAPL',
-        action: 'BUY',
-        qty: 10,
-        price: 196.4,
-        commission: 1.96,
-        order_id: 'ORD-123',
-      },
-    ];
-    setTrades(mockTrades);
-    setLoading(false);
-  }, [selectedPortfolioId]);
+    let cancelled = false;
+
+    async function fetchTrades() {
+      setLoading(true);
+      try {
+        const positions = await portfolioApi.getPositions(selectedTenantId!, selectedPortfolioId!);
+
+        const allTrades: (TradeRow & { asset: string })[] = [];
+        await Promise.all(
+          positions.map(async (pos) => {
+            try {
+              const resp = await ordersApi.listTrades(
+                selectedTenantId!,
+                selectedPortfolioId!,
+                pos.id,
+                20,
+              );
+              for (const t of resp.trades) {
+                allTrades.push({ ...t, asset: pos.asset });
+              }
+            } catch {
+              // skip positions with no trades
+            }
+          }),
+        );
+
+        if (cancelled) return;
+
+        allTrades.sort(
+          (a, b) => new Date(b.executed_at).getTime() - new Date(a.executed_at).getTime(),
+        );
+
+        const mapped: Trade[] = allTrades.slice(0, 10).map((t) => {
+          const dt = new Date(t.executed_at);
+          return {
+            id: t.id,
+            time: dt.toLocaleString(undefined, {
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+            symbol: t.asset,
+            action: t.side as 'BUY' | 'SELL',
+            qty: t.qty,
+            price: t.price,
+            commission: t.commission,
+            order_id: t.order_id,
+          };
+        });
+
+        setTrades(mapped);
+      } catch (err) {
+        console.error('Failed to fetch recent trades:', err);
+        setTrades([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    fetchTrades();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTenantId, selectedPortfolioId]);
 
   if (loading) {
     return <p className="text-sm text-gray-500">Loading trades...</p>;
@@ -108,10 +159,3 @@ export default function RecentTradesTable() {
     </div>
   );
 }
-
-
-
-
-
-
-

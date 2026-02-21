@@ -1,43 +1,92 @@
 import { useState, useEffect } from 'react';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
+import { portfolioApi, positionsApi } from '../../lib/api';
+import { Event } from '../../types';
 
 interface TriggerEvent {
   id: string;
   time: string;
-  type: 'Trigger' | 'Guardrail';
+  type: 'Trigger' | 'Guardrail' | 'Other';
   detail: string;
 }
 
+function classifyEventType(eventType: string): 'Trigger' | 'Guardrail' | 'Other' {
+  const lower = eventType.toLowerCase();
+  if (lower.includes('trigger') || lower.includes('evaluate') || lower.includes('price_change')) {
+    return 'Trigger';
+  }
+  if (lower.includes('guardrail') || lower.includes('reject') || lower.includes('breach')) {
+    return 'Guardrail';
+  }
+  return 'Other';
+}
+
 export default function TriggerEventsTable() {
-  const { selectedPortfolioId } = useTenantPortfolio();
+  const { selectedTenantId, selectedPortfolioId } = useTenantPortfolio();
   const [events, setEvents] = useState<TriggerEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!selectedPortfolioId) {
+    if (!selectedTenantId || !selectedPortfolioId) {
+      setEvents([]);
       setLoading(false);
       return;
     }
 
-    // TODO: Fetch trigger events from API
-    // For now, use mock data
-    const mockEvents: TriggerEvent[] = [
-      {
-        id: '1',
-        time: '10:03',
-        type: 'Trigger',
-        detail: 'BUY signal fired (−3.1%)',
-      },
-      {
-        id: '2',
-        time: '10:03',
-        type: 'Guardrail',
-        detail: 'Allowed trade (stock%=49→52)',
-      },
-    ];
-    setEvents(mockEvents);
-    setLoading(false);
-  }, [selectedPortfolioId]);
+    let cancelled = false;
+
+    async function fetchEvents() {
+      setLoading(true);
+      try {
+        const positions = await portfolioApi.getPositions(selectedTenantId!, selectedPortfolioId!);
+
+        const allEvents: Event[] = [];
+        await Promise.all(
+          positions.map(async (pos) => {
+            try {
+              const resp = await positionsApi.getEvents(pos.id, 20);
+              for (const e of resp.events) {
+                allEvents.push(e);
+              }
+            } catch {
+              // skip positions with no events
+            }
+          }),
+        );
+
+        if (cancelled) return;
+
+        allEvents.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
+
+        const mapped: TriggerEvent[] = allEvents.slice(0, 10).map((e) => {
+          const dt = new Date(e.ts);
+          return {
+            id: e.id,
+            time: dt.toLocaleString(undefined, {
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+            type: classifyEventType(e.type),
+            detail: e.message,
+          };
+        });
+
+        setEvents(mapped);
+      } catch (err) {
+        console.error('Failed to fetch trigger events:', err);
+        setEvents([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    fetchEvents();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTenantId, selectedPortfolioId]);
 
   if (loading) {
     return <p className="text-sm text-gray-500">Loading events...</p>;
@@ -72,7 +121,9 @@ export default function TriggerEventsTable() {
                   className={`badge ${
                     event.type === 'Trigger'
                       ? 'bg-blue-100 text-blue-800'
-                      : 'bg-purple-100 text-purple-800'
+                      : event.type === 'Guardrail'
+                        ? 'bg-purple-100 text-purple-800'
+                        : 'bg-gray-100 text-gray-800'
                   }`}
                 >
                   {event.type}
@@ -86,10 +137,3 @@ export default function TriggerEventsTable() {
     </div>
   );
 }
-
-
-
-
-
-
-

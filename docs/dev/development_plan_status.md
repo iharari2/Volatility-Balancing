@@ -30,8 +30,9 @@
 | 17 | Broker Integration (Alpaca) | — | Wired AlpacaBrokerAdapter in DI, alpaca-py dependency, broker status endpoint, credential validation |
 | — | Fix: Workspace Excel Export | `9ff4544` | Scoped Orders export to position, added Excel export button to Events tab |
 | — | Dividend Excel Export | `8e9f65a` | End-to-end Excel export for Dividends tab: backend endpoint + multi-sheet workbook (Receivables + Upcoming) + frontend Download button |
-| — | Fix: Orders Excel Export | — | Wired real trades/orders data into trading Excel export (replaced TODO stubs), implemented trades + orders analysis sheets in `excel_template_service.py`, added `dataclasses.asdict` serialization |
-| — | Fix: API limits | — | Increased `listOrders`/`listTrades` default limit from 200 to 5000 in `api.ts` |
+| — | Fix: Orders Excel Export | `b7fbbde` | Wired real trades/orders data into trading Excel export (replaced TODO stubs), implemented trades + orders analysis sheets in `excel_template_service.py`, added `dataclasses.asdict` serialization |
+| — | Fix: API limits | `b7fbbde` | Increased `listOrders`/`listTrades` default limit from 200 to 5000 in `api.ts` |
+| 20 | Analysis Enhancements | — | Wire overview tables to real data, PerformanceChart to market API, commission/dividend charts in simulation, guardrail band visualization |
 
 **Test suite**: 561 passed (13 skipped), ruff clean, TypeScript clean, frontend builds clean, pytest-xdist parallel enabled, **CI/CD: all 4 jobs green**
 
@@ -296,6 +297,54 @@
 **Files modified** (2):
 - `frontend/src/components/trading/OrdersTable.tsx` — pass positionId to export URL
 - `frontend/src/features/workspace/components/tabs/EventsTab.tsx` — add export button with imports
+
+---
+
+## Iteration 20: Analysis Enhancements — COMPLETE
+
+**Priority**: Medium
+
+**What was done**:
+
+### 20a. Wire Overview Tables to Real Data
+- **RecentTradesTable**: Replaced mock data with real API calls — fetches positions via `portfolioApi.getPositions()`, then fetches trades per position via `ordersApi.listTrades()`, merges and sorts by `executed_at` desc, displays top 10
+- **TriggerEventsTable**: Replaced mock data with real API calls — fetches events per position via `positionsApi.getEvents()`, classifies event types (Trigger/Guardrail/Other), merges and sorts by timestamp desc, displays top 10
+
+### 20b. Wire PerformanceChart to Market Data
+- Replaced placeholder with real `marketApi.getHistoricalData()` calls
+- Added `ticker` prop (derived from position asset in workspace)
+- Computes date range from `interval` prop (1D/1W/1M/3M/6M/1Y)
+- Shows loading state and error handling
+- Passed from `PositionWorkspace` with `selectedPosition.ticker || selectedPosition.asset`
+
+### 20c. Commission P&L Impact Chart (Simulation)
+- Added cumulative commission drag AreaChart to `EnhancedSimulationAnalytics.tsx` trades tab
+- Shows cumulative commission vs gross P&L over trade timeline
+- Displays commission as percentage of absolute return
+- Also added standalone cumulative commission chart to `SimulationResults.tsx`
+
+### 20d. Dividend Contribution Chart (Simulation)
+- Added cumulative dividend income AreaChart to `SimulationResults.tsx`
+- Uses step-after interpolation (dividends are discrete payments)
+- Shows cumulative net dividend amount with payment count
+- Only renders when `dividend_events` data is present
+
+### 20e. Guardrail Band Visualization
+- Created `GuardrailBandChart.tsx` with two sub-charts:
+  1. **Price vs Guardrail Boundaries**: Shows asset price with computed upper/lower guardrail price thresholds (derived from shares, cash, and min/max stock allocation)
+  2. **Stock Allocation %**: Shows actual allocation over time with ReferenceArea "safe zone" between min/max limits and ReferenceLine markers
+- Wired into `SimulationResults.tsx` — renders when timeline events are available
+
+**Files created** (1):
+- `frontend/src/components/charts/GuardrailBandChart.tsx`
+
+**Files modified** (5):
+- `frontend/src/features/overview/RecentTradesTable.tsx` — wire to real trades API
+- `frontend/src/features/overview/TriggerEventsTable.tsx` — wire to real events API
+- `frontend/src/components/charts/PerformanceChart.tsx` — wire to market data API
+- `frontend/src/components/EnhancedSimulationAnalytics.tsx` — add commission drag chart
+- `frontend/src/features/simulation/SimulationResults.tsx` — add commission, dividend, guardrail charts
+- `frontend/src/features/positions/PositionWorkspace.tsx` — pass ticker to PerformanceChart
 
 ---
 
