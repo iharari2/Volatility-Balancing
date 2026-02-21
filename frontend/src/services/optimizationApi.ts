@@ -68,6 +68,55 @@ class OptimizationApiService {
     return response.json();
   }
 
+  async updateConfig(id: string, updates: Partial<CreateConfigRequest>): Promise<ConfigResponse> {
+    const response = await fetch(`${this.baseUrl}/configs/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updates),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(
+        `Failed to update config: ${response.status} ${error.detail || response.statusText}`,
+      );
+    }
+
+    return response.json();
+  }
+
+  async deleteConfig(id: string): Promise<{ message: string; config_id: string }> {
+    const response = await fetch(`${this.baseUrl}/configs/${id}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(
+        `Failed to delete config: ${response.status} ${error.detail || response.statusText}`,
+      );
+    }
+
+    return response.json();
+  }
+
+  async resetConfig(id: string): Promise<{ message: string; config_id: string; status: string }> {
+    const response = await fetch(`${this.baseUrl}/configs/${id}/reset`, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(
+        `Failed to reset config: ${response.status} ${error.detail || response.statusText}`,
+      );
+    }
+
+    return response.json();
+  }
+
   // Optimization Control
   async startOptimization(id: string): Promise<StartResponse> {
     const response = await fetch(`${this.baseUrl}/configs/${id}/start`, {

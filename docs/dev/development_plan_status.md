@@ -32,7 +32,8 @@
 | — | Dividend Excel Export | `8e9f65a` | End-to-end Excel export for Dividends tab: backend endpoint + multi-sheet workbook (Receivables + Upcoming) + frontend Download button |
 | — | Fix: Orders Excel Export | `b7fbbde` | Wired real trades/orders data into trading Excel export (replaced TODO stubs), implemented trades + orders analysis sheets in `excel_template_service.py`, added `dataclasses.asdict` serialization |
 | — | Fix: API limits | `b7fbbde` | Increased `listOrders`/`listTrades` default limit from 200 to 5000 in `api.ts` |
-| 20 | Analysis Enhancements | — | Wire overview tables to real data, PerformanceChart to market API, commission/dividend charts in simulation, guardrail band visualization |
+| 20 | Analysis Enhancements | `51797af` | Wire overview tables to real data, PerformanceChart to market API, commission/dividend charts in simulation, guardrail band visualization |
+| 20b | Optimization Config Management | — | Add modify, rerun, delete actions for saved optimization configs (backend PUT/DELETE/reset endpoints + frontend UI) |
 
 **Test suite**: 561 passed (13 skipped), ruff clean, TypeScript clean, frontend builds clean, pytest-xdist parallel enabled, **CI/CD: all 4 jobs green**
 
@@ -345,6 +346,31 @@
 - `frontend/src/components/EnhancedSimulationAnalytics.tsx` — add commission drag chart
 - `frontend/src/features/simulation/SimulationResults.tsx` — add commission, dividend, guardrail charts
 - `frontend/src/features/positions/PositionWorkspace.tsx` — pass ticker to PerformanceChart
+
+---
+
+## Iteration 20b: Optimization Config Management — COMPLETE
+
+**Priority**: Medium
+
+**What was done**:
+
+### Backend
+- **PUT `/v1/optimization/configs/{id}`**: Update config fields (name, ticker, dates, parameters, criteria, sim settings). Only allowed when status is DRAFT or FAILED. Resets FAILED configs to DRAFT on update.
+- **DELETE `/v1/optimization/configs/{id}`**: Delete config and cascade-delete all associated results and heatmap data. Blocked when optimization is RUNNING.
+- **POST `/v1/optimization/configs/{id}/reset`**: Reset COMPLETED/FAILED config back to DRAFT, clearing all previous results and heatmap data for clean rerun.
+
+### Frontend
+- **Edit button**: Appears on DRAFT/FAILED config cards. Opens `ParameterConfigForm` pre-filled with existing config values. Form supports `mode="edit"` with `initialConfig` prop.
+- **Rerun button**: Appears on COMPLETED configs. Resets config (clears results), then immediately starts a new optimization run.
+- **Delete button**: Appears on all non-RUNNING configs. Shows confirmation dialog, cascade-deletes all data.
+- **API methods**: Added `updateConfig()`, `deleteConfig()`, `resetConfig()` to `optimizationApi.ts`.
+
+**Files modified** (4):
+- `backend/app/routes/optimization.py` — PUT, DELETE, POST/reset endpoints
+- `frontend/src/services/optimizationApi.ts` — 3 new API methods
+- `frontend/src/features/optimization/OptimizationPage.tsx` — edit/rerun/delete handlers + UI buttons
+- `frontend/src/components/optimization/ParameterConfigForm.tsx` — edit mode with initialConfig pre-fill
 
 ---
 

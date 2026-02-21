@@ -4,7 +4,7 @@
 
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 import concurrent.futures
 import traceback
 
@@ -326,6 +326,164 @@ async def get_optimization_config(
         if not config:
             raise HTTPException(status_code=404, detail="Optimization config not found")
         return OptimizationConfigResponse.from_domain(config)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+class UpdateOptimizationRequestModel(BaseModel):
+    """Request model for updating optimization configuration."""
+
+    name: Optional[str] = None
+    ticker: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    parameter_ranges: Optional[dict] = None
+    optimization_criteria: Optional[OptimizationCriteriaRequest] = None
+    description: Optional[str] = None
+    max_combinations: Optional[int] = None
+    batch_size: Optional[int] = None
+    initial_cash: Optional[float] = None
+    intraday_interval_minutes: Optional[int] = None
+    include_after_hours: Optional[bool] = None
+
+
+@router.put("/configs/{config_id}", response_model=OptimizationConfigResponse)
+async def update_optimization_config(
+    config_id: str,
+    request: UpdateOptimizationRequestModel,
+    optimization_uc: ParameterOptimizationUC = Depends(get_parameter_optimization_uc),
+):
+    """Update an optimization configuration. Only allowed when status is DRAFT or FAILED."""
+    try:
+        config_uuid = UUID(config_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid config ID format")
+
+    try:
+        config = optimization_uc.config_repo.get_by_id(config_uuid)
+        if not config:
+            raise HTTPException(status_code=404, detail="Optimization config not found")
+
+        if not config.can_start():
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot modify config in status: {config.status.value}. Only DRAFT or FAILED configs can be modified.",
+            )
+
+        # Apply updates
+        if request.name is not None:
+            config.name = request.name
+        if request.ticker is not None:
+            config.ticker = request.ticker
+        if request.start_date is not None:
+            config.start_date = request.start_date
+        if request.end_date is not None:
+            config.end_date = request.end_date
+        if request.description is not None:
+            config.description = request.description
+        if request.max_combinations is not None:
+            config.max_combinations = request.max_combinations
+        if request.batch_size is not None:
+            config.batch_size = request.batch_size
+        if request.initial_cash is not None:
+            config.initial_cash = request.initial_cash
+        if request.intraday_interval_minutes is not None:
+            config.intraday_interval_minutes = request.intraday_interval_minutes
+        if request.include_after_hours is not None:
+            config.include_after_hours = request.include_after_hours
+        if request.parameter_ranges is not None:
+            param_ranges = {}
+            for name, range_data in request.parameter_ranges.items():
+                param_ranges[name] = ParameterRangeRequest(**range_data).to_domain()
+            config.parameter_ranges = param_ranges
+        if request.optimization_criteria is not None:
+            config.optimization_criteria = request.optimization_criteria.to_domain()
+
+        # Reset to DRAFT if it was FAILED
+        if config.status == OptimizationStatus.FAILED:
+            config.status = OptimizationStatus.DRAFT
+
+        config.updated_at = datetime.now(timezone.utc)
+        optimization_uc.config_repo.save(config)
+
+        return OptimizationConfigResponse.from_domain(config)
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.delete("/configs/{config_id}")
+async def delete_optimization_config(
+    config_id: str,
+    optimization_uc: ParameterOptimizationUC = Depends(get_parameter_optimization_uc),
+):
+    """Delete an optimization configuration and all associated results."""
+    try:
+        config_uuid = UUID(config_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid config ID format")
+
+    try:
+        config = optimization_uc.config_repo.get_by_id(config_uuid)
+        if not config:
+            raise HTTPException(status_code=404, detail="Optimization config not found")
+
+        if config.is_running():
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot delete a running optimization. Wait for completion or cancel first.",
+            )
+
+        # Delete associated data
+        optimization_uc.result_repo.delete_by_config(config_uuid)
+        optimization_uc.heatmap_repo.delete_heatmap_data(config_uuid)
+        optimization_uc.config_repo.delete(config_uuid)
+
+        return {"message": "Optimization config deleted", "config_id": config_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.post("/configs/{config_id}/reset")
+async def reset_optimization_config(
+    config_id: str,
+    optimization_uc: ParameterOptimizationUC = Depends(get_parameter_optimization_uc),
+):
+    """Reset a COMPLETED or FAILED optimization back to DRAFT for rerun. Clears previous results."""
+    try:
+        config_uuid = UUID(config_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid config ID format")
+
+    try:
+        config = optimization_uc.config_repo.get_by_id(config_uuid)
+        if not config:
+            raise HTTPException(status_code=404, detail="Optimization config not found")
+
+        if config.is_running():
+            raise HTTPException(status_code=400, detail="Cannot reset a running optimization.")
+
+        # Clear previous results
+        optimization_uc.result_repo.delete_by_config(config_uuid)
+        optimization_uc.heatmap_repo.delete_heatmap_data(config_uuid)
+
+        # Reset status to DRAFT
+        config.status = OptimizationStatus.DRAFT
+        config.updated_at = datetime.now(timezone.utc)
+        optimization_uc.config_repo.save(config)
+
+        return {
+            "message": "Optimization reset to DRAFT",
+            "config_id": config_id,
+            "status": "draft",
+        }
     except HTTPException:
         raise
     except Exception as e:

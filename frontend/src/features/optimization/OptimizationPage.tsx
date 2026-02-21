@@ -9,9 +9,10 @@ import {
   OptimizationStatus,
 } from '../../types/optimization';
 import { optimizationApi } from '../../services/optimizationApi';
-import { Plus, Play, BarChart3, Grid3X3, RefreshCw, ChevronLeft } from 'lucide-react';
+import { Plus, Play, BarChart3, Grid3X3, RefreshCw, ChevronLeft, Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
-type ViewMode = 'list' | 'create' | 'results' | 'heatmap';
+type ViewMode = 'list' | 'create' | 'edit' | 'results' | 'heatmap';
 
 export default function OptimizationPage() {
   const { state, startOptimization, getResults } = useOptimization();
@@ -67,6 +68,46 @@ export default function OptimizationPage() {
     setViewMode('heatmap');
   };
 
+  const handleModify = (config: OptimizationConfig) => {
+    setSelectedConfig(config);
+    setViewMode('edit');
+  };
+
+  const handleConfigUpdated = () => {
+    setViewMode('list');
+    setSelectedConfig(null);
+    loadConfigs();
+    toast.success('Configuration updated');
+  };
+
+  const handleRerun = async (config: OptimizationConfig) => {
+    try {
+      setStartingId(config.id);
+      // Reset to DRAFT (clears old results), then start
+      await optimizationApi.resetConfig(config.id);
+      await startOptimization(config.id);
+      await loadConfigs();
+      toast.success('Optimization restarted');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to rerun optimization');
+    } finally {
+      setStartingId(null);
+    }
+  };
+
+  const handleDelete = async (config: OptimizationConfig) => {
+    if (!window.confirm(`Delete "${config.name}"? This will remove all associated results.`)) {
+      return;
+    }
+    try {
+      await optimizationApi.deleteConfig(config.id);
+      await loadConfigs();
+      toast.success('Configuration deleted');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete configuration');
+    }
+  };
+
   const handleProgressComplete = () => {
     loadConfigs();
   };
@@ -113,6 +154,7 @@ export default function OptimizationPage() {
           <h1 className="text-2xl font-bold text-gray-900">
             {viewMode === 'list' && 'Parameter Optimization'}
             {viewMode === 'create' && 'New Configuration'}
+            {viewMode === 'edit' && `Edit: ${selectedConfig?.name}`}
             {viewMode === 'results' && `Results: ${selectedConfig?.name}`}
             {viewMode === 'heatmap' && `Heatmap: ${selectedConfig?.name}`}
           </h1>
@@ -224,14 +266,24 @@ export default function OptimizationPage() {
                       {(config.status === OptimizationStatus.DRAFT ||
                         config.status === OptimizationStatus.PENDING ||
                         config.status === OptimizationStatus.FAILED) && (
-                        <button
-                          onClick={() => handleStart(config)}
-                          disabled={startingId === config.id}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium disabled:opacity-50"
-                        >
-                          <Play className="h-3.5 w-3.5" />
-                          {startingId === config.id ? 'Starting...' : 'Start'}
-                        </button>
+                        <>
+                          <button
+                            onClick={() => handleStart(config)}
+                            disabled={startingId === config.id}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium disabled:opacity-50"
+                          >
+                            <Play className="h-3.5 w-3.5" />
+                            {startingId === config.id ? 'Starting...' : 'Start'}
+                          </button>
+                          <button
+                            onClick={() => handleModify(config)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm font-medium"
+                            title="Edit configuration"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            Edit
+                          </button>
+                        </>
                       )}
                       {config.status === OptimizationStatus.COMPLETED && (
                         <>
@@ -249,7 +301,25 @@ export default function OptimizationPage() {
                             <Grid3X3 className="h-3.5 w-3.5" />
                             Heatmap
                           </button>
+                          <button
+                            onClick={() => handleRerun(config)}
+                            disabled={startingId === config.id}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-100 text-orange-700 rounded-md hover:bg-orange-200 text-sm font-medium disabled:opacity-50"
+                            title="Clear results and rerun"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            Rerun
+                          </button>
                         </>
+                      )}
+                      {config.status !== OptimizationStatus.RUNNING && (
+                        <button
+                          onClick={() => handleDelete(config)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-red-600 rounded-md hover:bg-red-50 text-sm font-medium"
+                          title="Delete configuration"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       )}
                     </div>
                   </div>
@@ -265,6 +335,16 @@ export default function OptimizationPage() {
         <ParameterConfigForm
           onConfigCreated={handleConfigCreated}
           onCancel={() => setViewMode('list')}
+        />
+      )}
+
+      {/* View: Edit Config */}
+      {viewMode === 'edit' && selectedConfig && (
+        <ParameterConfigForm
+          mode="edit"
+          initialConfig={selectedConfig}
+          onConfigUpdated={handleConfigUpdated}
+          onCancel={() => { setViewMode('list'); setSelectedConfig(null); }}
         />
       )}
 

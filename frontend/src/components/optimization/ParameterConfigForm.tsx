@@ -40,44 +40,76 @@ function formatMetricLabel(metric: string): string {
 interface ParameterConfigFormProps {
   onConfigCreated?: (configId: string) => void;
   onCancel?: () => void;
+  initialConfig?: any;
+  mode?: 'create' | 'edit';
+  onConfigUpdated?: (configId: string) => void;
 }
 
 export const ParameterConfigForm: React.FC<ParameterConfigFormProps> = ({
   onConfigCreated,
   onCancel,
+  initialConfig,
+  mode = 'create',
+  onConfigUpdated,
 }) => {
   const { createConfig, getMetrics, getParameterTypes, state } = useOptimization();
 
-  // Form state
-  const [formData, setFormData] = useState<CreateConfigRequest>({
-    name: '',
-    ticker: 'AAPL',
-    start_date: '',
-    end_date: '',
-    parameter_ranges: {},
-    optimization_criteria: {
-      primary_metric: OptimizationMetric.TOTAL_RETURN,
-      secondary_metrics: [OptimizationMetric.SHARPE_RATIO],
-      minimize: false,
-    },
-    constraints: [],
+  // Form state — pre-fill from initialConfig when editing
+  const [formData, setFormData] = useState<CreateConfigRequest>(() => {
+    if (initialConfig) {
+      return {
+        name: initialConfig.name || '',
+        ticker: initialConfig.ticker || 'AAPL',
+        start_date: initialConfig.start_date ? initialConfig.start_date.split('T')[0] : '',
+        end_date: initialConfig.end_date ? initialConfig.end_date.split('T')[0] : '',
+        parameter_ranges: initialConfig.parameter_ranges || {},
+        optimization_criteria: initialConfig.optimization_criteria || {
+          primary_metric: OptimizationMetric.TOTAL_RETURN,
+          secondary_metrics: [OptimizationMetric.SHARPE_RATIO],
+          minimize: false,
+        },
+        constraints: initialConfig.constraints || [],
+      };
+    }
+    return {
+      name: '',
+      ticker: 'AAPL',
+      start_date: '',
+      end_date: '',
+      parameter_ranges: {},
+      optimization_criteria: {
+        primary_metric: OptimizationMetric.TOTAL_RETURN,
+        secondary_metrics: [OptimizationMetric.SHARPE_RATIO],
+        minimize: false,
+      },
+      constraints: [],
+    };
   });
 
   const [availableMetrics, setAvailableMetrics] = useState<OptimizationMetric[]>([]);
   const [availableParameterTypes, setAvailableParameterTypes] = useState<ParameterTypeInfo[]>([]);
   const [parameterTypesLoading, setParameterTypesLoading] = useState(true);
-  const [parameterRanges, setParameterRanges] = useState<Record<string, ParameterRangeRequest>>({});
-  const [constraints, setConstraints] = useState<ConstraintRequest[]>([]);
+  const [parameterRanges, setParameterRanges] = useState<Record<string, ParameterRangeRequest>>(
+    () => initialConfig?.parameter_ranges || {},
+  );
+  const [constraints, setConstraints] = useState<ConstraintRequest[]>(
+    () => initialConfig?.constraints || [],
+  );
   const [selectedParameterId, setSelectedParameterId] = useState<string>('');
   const [parameterCategories] = useState<string[]>(getParameterCategories());
-  const [metricWeights, setMetricWeights] = useState<Record<string, number>>({
-    [OptimizationMetric.TOTAL_RETURN]: 1.0,
-    [OptimizationMetric.SHARPE_RATIO]: 0.5,
+  const [metricWeights, setMetricWeights] = useState<Record<string, number>>(() => {
+    if (initialConfig?.optimization_criteria?.weights) {
+      return initialConfig.optimization_criteria.weights;
+    }
+    return {
+      [OptimizationMetric.TOTAL_RETURN]: 1.0,
+      [OptimizationMetric.SHARPE_RATIO]: 0.5,
+    };
   });
   const [simSettingsOpen, setSimSettingsOpen] = useState(false);
-  const [initialCash, setInitialCash] = useState(10000);
-  const [intradayInterval, setIntradayInterval] = useState(30);
-  const [includeAfterHours, setIncludeAfterHours] = useState(false);
+  const [initialCash, setInitialCash] = useState(initialConfig?.initial_cash || 10000);
+  const [intradayInterval, setIntradayInterval] = useState(initialConfig?.intraday_interval_minutes || 30);
+  const [includeAfterHours, setIncludeAfterHours] = useState(initialConfig?.include_after_hours || false);
 
   // Get available secondary metrics (excluding primary metric)
   const getAvailableSecondaryMetrics = () => {
@@ -258,16 +290,24 @@ export const ParameterConfigForm: React.FC<ParameterConfigFormProps> = ({
         include_after_hours: includeAfterHours,
       };
 
-      const config = await createConfig(configData as any);
-      onConfigCreated?.((config as any)?.id || 'new-config');
+      if (mode === 'edit' && initialConfig?.id) {
+        const { optimizationApi } = await import('../../services/optimizationApi');
+        await optimizationApi.updateConfig(initialConfig.id, configData as any);
+        onConfigUpdated?.(initialConfig.id);
+      } else {
+        const config = await createConfig(configData as any);
+        onConfigCreated?.((config as any)?.id || 'new-config');
+      }
     } catch (error) {
-      console.error('Failed to create config:', error);
+      console.error(`Failed to ${mode} config:`, error);
     }
   };
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-lg">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">Create Optimization Configuration</h2>
+      <h2 className="text-2xl font-bold text-gray-900 mb-6">
+        {mode === 'edit' ? 'Edit Optimization Configuration' : 'Create Optimization Configuration'}
+      </h2>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Basic Information */}
@@ -842,7 +882,9 @@ export const ParameterConfigForm: React.FC<ParameterConfigFormProps> = ({
             disabled={state.loading || Object.keys(parameterRanges).length === 0}
             className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {state.loading ? 'Creating...' : 'Create Configuration'}
+            {state.loading
+              ? (mode === 'edit' ? 'Saving...' : 'Creating...')
+              : (mode === 'edit' ? 'Save Changes' : 'Create Configuration')}
           </button>
         </div>
       </form>
