@@ -1,454 +1,123 @@
 ---
 owner: Development Team
 status: active
-last_updated: 2026-02-18
-related:
-  - [
-      '../product/volatility_trading_spec_v1.md',
-      '../architecture/system_architecture_v1.md',
-      'parameter_optimization_implementation_plan.md',
-    ]
+last_updated: 2026-02-19
 ---
 
-# Unified Development Plan - Volatility Balancing System
+# Volatility Balancing — Development Plan
 
-## Overview
+## Current State
 
-This document outlines the comprehensive development roadmap for the Volatility Balancing trading system, from quality issue resolution through enterprise-scale deployment. The plan is structured in 5 phases over 36 weeks, with each phase building upon the previous one.
+**Phase 1 complete.** Test suite: 561 passed (13 skipped) | Ruff clean | TypeScript clean | CI: all 4 jobs green.
 
-## 🎉 **MAJOR MILESTONE ACHIEVED: Phase 1 Complete!**
-
-**✅ Parameter Optimization System Successfully Implemented and Tested**
-
-We have successfully completed Phase 1 of the development plan, delivering a fully functional Parameter Optimization System that includes:
-
-- **Complete API**: 8 REST endpoints for optimization management
-- **Database Integration**: Full SQLAlchemy schema with optimization tables
-- **Real Simulation**: Each parameter combination runs the full trading algorithm via `SimulationUnifiedUC.run_simulation_with_data()` with lightweight mode
-- **Market Data Prefetch**: Historical data fetched once and reused across all combinations
-- **10 Real Metrics**: TOTAL_RETURN, SHARPE_RATIO, MAX_DRAWDOWN, VOLATILITY, TRADE_COUNT, CALMAR_RATIO, SORTINO_RATIO, WIN_RATE, PROFIT_FACTOR, AVG_TRADE_DURATION
-- **Non-Blocking Execution**: Background thread pool with progress polling
-- **Configurable Resolution**: Initial cash, intraday interval (5/15/30/60 min), after-hours toggle
-- **Heatmap Visualization**: Multi-dimensional parameter analysis
-- **Progress Tracking**: Real-time optimization monitoring
-- **Frontend Integration**: Simulation settings form, React error fixes and null safety
-
-**Status**: Fully operational with real simulation engine. Parameter combinations produce meaningful, varying metrics based on actual algorithm behavior against historical data.
-
-## Current State: Phase 1 Complete ✅
-
-### ✅ Quality Issues Resolved (Weeks 1-3) - COMPLETED
-
-1. **✅ IdempotencyRecord Interface Mismatch** - Fixed and all tests passing
-2. **✅ Missing Hash Methods** - Added to Event, Order, and Trade entities
-3. **✅ Equality Issues** - Resolved timestamp comparison problems
-4. **✅ Test Coverage Improved** - Significant improvements across all layers
-
-### ✅ Coverage Achievements
-
-- Domain Entities: 85% → 95% ✅
-- Use Cases: 60% → 90% ✅
-- API Routes: 20% → 85% ✅
-- Infrastructure: 30% → 80% ✅
-
-### ✅ GUI Design Implementation Progress (January 2025)
-
-**Status**: 85% Complete - Major Progress Achieved
-
-#### **✅ COMPLETED FEATURES**
-
-1. **Excel Export Functionality** ✅ **FULLY IMPLEMENTED**
-
-   - Comprehensive Excel Export Service with 6 API endpoints
-   - Professional multi-sheet templates with advanced formatting
-   - Frontend React components with download functionality
-   - Complete data structure matching GUI specification
-
-2. **Refresh Frequency Configuration** ✅ **IMPLEMENTED**
-
-   - Configurable refresh rates (5s, 10s, 30s, 1min, 5min)
-   - Auto-refresh toggle with manual refresh option
-   - Real-time status display
-
-3. **Optimization Infrastructure** ✅ **PARTIALLY IMPLEMENTED**
-   - Heat map data structures and API endpoints
-   - Parameter range configuration system
-   - Backend services ready for frontend integration
-
-#### **❌ REMAINING MISSING FEATURES**
-
-1. **Debug Checkbox for Export Filtering** ❌ **NOT IMPLEMENTED**
-2. **Transaction Details & Event Tracking** ❌ **NOT IMPLEMENTED**
-3. **Heat Map Visualization** ❌ **NOT IMPLEMENTED**
-4. **Position Change Logging** ❌ **NOT IMPLEMENTED**
-5. **Real-time Data UI** ❌ **LOW PRIORITY** (backend implemented, UI missing)
-
-#### **📊 Progress Summary**
-
-| Feature Category            | Completion |
-| --------------------------- | ---------- |
-| Portfolio Management        | 100% ✅    |
-| Trading Interface           | 85% 🟡     |
-| Analysis & Export           | 100% ✅    |
-| Simulation                  | 100% ✅    |
-| Excel Export                | 100% ✅    |
-| Refresh Configuration       | 100% ✅    |
-| Optimization Infrastructure | 100% ✅    |
-| Event Tracking              | 10% ❌     |
-| Heat Map Visualization      | 100% ✅    |
-| Real-time Data UI           | 20% ⏸️ (Low Priority) |
+| Area | Completion |
+|---|---|
+| Portfolio Management | 100% ✅ |
+| Simulation | 100% ✅ |
+| Parameter Optimization | 100% ✅ |
+| Excel Export | 100% ✅ |
+| Broker Integration (Alpaca) | 100% ✅ |
+| Monitoring Dashboard | 100% ✅ |
+| Trading Interface | 85% 🟡 |
+| Event Tracking | 10% ❌ |
+| Real-time Data UI | 20% ⏸️ (low priority) |
 
 ---
 
-## Phase 1: Core System Enhancement (Weeks 4-11)
+## Completed Iterations
 
-### **✅ Parameter Optimization System** (8 weeks) - COMPLETED
-
-**✅ COMPLETED** - A comprehensive system that significantly enhances your trading algorithm's performance.
-
-#### **✅ Weeks 4-5: Core Infrastructure - COMPLETED**
-
-- **✅ Database Schema Extensions**: New optimization tables and indexes implemented
-- **✅ Domain Entities**: OptimizationConfig, ParameterRange, OptimizationCriteria, OptimizationResult, HeatmapData
-- **✅ Use Cases**: ParameterOptimizationUC with mock simulation processing
-- **✅ API Routes**: 8 FastAPI endpoints for complete optimization management
-- **✅ Basic Excel Export**: Core export functionality for transaction logs
-
-#### **✅ Weeks 6-7: Parallel Processing & Progress Tracking - COMPLETED**
-
-- **✅ Background Job System**: Mock processing system with realistic simulation
-- **✅ Progress Tracking**: Real-time optimization progress with status tracking
-- **✅ Data Processing**: Heatmap data generation and caching implemented
-- **✅ Frontend Components**: Progress tracking and status indicators working
-
-#### **✅ Weeks 8-9: Visualization & Analysis - COMPLETED**
-
-- **✅ Heatmap Visualization**: Interactive parameter space visualization implemented
-- **✅ Multi-dimensional Analysis**: 2D parameter space exploration with heatmap data
-- **✅ Performance Charts**: Statistical analysis of optimization results
-- **✅ Advanced Excel Export**: Comprehensive reporting capabilities
-
-#### **✅ Weeks 10-11: Advanced Features - COMPLETED**
-
-- **✅ Market Regime Detection**: Mock simulation with parameter-based variation
-- **✅ Sensitivity Analysis**: Parameter sensitivity through realistic metrics generation
-- **✅ Export & Sharing**: Configuration management and result export
-- **✅ Performance Optimization**: Efficient processing with mock simulation
-
-### **✅ Success Criteria for Phase 1 - ACHIEVED**
-
-- **✅ Algorithm Performance**: Real simulation engine produces actual performance metrics per combination
-- **✅ Parameter Combinations**: Support for unlimited parameter combinations with market data prefetch
-- **✅ Completion Time**: Background execution with per-combination progress tracking
-- **✅ Optimization Rate**: Combination-level error isolation — individual failures don't abort the run
-- **✅ Export Functionality**: Complete API for data export and heatmap generation
-- **✅ Configurable Resolution**: Initial cash, intraday interval, after-hours support
+| # | Iteration | Key Deliverable |
+|---|---|---|
+| 1 | Algorithm Correctness Audit | 90 unit tests — order sizing, triggers, guardrails, commission |
+| 2 | EC2 Deployment Runbook | Runbook, systemd template, deploy script |
+| 3 | UX Foundation | Toast, ConfirmDialog, ErrorBoundary |
+| 4 | Form Validation | FormField component, numeric input constraints |
+| 5 | Repo Cleanup | Archive legacy docs/scripts, remove deprecated routes |
+| 6 | Trade Tracking (Backend) | Order/trade enrichment, pagination, explainability API |
+| 7 | Trade Tracking (Frontend) | Guardrail defaults 25%/75%, server-side pagination |
+| 8 | Monitoring & Alerting | 6-condition alert system, webhook delivery, structured logging |
+| 9 | Test Fixes | All 118 integration tests passing |
+| 10 | Remove Audit Trail | Deleted 10 files (−2,383 lines); evaluation timeline is canonical |
+| 11 | Dividends UI | Workspace tab, dividendApi wired, datetime timezone bug fix |
+| 12 | Optimization Page | Config list, heatmap, results view, routing + nav |
+| 13 | Monitoring Dashboard | Health cards, alerts table, webhook config UI, 30s auto-refresh |
+| 14 | Real Simulation Engine | Replaced mock metrics with SimulationUnifiedUC; 10 real metrics; prefetch market data once |
+| 15 | Persist + Export | SQL optimization repos, Excel wired to 6 tables, pytest-xdist parallel |
+| 16 | CI/CD Fix | All 4 CI jobs green; migration fix, ESLint config, coverage threshold |
+| 17 | Broker Integration (Alpaca) | AlpacaBrokerAdapter wired in DI, broker status endpoint (`GET /v1/broker/status`) |
+| — | Bug Fixes | Order fill persistence, workspace Orders Excel scoped to position, Dividends Excel export |
+| 20 | Analysis Enhancements | Real data in overview tables; PerformanceChart vs market API; commission, dividend, guardrail band charts in simulation |
+| 20b | Optimization Config Management | Edit, rerun, delete actions on saved configs (backend PUT/DELETE/reset + frontend UI) |
 
 ---
 
-## Phase 2: Environment Separation & Infrastructure (Weeks 12-16)
+## Roadmap
 
-### **Multi-Environment Architecture** (4 weeks)
+### Phase 2: Environment Separation — Next
 
-**Critical infrastructure phase** - Establish proper development, staging, and production environments with complete separation.
+Establish proper Dev / Staging / Production environments.
 
-#### **Weeks 12-13: Environment Architecture Setup**
+**Dev**: Docker Compose, SQLite, mock services, hot reload
+**Staging**: AWS mirrors prod, PostgreSQL, paper trading, full CI/CD
+**Production**: HA PostgreSQL, live trading, monitoring, disaster recovery
 
-- **Development Environment**:
+Deliverables:
+- Terraform IaC modules per environment
+- Separate AWS accounts with network isolation
+- Automated deployment pipeline with manual prod approval gate
+- Environment-specific secrets management
 
-  - Local development with Docker Compose
-  - SQLite database for rapid development
-  - Mock market data and brokerage APIs
-  - Hot reloading and debugging tools
-  - Isolated testing environment
-
-- **Staging Environment**:
-
-  - AWS staging infrastructure (mirrors production)
-  - PostgreSQL staging database
-  - Real market data integration (paper trading)
-  - Full CI/CD pipeline testing
-  - Performance and load testing
-
-- **Production Environment**:
-  - AWS production infrastructure
-  - High-availability PostgreSQL cluster
-  - Live market data and brokerage integration
-  - Production monitoring and alerting
-  - Disaster recovery and backup systems
-
-#### **Weeks 14-15: Environment Management & CI/CD**
-
-- **Infrastructure as Code**:
-
-  - Terraform modules for each environment
-  - Environment-specific configurations
-  - Automated provisioning and teardown
-  - Version-controlled infrastructure changes
-
-- **CI/CD Pipeline**:
-
-  - **Development**: Automated testing on every commit
-  - **Staging**: Automated deployment from main branch
-  - **Production**: Manual approval with automated deployment
-  - **Rollback**: Automated rollback capabilities
-
-- **Environment Isolation**:
-  - Separate AWS accounts for each environment
-  - Network isolation and security groups
-  - Environment-specific secrets management
-  - Data isolation and privacy controls
-
-#### **Week 16: Environment Validation & Testing**
-
-- **Environment Testing**: End-to-end testing across all environments
-- **Data Migration**: Safe data migration between environments
-- **Security Validation**: Security testing and compliance verification
-- **Performance Testing**: Load testing and performance validation
-
-### **Success Criteria for Phase 2**
-
-- Complete environment isolation and security
-- Automated deployment across all environments
-- Zero data leakage between environments
-- 100% infrastructure as code coverage
+**Success criteria**: Complete isolation, zero data leakage between environments, 100% IaC coverage.
 
 ---
 
-## Phase 3: Production Deployment (Weeks 17-20)
+### Phase 3: Production Deployment
 
-### **AWS Serverless Migration** (4 weeks)
+- **Frontend**: S3 + CloudFront
+- **Backend**: FastAPI on AWS Lambda + API Gateway
+- **Database**: PostgreSQL RDS + Redis ElastiCache
+- **Auth**: AWS Cognito + KMS encryption
+- **Async workers**: EventBridge → SQS → Lambda
+- **Observability**: CloudWatch dashboards, centralized logging, alerting
 
-**Deploy to production** with full environment separation and monitoring.
-
-#### **Weeks 17-18: Production Infrastructure**
-
-- **Frontend**: Next.js deployment to S3 + CloudFront
-- **Backend**: FastAPI on AWS Lambda with API Gateway
-- **Database**: PostgreSQL RDS with Redis (ElastiCache)
-- **Storage**: S3 for audit exports and cold storage
-- **Security**: AWS Cognito authentication, KMS encryption
-
-#### **Weeks 19-20: Monitoring & Operations**
-
-- **Async Processing**: EventBridge → SQS → Lambda workers
-- **Monitoring**: CloudWatch dashboards and alerting
-- **Logging**: Centralized logging across all environments
-- **Backup & Recovery**: Automated backup and disaster recovery
-
-### **Success Criteria for Phase 3**
-
-- 99.9% uptime in production
-- <100ms API response times
-- Zero security vulnerabilities
-- Successful migration with zero data loss
+**Success criteria**: 99.9% uptime, <100ms API response times, zero security vulnerabilities.
 
 ---
 
-## Phase 4: Advanced Trading Features (Weeks 21-28)
+### Phase 4: Advanced Trading Features
 
-### **Core Trading Enhancements** (8 weeks)
+- Multi-asset portfolio allocation
+- Dynamic / adaptive trigger thresholds
+- DRIP (dividend reinvestment)
+- Tax-lot optimization
+- TWAP order execution
+- Advanced risk controls (real-time exposure monitoring)
+- Multi-tenant architecture
 
-**Build on the solid foundation** of Phases 1-3 to add sophisticated trading capabilities.
-
-#### **Weeks 21-22: Multi-Asset & Dynamic Features**
-
-- **Multi-asset Portfolio Allocation**: Support for multiple tickers
-- **Dynamic Thresholds**: Adaptive parameter adjustment based on market conditions
-- **Enhanced Order Types**: Stop-loss, limit orders, algorithmic execution
-- **Real-time WebSocket Updates**: Live market data streaming
-
-#### **Weeks 23-24: Dividend & Tax Optimization**
-
-- **DRIP (Dividend Reinvestment Plan)**: Automated dividend handling
-- **Tax-lot Optimization**: Tax-efficient trading strategies
-- **TWAP (Time-Weighted Average Price)**: Advanced order execution
-- **Enhanced Reporting**: Tax reporting and compliance features
-
-#### **Weeks 25-26: Risk Management & Analytics**
-
-- **Advanced Risk Controls**: Real-time position and exposure monitoring
-- **Portfolio Management**: Multi-strategy portfolio optimization
-- **Advanced Analytics**: Comprehensive performance metrics and reporting
-- **Backtesting Engine**: Historical performance analysis
-
-#### **Weeks 27-28: Enterprise Features**
-
-- **Multi-tenant Architecture**: Support for multiple users/portfolios
-- **Audit Trails**: Complete transaction history for compliance
-- **Regulatory Compliance**: FINRA, SEC reporting capabilities
-- **Data Privacy**: GDPR/CCPA compliance features
-
-### **Success Criteria for Phase 4**
-
-- Support for 10+ concurrent users
-- 100+ positions managed simultaneously
-- <1 second real-time data updates
-- 95% user satisfaction with new features
+**Success criteria**: 10+ concurrent users, 100+ positions managed, <1s real-time updates.
 
 ---
 
-## Phase 5: Scale & Optimization (Weeks 29-36)
+### Phase 5: Scale & Enterprise
 
-### **Enterprise & Performance** (8 weeks)
+- Sub-second execution, HFT capabilities
+- ML-based parameter optimization
+- Additional broker integrations (Meitav, Excellence Trade, others)
+- Webhook / notification system
+- Enterprise compliance (FINRA, SEC, GDPR/CCPA)
 
-**Scale the system** for enterprise use and optimize performance across all environments.
-
-#### **Weeks 29-30: High-Frequency Trading**
-
-- **Sub-second Execution**: High-frequency trading capabilities
-- **Advanced Order Types**: Complex algorithmic execution strategies
-- **Market Microstructure**: Bid-ask spread analysis and optimization
-- **Latency Optimization**: Ultra-low latency execution
-
-#### **Weeks 31-32: Advanced Analytics**
-
-- **Machine Learning Integration**: ML-based parameter optimization
-- **Predictive Analytics**: Market regime prediction and adaptation
-- **Alternative Data**: Integration with alternative data sources
-- **Custom Indicators**: User-defined technical indicators
-
-#### **Weeks 33-34: Integration & APIs**
-
-- **Brokerage Integrations**: Direct integration with major brokers
-- **Third-party APIs**: Integration with external data providers
-- **Webhook System**: Real-time event notifications
-- **API Rate Limiting**: Enterprise-grade API management
-
-#### **Weeks 35-36: Final Polish & Launch**
-
-- **Performance Optimization**: System-wide performance tuning
-- **User Experience**: Final UI/UX improvements
-- **Documentation**: Complete user and developer documentation
-- **Launch Preparation**: Marketing, support, and go-to-market strategy
-
-### **Success Criteria for Phase 5**
-
-- Sub-100ms execution times
-- 1000+ API requests per second
-- 99.99% uptime
-- Enterprise-grade security and compliance
+**Success criteria**: Sub-100ms execution, 1000+ API req/sec, 99.99% uptime.
 
 ---
 
-## Environment-Specific Features
+## Backlog (Unscheduled)
 
-### **Development Environment**
-
-- **Rapid Development**: Hot reloading, instant feedback
-- **Mock Services**: Simulated market data and brokerage APIs
-- **Debug Tools**: Comprehensive debugging and profiling
-- **Test Data**: Synthetic data for testing and development
-- **Local Storage**: SQLite for fast development cycles
-
-### **Staging Environment**
-
-- **Production Parity**: Identical to production infrastructure
-- **Integration Testing**: Full system integration testing
-- **Performance Testing**: Load testing and performance validation
-- **User Acceptance Testing**: End-to-end workflow validation
-- **Paper Trading**: Real market data with simulated trading
-
-### **Production Environment**
-
-- **High Availability**: 99.9% uptime with redundancy
-- **Live Trading**: Real market data and actual trading
-- **Monitoring**: Comprehensive monitoring and alerting
-- **Security**: Enterprise-grade security and compliance
-- **Scalability**: Auto-scaling based on demand
-
----
-
-## Key Features Throughout All Phases
-
-### **Excel Export & Reporting** (Continuous)
-
-- **Transaction Logs**: Detailed Excel exports with comprehensive data
-- **Performance Reports**: Automated performance reporting
-- **Audit Trails**: Complete compliance and audit documentation
-- **Custom Exports**: User-configurable export formats and data
-
-### **Quality & Testing** (Continuous)
-
-- **Test Coverage**: Maintain 90%+ test coverage across all layers
-- **Environment Testing**: Testing across all environments
-- **Performance Testing**: Continuous performance monitoring
-- **Security Testing**: Regular security assessments
-
-### **Monitoring & Observability** (Continuous)
-
-- **Environment Health**: Real-time monitoring across all environments
-- **Business Metrics**: Trading performance and user engagement
-- **Error Tracking**: Comprehensive error monitoring and alerting
-- **Performance Metrics**: System performance and optimization
-
----
-
-## Resource Requirements
-
-### **Team Structure**
-
-- **Backend Developer** (Python/FastAPI): Core system development
-- **Frontend Developer** (React/TypeScript): UI and visualization
-- **Data/ML Engineer**: Parameter optimization and analytics
-- **DevOps Engineer**: AWS infrastructure and environment management
-- **QA Engineer**: Testing and quality assurance across all environments
-
-### **Infrastructure by Environment**
-
-- **Development**: Local Docker, SQLite, mock services
-- **Staging**: AWS staging account, PostgreSQL, paper trading
-- **Production**: AWS production account, high-availability PostgreSQL, live trading
-
----
-
-## Risk Mitigation
-
-### **Technical Risks**
-
-- **Computational Intensity**: Large parameter sweeps may overwhelm system resources
-- **Data Quality**: Historical data gaps or anomalies may skew optimization results
-- **Performance Degradation**: Large datasets may slow down visualization and analysis
-
-### **Mitigation Strategies**
-
-- **Resource Monitoring**: Implement resource monitoring, automatic scaling, and job queuing
-- **Data Validation**: Data validation, anomaly detection, and quality checks
-- **Data Aggregation**: Data aggregation, caching, and progressive loading
-
----
-
-## Success Metrics Summary
-
-| Phase       | Duration | Key Success Metrics                                        |
-| ----------- | -------- | ---------------------------------------------------------- |
-| **Phase 1** | 8 weeks  | 15-25% algorithm improvement, 1000+ parameter combinations |
-| **Phase 2** | 4 weeks  | Complete environment isolation, 100% IaC coverage          |
-| **Phase 3** | 4 weeks  | 99.9% uptime, <100ms response times                        |
-| **Phase 4** | 8 weeks  | 10+ concurrent users, 100+ positions                       |
-| **Phase 5** | 8 weeks  | Sub-100ms execution, 1000+ API requests/sec                |
-
----
-
-## Next Steps
-
-1. **✅ COMPLETED**: Fixed critical quality issues (Weeks 1-3)
-2. **✅ COMPLETED**: Parameter Optimization System development (Weeks 4-11)
-3. **🔄 NEXT**: Phase 2 - Environment Separation & Infrastructure (Weeks 12-16)
-4. **📋 READY**: Resource allocation for Phase 2 development
-5. **📋 READY**: Environment setup for staging and production
-6. **📊 MONITORING**: Track progress against Phase 2 success metrics
-
----
-
-## Related Documentation
-
-- **[Product Requirements](product/volatility_trading_spec_v1.md)** - Product specification and requirements
-- **[System Architecture](architecture/system_architecture_v1.md)** - Complete system overview
-- **[Parameter Optimization Implementation](parameter_optimization_implementation_plan.md)** - Detailed implementation plan
-- **[Test Plan](test-plan.md)** - Testing strategy and procedures
-- **[CI/CD Guide](ci-cd.md)** - Continuous integration and deployment
-
----
-
-_This document is a living document and should be updated as the project progresses and requirements evolve._
+- Debug checkbox for export filtering (events vs successful transactions only)
+- Position change logging
+- Real-time data UI indicators (live vs cached source)
+- Mobile / tablet responsive design
+- **PostgreSQL migration** — move dev off SQLite
+- Dynamic thresholds
+- DRIP support
+- Tax-lot optimization
+- Notification / alert system (configurable, medium priority)
