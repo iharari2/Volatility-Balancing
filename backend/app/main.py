@@ -35,6 +35,7 @@ from app.routes.explainability import live_router as explainability_live_router
 from app.routes.explainability import simulation_router as explainability_sim_router
 from app.routes.monitoring import router as monitoring_router
 from app.routes.broker_status import router as broker_status_router
+from app.routes.auth import router as auth_router
 from application.services.trading_worker import start_trading_worker, stop_trading_worker
 
 API_PREFIX = "/v1"
@@ -128,13 +129,17 @@ def create_app(enable_trading_worker: bool | None = None) -> FastAPI:
 
     # Add CORS middleware unless explicitly disabled for debugging.
     if os.getenv("VB_TIMING_NO_CORS", "").lower() not in {"1", "true", "yes", "on"}:
+        cors_origins = os.getenv(
+            "CORS_ORIGINS", "http://localhost:5173,http://localhost:5174"
+        ).split(",")
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=["*"],  # Allow all origins for development
-            allow_credentials=False,  # Set to False when using allow_origins=["*"]
+            allow_origins=[o.strip() for o in cors_origins],
+            allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
         )
+    app.include_router(auth_router)
     app.include_router(health_router, prefix=API_PREFIX)
     app.include_router(version_router)
     app.include_router(positions_router)  # positions_router already has /v1 prefix

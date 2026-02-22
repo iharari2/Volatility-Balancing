@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Download, FileSpreadsheet, Loader2, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
+import { getAuthHeaders } from '../lib/api';
 
 interface ExportStatus {
   [key: string]: 'idle' | 'loading' | 'success' | 'error';
@@ -33,7 +34,7 @@ const ExcelExportPage: React.FC = () => {
   const loadSimulations = async () => {
     setIsLoadingSimulations(true);
     try {
-      const response = await fetch(`${SIMULATIONS_API}/`);
+      const response = await fetch(`${SIMULATIONS_API}/`, { headers: { ...getAuthHeaders() } });
       if (response.ok) {
         const data = await response.json();
         setSimulations(data.simulations || []);
@@ -61,7 +62,7 @@ const ExcelExportPage: React.FC = () => {
     setExportStatus((prev) => ({ ...prev, [exportName]: 'loading' }));
 
     try {
-      const response = await fetch(`${API_BASE}${endpoint}`);
+      const response = await fetch(`${API_BASE}${endpoint}`, { headers: { ...getAuthHeaders() } });
 
       if (response.ok) {
         const blob = await response.blob();

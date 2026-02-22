@@ -1006,6 +1006,30 @@ class PositionEventModel(Base):
     )
 
 
+class UserModel(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    email: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    hashed_password: Mapped[str] = mapped_column(String, nullable=False)
+    display_name: Mapped[str] = mapped_column(String, nullable=False, default="")
+    role: Mapped[str] = mapped_column(String, nullable=False, default="owner")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "email", name="uq_users_tenant_email"),
+        Index("ix_users_tenant_id", "tenant_id"),
+        Index("ix_users_email", "email"),
+    )
+
+
 class TradingExperimentModel(Base):
     """
     SQL model for TradingExperiment entity.

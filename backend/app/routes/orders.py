@@ -4,9 +4,10 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, HTTPException, Header, Depends
 
 from app.di import container
+from app.auth import get_current_user, CurrentUser
 from application.dto.orders import (
     CreateOrderRequest,
     CreateOrderResponse,
@@ -35,6 +36,7 @@ def submit_order(
     position_id: str,
     payload: CreateOrderRequest,
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    user: CurrentUser = Depends(get_current_user),
 ) -> CreateOrderResponse:
     uc = SubmitOrderUC(
         positions=container.positions,
@@ -69,7 +71,7 @@ def submit_order(
 
 
 @router.post("/v1/orders/{order_id}/fill", response_model=FillOrderResponse)
-def fill_order(order_id: str, payload: FillOrderRequest) -> FillOrderResponse:
+def fill_order(order_id: str, payload: FillOrderRequest, user: CurrentUser = Depends(get_current_user)) -> FillOrderResponse:
     uc = ExecuteOrderUC(
         positions=container.positions,
         orders=container.orders,
@@ -105,6 +107,7 @@ def submit_auto_sized_order(
     position_id: str,
     current_price: float,
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Submit an order with automatic sizing based on volatility triggers and guardrails."""
 
@@ -205,6 +208,7 @@ def submit_auto_sized_order_with_market_data(
     portfolio_id: str,
     position_id: str,
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Submit an order with automatic sizing using real-time market data and after-hours support."""
 
@@ -297,7 +301,7 @@ def submit_auto_sized_order_with_market_data(
 
 @router.get("/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders")
 def list_orders(
-    tenant_id: str, portfolio_id: str, position_id: str, limit: int = 100
+    tenant_id: str, portfolio_id: str, position_id: str, limit: int = 100, user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     if not container.positions.get(
         tenant_id=tenant_id, portfolio_id=portfolio_id, position_id=position_id
@@ -309,7 +313,7 @@ def list_orders(
 
 @router.get("/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/trades")
 def list_trades(
-    tenant_id: str, portfolio_id: str, position_id: str, limit: int = 100
+    tenant_id: str, portfolio_id: str, position_id: str, limit: int = 100, user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """List trades for a position, ordered by execution time (newest first)."""
     if not container.positions.get(
@@ -321,7 +325,7 @@ def list_trades(
 
 
 @router.get("/v1/orders/{order_id}/trades")
-def list_trades_for_order(order_id: str) -> Dict[str, Any]:
+def list_trades_for_order(order_id: str, user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     """List trades for a specific order."""
     if not container.orders.get(order_id):
         raise HTTPException(404, detail="order_not_found")
@@ -330,7 +334,7 @@ def list_trades_for_order(order_id: str) -> Dict[str, Any]:
 
 
 @router.post("/v1/orders/{order_id}/cancel")
-def cancel_order(order_id: str) -> Dict[str, Any]:
+def cancel_order(order_id: str, user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     """Cancel an order."""
     order = container.orders.get(order_id)
     if not order:
@@ -366,7 +370,7 @@ def cancel_order(order_id: str) -> Dict[str, Any]:
 
 
 @router.get("/v1/orders/{order_id}/status")
-def get_order_status(order_id: str) -> Dict[str, Any]:
+def get_order_status(order_id: str, user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     """Get current status of an order."""
     order = container.orders.get(order_id)
     if not order:

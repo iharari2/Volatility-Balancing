@@ -5,17 +5,18 @@
 import logging
 import os
 from typing import Dict, Any
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from datetime import datetime, timezone
 
 from app.di import container
+from app.auth import get_current_user, CurrentUser
 
 router = APIRouter(prefix="/v1/market", tags=["market"])
 logger = logging.getLogger(__name__)
 
 
 @router.get("/status")
-def get_market_status() -> Dict[str, Any]:
+def get_market_status(user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     """Get current market status."""
     try:
         market_data = container.market_data
@@ -37,7 +38,7 @@ def get_market_status() -> Dict[str, Any]:
 
 
 @router.get("/state")
-def get_market_state() -> Dict[str, Any]:
+def get_market_state(user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     """
     Get detailed market hours state for UI display.
     Returns: status (PRE_MARKET, OPEN, AFTER_HOURS, CLOSED), isOpen, timestamps
@@ -97,6 +98,7 @@ def get_market_state() -> Dict[str, Any]:
 @router.post("/cache/clear")
 def clear_market_cache(
     ticker: str = Query(None, description="Ticker to clear, or all if not specified"),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Clear market data cache for a ticker or all tickers."""
     try:
@@ -115,7 +117,7 @@ def clear_market_cache(
 
 @router.get("/price/{ticker}")
 def get_market_price(
-    ticker: str, force_refresh: bool = Query(False, description="Force refresh, bypass cache")
+    ticker: str, force_refresh: bool = Query(False, description="Force refresh, bypass cache"), user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Get current market price for a ticker. Always fetches fresh data to avoid stale prices."""
     try:
@@ -223,6 +225,7 @@ def get_historical_data(
     start_date: str = Query(..., description="Start date in ISO format"),
     end_date: str = Query(..., description="End date in ISO format"),
     market_hours_only: bool = Query(False, description="Only include market hours data"),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Get historical price data for a ticker."""
     try:

@@ -13,12 +13,18 @@ interface ApiResponse<T> {
   error?: string;
 }
 
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('auth_token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
 
   const config: RequestInit = {
     headers: {
       'Content-Type': 'application/json',
+      ...getAuthHeaders(),
       ...options.headers,
     },
     ...options,
@@ -119,6 +125,14 @@ export interface AnalyticsEvent {
   asset_symbol?: string;
 }
 
+export interface BenchmarkSeries {
+  return_pct: number;
+  first_price?: number;
+  last_price?: number;
+  ticker?: string;
+  series?: { date: string; value: number }[];
+}
+
 export interface AnalyticsGuardrails {
   min_stock_pct: number;
   max_stock_pct: number;
@@ -159,6 +173,12 @@ export interface AnalyticsData {
     num_tickers: number;
     num_positions: number;
   };
+  benchmarks?: {
+    spy?: BenchmarkSeries;
+    custom?: BenchmarkSeries;
+  };
+  resolution?: string;
+  portfolio_name?: string;
 }
 
 class PortfolioScopedApi {
@@ -385,12 +405,51 @@ class PortfolioScopedApi {
   }
 
   /**
-   * Get portfolio analytics
-   * @param positionId - Optional position ID to filter analytics to a single position
+   * Get portfolio analytics.
+   * Pass startDate/endDate for explicit date range; omit both for full history ("All").
    */
-  async getAnalytics(tenantId: string, portfolioId: string, days: number = 30, positionId?: string): Promise<AnalyticsData> {
-    const positionParam = positionId && positionId !== 'all' ? `&position_id=${positionId}` : '';
-    return request<AnalyticsData>(`/tenants/${tenantId}/portfolios/${portfolioId}/analytics?days=${days}${positionParam}`);
+  async getAnalytics(
+    tenantId: string,
+    portfolioId: string,
+    days: number = 0,
+    positionId?: string,
+    startDate?: string,
+    endDate?: string,
+    resolution?: string,
+    benchmarks?: string[],
+    customTicker?: string,
+  ): Promise<AnalyticsData> {
+    const params = new URLSearchParams();
+    if (startDate) params.set('start_date', startDate);
+    if (endDate) params.set('end_date', endDate);
+    // Fall back to days only if no explicit dates provided
+    if (!startDate && days > 0) params.set('days', String(days));
+    if (positionId && positionId !== 'all') params.set('position_id', positionId);
+    if (resolution) params.set('resolution', resolution);
+    if (benchmarks?.length) params.set('benchmarks', benchmarks.join(','));
+    if (customTicker) params.set('custom_ticker', customTicker);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return request<AnalyticsData>(`/tenants/${tenantId}/portfolios/${portfolioId}/analytics${qs}`);
+  }
+
+  /**
+   * Build analytics Excel export URL with current filter state.
+   */
+  getAnalyticsExportUrl(
+    tenantId: string,
+    portfolioId: string,
+    positionId?: string,
+    startDate?: string,
+    endDate?: string,
+    resolution?: string,
+  ): string {
+    const base = import.meta.env.VITE_API_BASE_URL || '';
+    const params = new URLSearchParams({ tenant_id: tenantId, portfolio_id: portfolioId });
+    if (positionId && positionId !== 'all') params.set('position_id', positionId);
+    if (startDate) params.set('start_date', startDate);
+    if (endDate) params.set('end_date', endDate);
+    if (resolution) params.set('resolution', resolution);
+    return `${base}/v1/excel/analytics/export?${params.toString()}`;
   }
 
   /**

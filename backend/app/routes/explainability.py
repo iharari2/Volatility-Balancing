@@ -16,6 +16,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import StreamingResponse
 
 from app.di import container
+from app.auth import get_current_user, CurrentUser
 from application.services.explainability_timeline_service import ExplainabilityTimelineService
 
 
@@ -70,6 +71,7 @@ def get_live_explainability(
     offset: int = Query(0, ge=0, description="Number of rows to skip for pagination"),
     limit: int = Query(500, ge=1, le=2000, description="Maximum number of rows to return"),
     service: ExplainabilityTimelineService = Depends(get_explainability_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     """
     Get explainability timeline for a live position.
@@ -157,6 +159,7 @@ def export_live_explainability(
     order_status: Optional[str] = Query(None, description="Order status filter (comma-separated)"),
     aggregation: str = Query("daily", description="Aggregation mode: 'daily' or 'all'"),
     service: ExplainabilityTimelineService = Depends(get_explainability_service),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """
     Export explainability timeline to Excel.
@@ -247,6 +250,7 @@ def get_simulation_explainability(
     offset: int = Query(0, ge=0, description="Number of rows to skip for pagination"),
     limit: int = Query(500, ge=1, le=2000, description="Maximum number of rows to return"),
     service: ExplainabilityTimelineService = Depends(get_explainability_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     """
     Get explainability timeline for a simulation.
@@ -313,6 +317,7 @@ def export_simulation_explainability(
     action: Optional[str] = Query(None, description="Action filter (comma-separated: BUY,SELL,HOLD,SKIP)"),
     aggregation: str = Query("daily", description="Aggregation mode: 'daily' or 'all'"),
     service: ExplainabilityTimelineService = Depends(get_explainability_service),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """
     Export simulation explainability timeline to Excel.

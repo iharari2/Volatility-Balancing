@@ -23,6 +23,7 @@ from domain.ports.optimization_repo import (
 )
 from domain.ports.simulation_repo import SimulationRepo
 from domain.ports.alert_repo import AlertRepo
+from domain.ports.user_repo import UserRepo
 
 from infrastructure.time.clock import Clock
 
@@ -68,6 +69,7 @@ from infrastructure.persistence.sql.optimization_repo_sql import (
     SQLHeatmapDataRepo,
 )
 from infrastructure.persistence.memory.alert_repo_mem import InMemoryAlertRepo
+from infrastructure.persistence.memory.user_repo_mem import InMemoryUserRepo
 
 # Use cases
 from application.use_cases.parameter_optimization_uc import ParameterOptimizationUC
@@ -90,6 +92,7 @@ from application.services.order_status_worker import OrderStatusWorker
 from application.services.alert_checker import AlertChecker
 from application.services.webhook_service import WebhookService
 from application.services.system_status_service import SystemStatusService
+from application.services.auth_service import AuthService
 
 # New clean architecture: Orchestrators
 from application.orchestrators.live_trading import LiveTradingOrchestrator
@@ -150,6 +153,10 @@ class _Container:
     broker: IBrokerService
     broker_integration: BrokerIntegrationService
     order_status_worker: OrderStatusWorker
+
+    # Auth
+    user_repo: UserRepo
+    auth_service: AuthService
 
     # Monitoring & alerting
     alert_repo: AlertRepo
@@ -420,6 +427,21 @@ class _Container:
         self.order_status_worker = OrderStatusWorker(
             orders_repo=self.orders,
             broker_integration=self.broker_integration,
+        )
+
+        # --- User / Auth ---
+        if persistence == "sql":
+            from infrastructure.persistence.sql.user_repo_sql import SQLUserRepo
+            user_session_engine = main_engine or get_engine(sql_url)
+            UserSession = sessionmaker(bind=user_session_engine, expire_on_commit=False, autoflush=False)
+            self.user_repo = SQLUserRepo(UserSession)
+        else:
+            self.user_repo = InMemoryUserRepo()
+        self.auth_service = AuthService(
+            user_repo=self.user_repo,
+            secret_key=os.getenv("JWT_SECRET_KEY", "CHANGE-ME-IN-PRODUCTION"),
+            algorithm="HS256",
+            token_expire_hours=int(os.getenv("JWT_EXPIRE_HOURS", "24")),
         )
 
         # --- Monitoring & Alerting ---

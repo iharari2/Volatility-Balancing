@@ -12,6 +12,7 @@ from openpyxl import load_workbook
 
 # Import the FastAPI app factory
 from app.main import create_app
+from app.auth import get_current_user, CurrentUser
 
 # Import domain entities for creating test data
 from domain.entities.position import Position
@@ -35,6 +36,9 @@ class TestExportRegression:
     def client(self):
         """Create test client"""
         app = create_app(enable_trading_worker=False)
+        app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+            user_id="test-user", tenant_id="default", email="test@test.com", role="owner"
+        )
         with TestClient(app) as test_client:
             yield test_client
 

@@ -4,11 +4,18 @@
 import pytest
 from starlette.testclient import TestClient
 from app.main import create_app
+from app.auth import get_current_user, CurrentUser
+
+_test_user = CurrentUser(
+    user_id="test-user", tenant_id="default", email="test@test.com", role="owner"
+)
 
 
 @pytest.fixture
 def app():
-    return create_app(enable_trading_worker=False)
+    app = create_app(enable_trading_worker=False)
+    app.dependency_overrides[get_current_user] = lambda: _test_user
+    return app
 
 
 @pytest.fixture

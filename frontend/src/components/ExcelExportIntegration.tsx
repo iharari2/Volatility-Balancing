@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Download, FileSpreadsheet, Loader2 } from 'lucide-react';
+import { getAuthHeaders } from '../lib/api';
 
 interface ExcelExportIntegrationProps {
   className?: string;
@@ -21,7 +22,7 @@ const ExcelExportIntegration: React.FC<ExcelExportIntegrationProps> = ({ classNa
     setExportStatus((prev) => ({ ...prev, [exportName]: 'loading' }));
 
     try {
-      const response = await fetch(`${API_BASE}${endpoint}`);
+      const response = await fetch(`${API_BASE}${endpoint}`, { headers: { ...getAuthHeaders() } });
 
       if (response.ok) {
         const blob = await response.blob();

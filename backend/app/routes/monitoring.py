@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
 from app.di import container
+from app.auth import get_current_user, CurrentUser
 from application.services.trading_worker import get_trading_worker
 
 router = APIRouter(prefix="/v1", tags=["monitoring"])
@@ -57,7 +58,7 @@ def _alert_to_dict(alert) -> Dict[str, Any]:
 # --- Endpoints ---
 
 @router.get("/system/status")
-async def system_status() -> Dict[str, Any]:
+async def system_status(user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     worker = get_trading_worker()
     svc = container.system_status_service
     return svc.get_full_status(
@@ -69,7 +70,7 @@ async def system_status() -> Dict[str, Any]:
 
 
 @router.get("/alerts")
-async def list_alerts(status: Optional[str] = None) -> Dict[str, Any]:
+async def list_alerts(status: Optional[str] = None, user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     from domain.entities.alert import AlertStatus
 
     repo = container.alert_repo
@@ -88,7 +89,7 @@ async def list_alerts(status: Optional[str] = None) -> Dict[str, Any]:
 
 
 @router.post("/alerts/{alert_id}/acknowledge")
-async def acknowledge_alert(alert_id: str) -> Dict[str, Any]:
+async def acknowledge_alert(alert_id: str, user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     from domain.entities.alert import AlertStatus
 
     repo = container.alert_repo
@@ -105,7 +106,7 @@ async def acknowledge_alert(alert_id: str) -> Dict[str, Any]:
 
 
 @router.post("/alerts/{alert_id}/resolve")
-async def resolve_alert(alert_id: str) -> Dict[str, Any]:
+async def resolve_alert(alert_id: str, user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     from domain.entities.alert import AlertStatus
 
     repo = container.alert_repo
@@ -120,7 +121,7 @@ async def resolve_alert(alert_id: str) -> Dict[str, Any]:
 
 
 @router.get("/alerts/webhook")
-async def get_webhook_config() -> Dict[str, Any]:
+async def get_webhook_config(user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     svc = container.webhook_service
     return {
         "configured": svc.is_configured,
@@ -129,7 +130,7 @@ async def get_webhook_config() -> Dict[str, Any]:
 
 
 @router.put("/alerts/webhook")
-async def set_webhook_config(req: WebhookUpdateRequest) -> Dict[str, Any]:
+async def set_webhook_config(req: WebhookUpdateRequest, user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     svc = container.webhook_service
     svc.set_url(req.url)
     return {

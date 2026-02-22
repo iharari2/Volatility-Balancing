@@ -1,5 +1,6 @@
 import { PortfolioPosition } from '../../../services/portfolioScopedApi';
 import { useState, useEffect } from 'react';
+import { getAuthHeaders } from '../../../lib/api';
 
 interface RecentMarketDataSectionProps {
   position: PortfolioPosition;
@@ -16,7 +17,7 @@ export default function RecentMarketDataSection({ position }: RecentMarketDataSe
         if (!asset) return;
 
         // Fetch recent market data - adjust endpoint as needed
-        const response = await fetch(`/api/v1/market-data/${asset}/latest`);
+        const response = await fetch(`/api/v1/market-data/${asset}/latest`, { headers: { ...getAuthHeaders() } });
         if (response.ok) {
           const data = await response.json();
           setMarketData(data);

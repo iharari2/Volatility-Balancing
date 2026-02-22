@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { usePortfolio } from '../../contexts/PortfolioContext';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
+import { getAuthHeaders } from '../../lib/api';
 import { marketHoursService, MarketStatus } from '../../services/marketHoursService';
 import EmptyState from '../../components/shared/EmptyState';
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
@@ -120,7 +121,7 @@ export default function DashboardPage() {
       setLoadingActivity(true);
       try {
         const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
-        const response = await fetch(`${apiBase}/v1/audit/traces?limit=10`);
+        const response = await fetch(`${apiBase}/v1/audit/traces?limit=10`, { headers: { ...getAuthHeaders() } });
         if (response.ok) {
           const data = await response.json();
           const events: ActivityEvent[] = (data.traces || []).map((trace: any) => ({

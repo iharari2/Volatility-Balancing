@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 
 from app.di import container
+from app.auth import get_current_user, CurrentUser
 from application.services.portfolio_service import PortfolioService
 from app.routes.portfolios import get_portfolio_service
 
@@ -39,6 +40,7 @@ def get_position_cockpit(
     portfolio_id: str,
     position_id: str,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> CockpitSummaryResponse:
     """
     Get comprehensive position cockpit data.
@@ -70,6 +72,7 @@ def reset_position_baseline(
     portfolio_id: str,
     position_id: str,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Reset the baseline for a position to its current state.
@@ -94,6 +97,7 @@ def get_position_marketdata(
     position_id: str,
     limit: int = Query(50, description="Maximum number of data points to return"),
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Get recent market data for a position.
@@ -123,6 +127,7 @@ def get_position_timeline_cockpit(
     portfolio_id: str,
     position_id: str,
     limit: int = Query(500, description="Maximum number of timeline rows to return"),
+    user: CurrentUser = Depends(get_current_user),
 ) -> List[Dict[str, Any]]:
     """
     Get detailed evaluation timeline for a position.
@@ -160,6 +165,7 @@ def get_position_events_cockpit(
     position_id: str,
     limit: int = Query(500, description="Maximum number of events to return"),
     event_type: Optional[str] = Query(None, description="Filter by event type"),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Get events for position cockpit (from PositionEvaluationTimeline).
@@ -254,6 +260,7 @@ def get_position_config(
     portfolio_id: str,
     position_id: str,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Get position-specific configuration.
@@ -350,6 +357,7 @@ def update_position_config(
     position_id: str,
     request: PositionConfigRequest,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Update position-specific configuration.

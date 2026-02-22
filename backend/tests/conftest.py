@@ -60,6 +60,13 @@ def client():
     # Reset container to ensure clean state
     container.reset()
     app = create_app(enable_trading_worker=False)
+
+    # Override auth dependency so all routes are accessible without a real JWT
+    from app.auth import get_current_user, CurrentUser
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+        user_id="test-user", tenant_id="default", email="test@test.com", role="owner"
+    )
+
     with TestClient(app) as test_client:
         yield test_client
 

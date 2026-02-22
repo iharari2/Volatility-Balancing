@@ -17,7 +17,12 @@ os.environ.setdefault("TRADING_WORKER_INTERVAL_SECONDS", "3600")
 from starlette.testclient import TestClient
 from app.main import app
 from app.di import container
+from app.auth import get_current_user, CurrentUser
 from tests.fixtures.mock_market_data import MockMarketDataAdapter
+
+_test_user = CurrentUser(
+    user_id="test-user", tenant_id="default", email="test@test.com", role="owner"
+)
 
 
 @pytest.fixture()
@@ -26,6 +31,8 @@ def client():
     container.reset()
     # Override market data adapter with mock for fast testing
     container.market_data = MockMarketDataAdapter()
+    # Override auth dependency so tests don't need tokens
+    app.dependency_overrides[get_current_user] = lambda: _test_user
     return TestClient(app)
 
 

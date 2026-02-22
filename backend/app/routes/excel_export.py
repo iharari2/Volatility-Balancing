@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 from datetime import datetime, timezone
 
 from app.di import container
+from app.auth import get_current_user, CurrentUser
 from application.services.excel_export_service import ExcelExportService
 from application.services.timeline_excel_export_service import TimelineExcelExportService
 from application.use_cases.parameter_optimization_uc import ParameterOptimizationUC
@@ -126,6 +127,7 @@ async def export_optimization_results(
     format: str = Query("xlsx", description="Export format (xlsx, csv)"),
     excel_service: ExcelExportService = Depends(get_excel_export_service),
     optimization_uc: ParameterOptimizationUC = Depends(get_parameter_optimization_uc),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Export optimization results to Excel format."""
     try:
@@ -182,6 +184,7 @@ async def export_simulation_results(
     format: str = Query("xlsx", description="Export format (xlsx, csv)"),
     ticker: str = Query(None, description="Override ticker symbol (e.g., 'NVDA', 'BRK.A', 'SPY')"),
     excel_service: ExcelExportService = Depends(get_excel_export_service),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Export simulation results to Excel format."""
     try:
@@ -362,6 +365,7 @@ async def export_trading_data(
     start_date: Optional[str] = Query(None, description="Start date for data export (ISO format)"),
     end_date: Optional[str] = Query(None, description="End date for data export (ISO format)"),
     excel_service: ExcelExportService = Depends(get_excel_export_service),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Export trading data (positions, trades, orders) to Excel format."""
     try:
@@ -479,6 +483,7 @@ async def export_position_data(
     include_trades: bool = Query(True, description="Include trade history"),
     include_orders: bool = Query(True, description="Include order history"),
     excel_service: ExcelExportService = Depends(get_excel_export_service),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Export specific position data to Excel format."""
     try:
@@ -621,6 +626,7 @@ async def export_dividend_data(
     position_id: str = Query(..., description="Position ID"),
     format: str = Query("xlsx", description="Export format"),
     excel_service: ExcelExportService = Depends(get_excel_export_service),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Export dividend data (receivables + upcoming) for a position to Excel."""
     try:
@@ -706,7 +712,7 @@ async def export_dividend_data(
 
 
 @router.get("/export/formats")
-async def get_export_formats():
+async def get_export_formats(user: CurrentUser = Depends(get_current_user)):
     """Get available export formats."""
     return {
         "formats": [
@@ -729,6 +735,7 @@ async def get_export_formats():
 @router.get("/positions/export")
 async def export_positions(
     excel_service: ExcelExportService = Depends(get_excel_export_service),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """
     Export all positions to Excel format.
@@ -881,6 +888,7 @@ async def export_positions(
 @router.get("/trades/export")
 async def export_trades(
     excel_service: ExcelExportService = Depends(get_excel_export_service),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Export all trades to Excel format."""
     try:
@@ -943,6 +951,7 @@ async def export_trades(
 @router.get("/orders/export")
 async def export_orders(
     excel_service: ExcelExportService = Depends(get_excel_export_service),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Export all orders to Excel format."""
     try:
@@ -1009,6 +1018,7 @@ async def export_enhanced_simulation_results(
     format: str = Query("xlsx", description="Export format (xlsx, csv)"),
     ticker: str = Query(None, description="Override ticker symbol (e.g., 'NVDA', 'BRK.A', 'SPY')"),
     excel_service: ExcelExportService = Depends(get_excel_export_service),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Export enhanced simulation results with comprehensive data logs."""
     try:
@@ -1200,6 +1210,7 @@ async def export_enhanced_simulation_results(
 async def export_enhanced_trading_data(
     format: str = Query("xlsx", description="Export format (xlsx, csv)"),
     excel_service: ExcelExportService = Depends(get_excel_export_service),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Export enhanced trading data with comprehensive audit trail."""
     try:
@@ -1341,7 +1352,7 @@ async def export_enhanced_trading_data(
 
 
 @router.get("/export/templates")
-async def get_export_templates():
+async def get_export_templates(user: CurrentUser = Depends(get_current_user)):
     """Get available Excel export templates."""
     return {
         "templates": [
@@ -1398,6 +1409,7 @@ async def export_position_comprehensive_data(
     ticker: str = Query(None, description="Override ticker symbol (e.g., 'NVDA', 'BRK.A', 'SPY')"),
     include_simulation: bool = Query(False, description="Include simulation analysis if available"),
     excel_service: ExcelExportService = Depends(get_excel_export_service),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """
     Export comprehensive per-position data to Excel with all data categories.
@@ -1507,6 +1519,7 @@ async def export_position_comprehensive_data(
 async def export_activity_log(
     position_id: str,
     excel_service: ExcelExportService = Depends(get_excel_export_service),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Export activity log (events) for a position to Excel format."""
     try:
@@ -1573,6 +1586,221 @@ async def export_activity_log(
         raise HTTPException(status_code=500, detail=f"Failed to export activity log: {str(e)}")
 
 
+@router.get("/analytics/export")
+async def export_analytics_data(
+    tenant_id: str = Query(..., description="Tenant ID"),
+    portfolio_id: str = Query(..., description="Portfolio ID"),
+    position_id: Optional[str] = Query(None, description="Optional position ID filter"),
+    start_date: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
+    resolution: str = Query("daily", description="Resolution: daily | weekly | hourly"),
+    format: str = Query("xlsx", description="Export format"),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Export portfolio analytics to Excel.
+
+    Sheets: Summary KPIs, Time Series, Trades, Dividends, Benchmark Comparison.
+    """
+    try:
+        import io as _io
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+        from application.services.portfolio_service import PortfolioService
+
+        # Build PortfolioService
+        portfolio_service = PortfolioService(
+            portfolio_repo=container.portfolio_repo,
+            positions_repo=container.positions,
+            portfolio_config_repo=container.portfolio_config_repo,
+            baseline_repo=getattr(container, "position_baseline", None),
+            market_data_repo=getattr(container, "market_data", None),
+        )
+
+        # Parse dates
+        from datetime import datetime as _dt, timezone as _tz
+        parsed_start = _dt.strptime(start_date, "%Y-%m-%d").replace(tzinfo=_tz.utc) if start_date else None
+        parsed_end = (
+            _dt.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, tzinfo=_tz.utc)
+            if end_date
+            else None
+        )
+
+        data = portfolio_service.get_portfolio_analytics(
+            tenant_id=tenant_id,
+            portfolio_id=portfolio_id,
+            days=0,  # use start/end dates
+            position_id=position_id,
+            start_date=parsed_start,
+            end_date=parsed_end,
+            resolution=resolution,
+            benchmarks=["buy_hold", "spy"],
+        )
+        if not data:
+            raise HTTPException(status_code=404, detail="Portfolio not found")
+
+        wb = Workbook()
+
+        # --- Helpers ---
+        header_fill = PatternFill("solid", fgColor="1E3A5F")
+        header_font = Font(color="FFFFFF", bold=True)
+        alt_fill = PatternFill("solid", fgColor="F0F4F8")
+        thin = Border(
+            left=Side(style="thin", color="D1D5DB"),
+            right=Side(style="thin", color="D1D5DB"),
+            top=Side(style="thin", color="D1D5DB"),
+            bottom=Side(style="thin", color="D1D5DB"),
+        )
+
+        def _write_header_row(ws, headers, row=1):
+            for col, h in enumerate(headers, 1):
+                cell = ws.cell(row=row, column=col, value=h)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = Alignment(horizontal="center")
+                ws.column_dimensions[get_column_letter(col)].width = max(14, len(str(h)) + 4)
+
+        def _write_data_row(ws, values, row, use_alt=False):
+            for col, v in enumerate(values, 1):
+                cell = ws.cell(row=row, column=col, value=v)
+                cell.border = thin
+                if use_alt:
+                    cell.fill = alt_fill
+
+        # --- Sheet 1: Summary KPIs ---
+        ws_kpi = wb.active
+        ws_kpi.title = "Summary KPIs"
+        kpis = data.get("kpis", {})
+        performance = data.get("performance", {})
+        ws_kpi["A1"] = f"Analytics Summary — {data.get('portfolio_name', portfolio_id)}"
+        ws_kpi["A1"].font = Font(size=14, bold=True)
+        ws_kpi["A2"] = f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        if parsed_start or parsed_end:
+            date_range = f"{(parsed_start or _dt.now(_tz.utc)).strftime('%Y-%m-%d')} → {(parsed_end or _dt.now(_tz.utc)).strftime('%Y-%m-%d')}"
+        else:
+            date_range = "All time"
+        ws_kpi["A3"] = f"Date range: {date_range}  |  Resolution: {resolution}"
+        ws_kpi.row_dimensions[1].height = 22
+
+        kpi_rows = [
+            ("Portfolio Return", f"{performance.get('portfolio_return_pct', 0):.2f}%"),
+            ("Buy-Hold Return", f"{performance.get('benchmark_return_pct', 0):.2f}%"),
+            ("Alpha vs Buy-Hold", f"{performance.get('alpha', 0):.2f}%"),
+            ("S&P 500 Return", f"{performance.get('spy_return_pct', 'N/A')}%" if isinstance(performance.get('spy_return_pct'), float) else "N/A"),
+            ("Alpha vs S&P 500", f"{performance.get('spy_alpha', 'N/A')}%" if isinstance(performance.get('spy_alpha'), float) else "N/A"),
+            ("Volatility (annualized)", f"{kpis.get('volatility', 0):.2f}%"),
+            ("Max Drawdown", f"{kpis.get('max_drawdown', 0):.2f}%"),
+            ("Sharpe-like Ratio", f"{kpis.get('sharpe_like', 0):.3f}"),
+            ("Period Return", f"{kpis.get('pnl_pct', 0):.2f}%"),
+            ("Total Commissions Paid", f"${kpis.get('commission_total', 0):.2f}"),
+            ("Total Dividends Received", f"${kpis.get('dividend_total', 0):.2f}"),
+            ("Total Positions", str(data.get("total_positions", 0))),
+            ("Total Value", f"${data.get('total_value', 0):,.2f}"),
+        ]
+        _write_header_row(ws_kpi, ["Metric", "Value"], row=5)
+        for i, (k, v) in enumerate(kpi_rows, 6):
+            _write_data_row(ws_kpi, [k, v], row=i, use_alt=(i % 2 == 0))
+        ws_kpi.column_dimensions["A"].width = 30
+        ws_kpi.column_dimensions["B"].width = 20
+
+        # --- Sheet 2: Time Series ---
+        ws_ts = wb.create_sheet("Time Series")
+        ts_headers = ["Date", "Total Value ($)", "Stock Value ($)", "Cash ($)", "Stock %", "Cash %"]
+        _write_header_row(ws_ts, ts_headers)
+        for i, point in enumerate(data.get("time_series", []), 2):
+            _write_data_row(ws_ts, [
+                point.get("date"),
+                round(point.get("value", 0), 2),
+                round(point.get("stock", 0), 2),
+                round(point.get("cash", 0), 2),
+                round(point.get("stock_pct", 0), 2),
+                round(point.get("cash_pct", 0), 2),
+            ], row=i, use_alt=(i % 2 == 0))
+
+        # --- Sheet 3: Trades ---
+        ws_trades = wb.create_sheet("Trades")
+        trade_events = [e for e in data.get("events", []) if e.get("type") == "TRADE"]
+        trade_headers = ["Date", "Asset", "Side", "Qty", "Price ($)", "Commission ($)", "Position ID"]
+        _write_header_row(ws_trades, trade_headers)
+        for i, ev in enumerate(trade_events, 2):
+            _write_data_row(ws_trades, [
+                ev.get("date"),
+                ev.get("asset_symbol", ""),
+                ev.get("side", ""),
+                round(ev.get("qty", 0), 4),
+                round(ev.get("price", 0), 4),
+                round(ev.get("commission", 0), 4),
+                ev.get("position_id", ""),
+            ], row=i, use_alt=(i % 2 == 0))
+        if not trade_events:
+            ws_trades["A2"] = "No trades in selected period"
+
+        # --- Sheet 4: Dividends ---
+        ws_div = wb.create_sheet("Dividends")
+        div_events = [e for e in data.get("events", []) if e.get("type") == "DIVIDEND"]
+        div_headers = ["Date", "Asset", "Gross Amount ($)", "Net Amount ($)", "Shares Held", "DPS ($)", "Position ID"]
+        _write_header_row(ws_div, div_headers)
+        for i, ev in enumerate(div_events, 2):
+            _write_data_row(ws_div, [
+                ev.get("date"),
+                ev.get("asset_symbol", ""),
+                round(ev.get("gross_amount", 0), 4),
+                round(ev.get("net_amount", 0), 4),
+                round(ev.get("shares_held", 0), 4),
+                round(ev.get("dps", 0), 4),
+                ev.get("position_id", ""),
+            ], row=i, use_alt=(i % 2 == 0))
+        if not div_events:
+            ws_div["A2"] = "No dividends in selected period"
+
+        # --- Sheet 5: Benchmark Comparison ---
+        ws_bench = wb.create_sheet("Benchmark Comparison")
+        bench_headers = ["Benchmark", "Start Value / Price", "End Value / Price", "Return %"]
+        _write_header_row(ws_bench, bench_headers)
+        bench_rows = [
+            ("Portfolio", "-", "-", f"{performance.get('portfolio_return_pct', 0):.2f}%"),
+            ("Buy-Hold (Stock Only)", "-", "-", f"{performance.get('benchmark_return_pct', 0):.2f}%"),
+        ]
+        if isinstance(performance.get("spy_return_pct"), (int, float)):
+            spy_b = data.get("benchmarks", {}).get("spy", {})
+            bench_rows.append((
+                "S&P 500 (SPY)",
+                f"{spy_b.get('first_price', ''):.2f}" if spy_b.get('first_price') else "",
+                f"{spy_b.get('last_price', ''):.2f}" if spy_b.get('last_price') else "",
+                f"{performance.get('spy_return_pct', 0):.2f}%",
+            ))
+        custom_b = data.get("benchmarks", {}).get("custom", {})
+        if custom_b:
+            bench_rows.append((
+                f"Custom ({custom_b.get('ticker', '')})",
+                f"{custom_b.get('first_price', ''):.2f}" if custom_b.get('first_price') else "",
+                f"{custom_b.get('last_price', ''):.2f}" if custom_b.get('last_price') else "",
+                f"{custom_b.get('return_pct', 0):.2f}%",
+            ))
+        for i, row_vals in enumerate(bench_rows, 2):
+            _write_data_row(ws_bench, list(row_vals), row=i, use_alt=(i % 2 == 0))
+
+        # Serialise
+        output = _io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        ts_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"analytics_{portfolio_id}_{ts_str}.xlsx"
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error exporting analytics: {str(e)}")
+
+
 @router.get("/timeline/export")
 def export_timeline_excel(
     tenant_id: str = Query(..., description="Tenant ID"),
@@ -1580,6 +1808,7 @@ def export_timeline_excel(
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
     end_date: Optional[str] = Query(None, description="End date (ISO format)"),
     mode: Optional[str] = Query(None, description="Filter by mode (LIVE or SIMULATION)"),
+    user: CurrentUser = Depends(get_current_user),
 ) -> StreamingResponse:
     """
     Export PositionEvaluationTimeline to Excel according to specification.

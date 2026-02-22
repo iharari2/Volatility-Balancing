@@ -7,14 +7,16 @@ import os
 import logging
 from typing import Any, Dict
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from app.auth import get_current_user, CurrentUser
 
 router = APIRouter(prefix="/v1/broker")
 logger = logging.getLogger(__name__)
 
 
 @router.get("/status")
-async def broker_status() -> Dict[str, Any]:
+async def broker_status(user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     """
     Return current broker backend state.
 

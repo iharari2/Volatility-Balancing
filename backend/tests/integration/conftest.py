@@ -6,13 +6,19 @@
 import pytest
 from starlette.testclient import TestClient
 from app.main import create_app
+from app.auth import get_current_user, CurrentUser
 import httpx
+
+_test_user = CurrentUser(
+    user_id="test-user", tenant_id="default", email="test@test.com", role="owner"
+)
 
 
 @pytest.fixture
 def client():
     """Create test client."""
     app = create_app(enable_trading_worker=False)
+    app.dependency_overrides[get_current_user] = lambda: _test_user
     with TestClient(app) as test_client:
         yield test_client
 
@@ -26,6 +32,7 @@ def anyio_backend():
 async def async_client():
     """Async client for ASGI app using anyio pytest plugin."""
     app = create_app(enable_trading_worker=False)
+    app.dependency_overrides[get_current_user] = lambda: _test_user
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         yield client

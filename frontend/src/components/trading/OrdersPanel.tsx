@@ -17,6 +17,7 @@ import {
   TrendingDown,
   Receipt,
 } from 'lucide-react';
+import { getAuthHeaders } from '../../lib/api';
 
 interface Order {
   id: string;
@@ -79,8 +80,8 @@ export default function OrdersPanel({
 
       // Fetch orders and trades in parallel
       const [ordersRes, tradesRes] = await Promise.all([
-        fetch(`${API_BASE}/api/tenants/${TENANT_ID}/portfolios/${portfolioId}/positions/${positionId}/orders?limit=${limit}`),
-        fetch(`${API_BASE}/api/tenants/${TENANT_ID}/portfolios/${portfolioId}/positions/${positionId}/trades?limit=${limit}`),
+        fetch(`${API_BASE}/api/tenants/${TENANT_ID}/portfolios/${portfolioId}/positions/${positionId}/orders?limit=${limit}`, { headers: { ...getAuthHeaders() } }),
+        fetch(`${API_BASE}/api/tenants/${TENANT_ID}/portfolios/${portfolioId}/positions/${positionId}/trades?limit=${limit}`, { headers: { ...getAuthHeaders() } }),
       ]);
 
       if (!ordersRes.ok) {

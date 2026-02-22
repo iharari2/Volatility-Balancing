@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { Filter, X } from 'lucide-react';
 import DateRangeFilter, { DateRange, dateRangeToParams } from '../../../components/shared/DateRangeFilter';
 import EventTypeFilter from '../../../components/shared/EventTypeFilter';
+import { getAuthHeaders } from '../../../lib/api';
 
 interface TimelineRow {
   id: string;
@@ -90,6 +91,7 @@ export default function EventLogSection({ position, tenantId, portfolioId }: Eve
 
       const response = await fetch(
         `/api/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions/${position.id}/timeline?${params.toString()}`,
+        { headers: { ...getAuthHeaders() } },
       );
       if (response.ok) {
         const data = await response.json();

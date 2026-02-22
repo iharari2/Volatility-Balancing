@@ -576,12 +576,26 @@ class PortfolioService:
         return config
 
     def get_portfolio_analytics(
-        self, tenant_id: str, portfolio_id: str, days: int = 30, position_id: Optional[str] = None
+        self,
+        tenant_id: str,
+        portfolio_id: str,
+        days: int = 30,
+        position_id: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        resolution: str = "daily",
+        benchmarks: Optional[List[str]] = None,
+        custom_ticker: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Get detailed portfolio analytics with historical time series.
 
         Args:
             position_id: Optional position ID to filter analytics to a single position.
+            start_date: Start of analytics window (overrides days if provided).
+            end_date: End of analytics window (defaults to now).
+            resolution: Aggregation resolution — 'daily' (default), 'weekly', or 'hourly'.
+            benchmarks: Which benchmarks to include ('buy_hold', 'spy', 'custom').
+            custom_ticker: Ticker symbol for the 'custom' benchmark.
 
         Returns:
             Analytics data including:
@@ -633,37 +647,54 @@ class PortfolioService:
                 ) * 100
 
         # 2. Historical Time Series (from evaluation_timeline)
-        # We aggregate daily snapshots for the portfolio
+        # We aggregate snapshots for the portfolio based on resolution
         time_series = []
+
+        # Resolve effective date window
+        # If start_date is None and days == 0: full history ("all")
+        # If start_date is None and days > 0: relative window
+        # If start_date is provided: explicit window
+        effective_end = end_date or datetime.now(timezone.utc)
+        if start_date is not None:
+            effective_start = start_date
+        elif days and days > 0:
+            effective_start = effective_end - timedelta(days=days)
+        else:
+            effective_start = None  # Full history – no lower bound
+
         try:
             from app.di import container
             from collections import defaultdict
 
             if hasattr(container, "evaluation_timeline"):
-                # Calculate date range based on days parameter
-                end_date = datetime.now(timezone.utc)
-                start_date = end_date - timedelta(days=days)
+                # Larger limit when fetching full history; daily limit is fine for small ranges
+                row_limit = 50000 if effective_start is None else 5000
 
-                # Get timeline for all positions in the portfolio
-                # Filter by date range and exclude simulation data for live analytics
                 rows = container.evaluation_timeline.list_by_portfolio(
                     tenant_id=tenant_id,
                     portfolio_id=portfolio_id,
-                    start_date=start_date,
-                    end_date=end_date,
-                    limit=5000,  # Increased limit for more data points
+                    start_date=effective_start,
+                    end_date=effective_end,
+                    limit=row_limit,
                 )
 
                 # Filter rows by position_id if specified
                 if position_id:
                     rows = [r for r in rows if r.get("position_id") == position_id]
 
-                print(f"📊 Analytics: Found {len(rows)} timeline rows for portfolio {portfolio_id} (last {days} days)" +
-                      (f", filtered to position {position_id}" if position_id else ""))
+                date_range_desc = (
+                    "all time" if effective_start is None
+                    else f"{effective_start.strftime('%Y-%m-%d')} to {effective_end.strftime('%Y-%m-%d')}"
+                )
+                print(
+                    f"📊 Analytics: Found {len(rows)} timeline rows for portfolio {portfolio_id} "
+                    f"({date_range_desc}, resolution={resolution})"
+                    + (f", filtered to position {position_id}" if position_id else "")
+                )
 
-                # Group by day and position, taking the latest evaluation per position per day
-                # Structure: {day: {position_id: {timestamp, values...}}}
-                daily_position_data: Dict[str, Dict[str, Dict[str, Any]]] = defaultdict(dict)
+                # Group by bucket (day/week/hour) and position, keeping the latest per bucket
+                # Structure: {bucket_key: {position_id: {timestamp, values...}}}
+                bucket_data: Dict[str, Dict[str, Dict[str, Any]]] = defaultdict(dict)
 
                 for row in rows:
                     dt = row.get("timestamp")
@@ -671,13 +702,21 @@ class PortfolioService:
                         continue
                     if isinstance(dt, str):
                         dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
-                    day_key = dt.strftime("%Y-%m-%d")
+
+                    if resolution == "weekly":
+                        # ISO week key: "2024-W03"
+                        bucket_key = f"{dt.year}-W{dt.strftime('%W')}"
+                    elif resolution == "hourly":
+                        bucket_key = dt.strftime("%Y-%m-%dT%H:00")
+                    else:
+                        # daily (default)
+                        bucket_key = dt.strftime("%Y-%m-%d")
+
                     row_position_id = row.get("position_id", "unknown")
 
-                    # Keep only the latest evaluation per position per day
-                    existing = daily_position_data[day_key].get(row_position_id)
+                    # Keep only the latest evaluation per position per bucket
+                    existing = bucket_data[bucket_key].get(row_position_id)
                     if existing is None or dt > existing.get("timestamp", dt):
-                        # Use "after" values if available, fallback to "before" values
                         total_val = row.get("position_total_value_after")
                         if total_val is None or total_val == 0:
                             total_val = row.get("position_total_value_before") or 0.0
@@ -688,34 +727,34 @@ class PortfolioService:
                         if cash_val is None:
                             cash_val = row.get("position_cash_before") or 0.0
 
-                        daily_position_data[day_key][row_position_id] = {
+                        bucket_data[bucket_key][row_position_id] = {
                             "timestamp": dt,
                             "total_value": total_val,
                             "stock_value": stock_val,
                             "cash": cash_val,
                         }
 
-                # Aggregate across positions for each day
-                for day in sorted(daily_position_data.keys()):
-                    positions_data = daily_position_data[day]
-                    total_value = sum(p["total_value"] for p in positions_data.values())
-                    stock_value = sum(p["stock_value"] for p in positions_data.values())
-                    cash_value = sum(p["cash"] for p in positions_data.values())
+                # Aggregate across positions for each bucket
+                for bucket_key in sorted(bucket_data.keys()):
+                    positions_data = bucket_data[bucket_key]
+                    bucket_total = sum(p["total_value"] for p in positions_data.values())
+                    bucket_stock = sum(p["stock_value"] for p in positions_data.values())
+                    bucket_cash = sum(p["cash"] for p in positions_data.values())
 
-                    # Only include days with valid data (total_value > 0)
-                    if total_value > 0:
+                    if bucket_total > 0:
+                        # Use the bucket key as the date label
                         time_series.append(
                             {
-                                "date": day,
-                                "value": total_value,
-                                "stock": stock_value,
-                                "cash": cash_value,
-                                "stock_pct": (stock_value / total_value * 100),
-                                "cash_pct": (cash_value / total_value * 100),
+                                "date": bucket_key,
+                                "value": bucket_total,
+                                "stock": bucket_stock,
+                                "cash": bucket_cash,
+                                "stock_pct": (bucket_stock / bucket_total * 100),
+                                "cash_pct": (bucket_cash / bucket_total * 100),
                             }
                         )
 
-                print(f"   Aggregated to {len(time_series)} valid daily data points")
+                print(f"   Aggregated to {len(time_series)} valid data points ({resolution})")
 
         except Exception as e:
             print(f"Warning: Failed to fetch historical time series for analytics: {e}")
@@ -812,8 +851,6 @@ class PortfolioService:
 
         # 6. Fetch events (trades and dividends) for the period
         events: List[Dict[str, Any]] = []
-        end_date = datetime.now(timezone.utc)
-        start_date = end_date - timedelta(days=days)
 
         # Track seen trades to avoid duplicates
         seen_trade_keys: set = set()
@@ -823,12 +860,24 @@ class PortfolioService:
 
             # First, fetch trades from the trades table
             for pos in positions:
-                trades = container.trades.list_for_position(pos.id, limit=500)
+                try:
+                    trades = container.trades.list_for_position(pos.id, limit=500)
+                except Exception as te:
+                    print(f"⚠️ Analytics: Failed to fetch trades for position {pos.id}: {te}")
+                    trades = []
                 for trade in trades:
                     trade_date = trade.executed_at
-                    if trade_date and start_date <= trade_date <= end_date:
-                        # Create a unique key based on date, position, side for dedup
-                        trade_key = f"{trade_date.strftime('%Y-%m-%d')}_{pos.id}_{trade.side}_{trade.qty}"
+                    if not trade_date:
+                        continue
+                    if trade_date.tzinfo is None:
+                        trade_date = trade_date.replace(tzinfo=timezone.utc)
+                    # Apply date range filter (effective_start may be None for "all")
+                    if effective_start is not None and trade_date < effective_start:
+                        continue
+                    if trade_date > effective_end:
+                        continue
+                    trade_key = f"{trade_date.strftime('%Y-%m-%d')}_{pos.id}_{trade.side}_{trade.qty}"
+                    if trade_key not in seen_trade_keys:
                         seen_trade_keys.add(trade_key)
                         events.append({
                             "date": trade_date.strftime("%Y-%m-%d"),
@@ -841,88 +890,102 @@ class PortfolioService:
                             "asset_symbol": pos.asset_symbol,
                         })
 
-            # Also fetch BUY/SELL actions from evaluation_timeline (for consistency with workspace Events tab)
-            # This catches trades that may only be recorded in timeline but not in trades table
-            # NOTE: Don't pass start_date/end_date to timeline query (like workspace Events tab)
-            # to avoid timezone mismatches - filter in Python instead
+            # Also fetch BUY/SELL actions from evaluation_timeline to catch trades not yet in trades table
             if hasattr(container, "evaluation_timeline"):
                 for pos in positions:
-                    print(f"📊 Analytics: Querying timeline for position {pos.id} ({pos.asset_symbol})")
-                    print(f"   tenant_id={tenant_id}, portfolio_id={portfolio_id}")
-                    print(f"   date range for filtering: {start_date} to {end_date}")
-                    timeline_rows = container.evaluation_timeline.list_by_position(
-                        tenant_id=tenant_id,
-                        portfolio_id=portfolio_id,
-                        position_id=pos.id,
-                        mode="LIVE",  # Match workspace Events tab which uses mode=LIVE
-                        # Don't pass start_date/end_date here - filter in Python below
-                        limit=500,
-                    )
-                    print(f"📊 Analytics: Found {len(timeline_rows)} timeline rows for position {pos.id}")
-                    # Debug: show first few rows and their actions
-                    for i, row in enumerate(timeline_rows[:5]):
-                        print(f"   Row {i}: action={row.get('action')}, ts={row.get('timestamp') or row.get('evaluated_at')}, mode={row.get('mode')}")
+                    try:
+                        timeline_rows = container.evaluation_timeline.list_by_position(
+                            tenant_id=tenant_id,
+                            portfolio_id=portfolio_id,
+                            position_id=pos.id,
+                            mode="LIVE",
+                            limit=500,
+                        )
+                    except Exception as tle:
+                        print(f"⚠️ Analytics: Failed to fetch timeline for position {pos.id}: {tle}")
+                        timeline_rows = []
+
+                    print(f"📊 Analytics events: {len(timeline_rows)} timeline rows for {pos.asset_symbol} (pos {pos.id})")
                     for row in timeline_rows:
                         action = row.get("action")
-                        # Handle case-insensitive action matching
                         action_upper = action.upper() if isinstance(action, str) else None
-                        if action_upper in ("BUY", "SELL"):
-                            # Handle both timestamp column names
-                            row_ts = row.get("timestamp") or row.get("evaluated_at")
-                            if row_ts:
-                                if isinstance(row_ts, str):
-                                    row_ts = datetime.fromisoformat(row_ts.replace("Z", "+00:00"))
-                                # Make timezone-aware if naive
-                                if row_ts.tzinfo is None:
-                                    row_ts = row_ts.replace(tzinfo=timezone.utc)
-                                # Filter by date range in Python (to avoid SQL timezone issues)
-                                if not (start_date <= row_ts <= end_date):
-                                    print(f"   Skipping event outside date range: {row_ts}")
-                                    continue
-                                # Calculate qty from the change
-                                qty_before = row.get("position_qty_before") or 0
-                                qty_after = row.get("position_qty_after") or 0
-                                qty_change = abs(qty_after - qty_before)
-                                # Include event even if qty_change is 0 (might be recorded differently)
-                                trade_key = f"{row_ts.strftime('%Y-%m-%d')}_{pos.id}_{action_upper}_{qty_change}"
-                                # Only add if not already seen from trades table
-                                if trade_key not in seen_trade_keys:
-                                    seen_trade_keys.add(trade_key)
-                                    print(f"   Adding timeline event: {action_upper} {qty_change} @ {row_ts.strftime('%Y-%m-%d %H:%M:%S')}")
-                                    events.append({
-                                        "date": row_ts.strftime("%Y-%m-%d"),
-                                        "type": "TRADE",
-                                        "side": action_upper,
-                                        "qty": qty_change if qty_change > 0 else row.get("qty") or 0,
-                                        "price": row.get("effective_price") or row.get("close") or row.get("market_price_raw") or 0.0,
-                                        "commission": row.get("commission") or 0.0,
-                                        "position_id": pos.id,
-                                        "asset_symbol": pos.asset_symbol,
-                                    })
-
-            # Fetch dividends for each position
-            for pos in positions:
-                receivables = container.dividend_receivable.get_receivables_by_position(pos.id)
-                for recv in receivables:
-                    # Use ex_date for the event date
-                    ex_date = getattr(recv, "ex_date", None)
-                    if ex_date:
-                        if isinstance(ex_date, str):
-                            ex_date = datetime.fromisoformat(ex_date.replace("Z", "+00:00"))
-                        if start_date <= ex_date <= end_date:
+                        if action_upper not in ("BUY", "SELL"):
+                            continue
+                        row_ts = row.get("timestamp") or row.get("evaluated_at")
+                        if not row_ts:
+                            continue
+                        if isinstance(row_ts, str):
+                            row_ts = datetime.fromisoformat(row_ts.replace("Z", "+00:00"))
+                        if row_ts.tzinfo is None:
+                            row_ts = row_ts.replace(tzinfo=timezone.utc)
+                        # Apply date range filter
+                        if effective_start is not None and row_ts < effective_start:
+                            continue
+                        if row_ts > effective_end:
+                            continue
+                        qty_before = row.get("position_qty_before") or 0
+                        qty_after = row.get("position_qty_after") or 0
+                        qty_change = abs(qty_after - qty_before)
+                        trade_key = f"{row_ts.strftime('%Y-%m-%d')}_{pos.id}_{action_upper}_{qty_change}"
+                        if trade_key not in seen_trade_keys:
+                            seen_trade_keys.add(trade_key)
+                            print(f"   Adding timeline event: {action_upper} {qty_change} @ {row_ts.strftime('%Y-%m-%d %H:%M')}")
                             events.append({
-                                "date": ex_date.strftime("%Y-%m-%d"),
-                                "type": "DIVIDEND",
-                                "gross_amount": getattr(recv, "gross_amount", 0.0),
-                                "net_amount": getattr(recv, "net_amount", 0.0),
-                                "shares_held": getattr(recv, "shares_held", 0.0),
-                                "dps": getattr(recv, "dps", 0.0),
+                                "date": row_ts.strftime("%Y-%m-%d"),
+                                "type": "TRADE",
+                                "side": action_upper,
+                                "qty": qty_change if qty_change > 0 else row.get("qty") or 0,
+                                "price": row.get("effective_price") or row.get("close") or row.get("market_price_raw") or 0.0,
+                                "commission": row.get("commission") or 0.0,
                                 "position_id": pos.id,
                                 "asset_symbol": pos.asset_symbol,
                             })
 
+            # Fetch dividends for each position
+            for pos in positions:
+                try:
+                    receivables = container.dividend_receivable.get_receivables_by_position(pos.id)
+                except Exception as de:
+                    print(f"⚠️ Analytics: Failed to fetch dividends for position {pos.id}: {de}")
+                    receivables = []
+                for recv in receivables:
+                    ex_date = getattr(recv, "ex_date", None)
+                    if not ex_date:
+                        continue
+                    if isinstance(ex_date, str):
+                        ex_date = datetime.fromisoformat(ex_date.replace("Z", "+00:00"))
+                    if ex_date.tzinfo is None:
+                        ex_date = ex_date.replace(tzinfo=timezone.utc)
+                    if effective_start is not None and ex_date < effective_start:
+                        continue
+                    if ex_date > effective_end:
+                        continue
+                    events.append({
+                        "date": ex_date.strftime("%Y-%m-%d"),
+                        "type": "DIVIDEND",
+                        "gross_amount": getattr(recv, "gross_amount", 0.0),
+                        "net_amount": getattr(recv, "net_amount", 0.0),
+                        "shares_held": getattr(recv, "shares_held", 0.0),
+                        "dps": getattr(recv, "dps", 0.0),
+                        "position_id": pos.id,
+                        "asset_symbol": pos.asset_symbol,
+                    })
+
             # Sort events by date
             events.sort(key=lambda e: e["date"])
+
+            # Warn if no events found but trades exist (potential data issue)
+            if not events and time_series:
+                print(
+                    f"⚠️ Analytics: No events found for portfolio {portfolio_id} "
+                    f"despite {len(time_series)} time-series points. "
+                    "Check that trades/dividends are recorded and within the selected date range."
+                )
+            else:
+                trade_events = [e for e in events if e["type"] == "TRADE"]
+                div_events = [e for e in events if e["type"] == "DIVIDEND"]
+                print(f"📊 Analytics events: {len(trade_events)} trades, {len(div_events)} dividends")
+
         except Exception as e:
             print(f"Warning: Failed to fetch events for analytics: {e}")
             import traceback
@@ -987,65 +1050,65 @@ class PortfolioService:
                 performance["portfolio_return_pct"] - performance["benchmark_return_pct"], 2
             )
 
-        # 9. Fetch SPY (S&P 500) data for market benchmark comparison
+        # 9. Fetch benchmark data (SPY and/or custom ticker) – conditional on selection
+        benchmarks_result: Dict[str, Any] = {}
+        active_benchmarks = benchmarks or ["buy_hold", "spy"]  # defaults for backward compat
+
+        def _fetch_ticker_series(ticker_sym: str, first_date_str: str, last_date_str: str) -> Optional[Dict[str, Any]]:
+            """Fetch historical price series for a ticker and compute scalar return."""
+            try:
+                from app.di import container as _ct
+                ts_start = datetime.strptime(first_date_str[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                ts_end = datetime.strptime(last_date_str[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
+                hist = _ct.market_data.fetch_historical_data(ticker_sym, ts_start, ts_end, intraday_interval_minutes=1440)
+                if not hist or len(hist) < 2:
+                    return None
+                by_date: Dict[str, float] = {p.timestamp.strftime("%Y-%m-%d"): (p.close or p.price) for p in hist}
+                first_price = by_date.get(first_date_str) or (hist[0].close or hist[0].price)
+                last_price = by_date.get(last_date_str) or (hist[-1].close or hist[-1].price)
+                if not first_price or first_price == 0:
+                    return None
+                ret = ((last_price - first_price) / first_price) * 100
+                # Build time series of normalised returns (100-based)
+                sorted_dates = sorted(by_date.keys())
+                series = [{"date": d, "value": (by_date[d] / first_price) * 100} for d in sorted_dates]
+                return {"return_pct": round(ret, 2), "first_price": first_price, "last_price": last_price, "series": series}
+            except Exception as _e:
+                print(f"⚠️ Failed to fetch benchmark data for {ticker_sym}: {_e}")
+                return None
+
         try:
             if time_series and len(time_series) >= 2:
-                from app.di import container
-
                 first_date_str = time_series[0].get("date")
                 last_date_str = time_series[-1].get("date")
 
                 if first_date_str and last_date_str:
-                    # Parse dates and add buffer for market data availability
-                    spy_start = datetime.strptime(first_date_str, "%Y-%m-%d").replace(
-                        tzinfo=timezone.utc
-                    )
-                    spy_end = datetime.strptime(last_date_str, "%Y-%m-%d").replace(
-                        tzinfo=timezone.utc
-                    ) + timedelta(days=1)
-
-                    # Fetch SPY historical data
-                    spy_data = container.market_data.fetch_historical_data(
-                        "SPY", spy_start, spy_end, intraday_interval_minutes=1440
-                    )
-
-                    if spy_data and len(spy_data) >= 2:
-                        # Build a date -> price lookup for SPY
-                        spy_by_date: Dict[str, float] = {}
-                        for price_point in spy_data:
-                            date_key = price_point.timestamp.strftime("%Y-%m-%d")
-                            # Take the closing price for each day
-                            spy_by_date[date_key] = price_point.close or price_point.price
-
-                        # Find SPY prices matching our time series dates
-                        first_spy_price = spy_by_date.get(first_date_str)
-                        last_spy_price = spy_by_date.get(last_date_str)
-
-                        # If exact dates not found, use closest available
-                        if not first_spy_price and spy_data:
-                            first_spy_price = spy_data[0].close or spy_data[0].price
-                        if not last_spy_price and spy_data:
-                            last_spy_price = spy_data[-1].close or spy_data[-1].price
-
-                        if first_spy_price and last_spy_price and first_spy_price > 0:
-                            spy_return = (
-                                (last_spy_price - first_spy_price) / first_spy_price
-                            ) * 100
-                            performance["spy_return_pct"] = round(spy_return, 2)
+                    # SPY benchmark
+                    if "spy" in active_benchmarks:
+                        spy_result = _fetch_ticker_series("SPY", first_date_str[:10], last_date_str[:10])
+                        if spy_result:
+                            performance["spy_return_pct"] = spy_result["return_pct"]
                             performance["spy_alpha"] = round(
-                                performance["portfolio_return_pct"] - spy_return, 2
+                                performance["portfolio_return_pct"] - spy_result["return_pct"], 2
                             )
+                            benchmarks_result["spy"] = spy_result
                             print(
-                                f"📊 SPY benchmark: {first_spy_price:.2f} -> {last_spy_price:.2f}, "
-                                f"return={spy_return:.2f}%, alpha={performance['spy_alpha']:.2f}%"
+                                f"📊 SPY benchmark: return={spy_result['return_pct']:.2f}%, "
+                                f"alpha={performance['spy_alpha']:.2f}%"
                             )
                         else:
-                            print("⚠️ Could not calculate SPY return - missing price data")
-                    else:
-                        print(f"⚠️ No SPY data returned for period {first_date_str} to {last_date_str}")
+                            print(f"⚠️ No SPY data for period {first_date_str} to {last_date_str}")
+
+                    # Custom ticker benchmark
+                    if "custom" in active_benchmarks and custom_ticker:
+                        custom_result = _fetch_ticker_series(custom_ticker.upper(), first_date_str[:10], last_date_str[:10])
+                        if custom_result:
+                            benchmarks_result["custom"] = {**custom_result, "ticker": custom_ticker.upper()}
+                            print(f"📊 Custom benchmark {custom_ticker}: return={custom_result['return_pct']:.2f}%")
+
         except Exception as e:
-            print(f"⚠️ Failed to fetch SPY benchmark data: {e}")
-            # Continue without SPY data - it's optional
+            print(f"⚠️ Failed to fetch benchmark data: {e}")
+            # Continue without benchmark data
 
         return {
             **summary,
@@ -1059,6 +1122,8 @@ class PortfolioService:
             "events": events,
             "guardrails": guardrails,
             "performance": performance,
+            "benchmarks": benchmarks_result,
+            "resolution": resolution,
         }
 
     def get_portfolio_overview(self, tenant_id: str, portfolio_id: str) -> Optional[Dict[str, Any]]:

@@ -17,6 +17,7 @@ import {
   Filter,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getAuthHeaders } from '../../lib/api';
 
 // ============== TYPE DEFINITIONS ==============
 
@@ -319,7 +320,7 @@ export default function DecisionHistoryTable({
       setLoading(true);
       setError(null);
       const url = `${API_BASE}/v1/tenants/${TENANT_ID}/portfolios/${portfolioId}/positions/${positionId}/timeline?limit=${limit}`;
-      const response = await fetch(url);
+      const response = await fetch(url, { headers: { ...getAuthHeaders() } });
       if (!response.ok) {
         throw new Error('Failed to fetch timeline');
       }

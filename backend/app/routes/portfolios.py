@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict
 from decimal import Decimal
 
 from app.di import container
+from app.auth import get_current_user, CurrentUser
 from application.services.portfolio_service import PortfolioService
 from domain.value_objects.configs import GuardrailConfig
 
@@ -108,6 +109,7 @@ def create_portfolio(
     tenant_id: str,
     request: CreatePortfolioRequest,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, str]:
     """Create a new portfolio with metadata and config."""
     try:
@@ -137,6 +139,7 @@ def list_portfolios(
     tenant_id: str,
     user_id: Optional[str] = Query(None, description="Filter by user ID"),
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> List[PortfolioResponse]:
     """List all portfolios for a tenant."""
     try:
@@ -161,6 +164,7 @@ def get_portfolio(
     tenant_id: str,
     portfolio_id: str,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> PortfolioResponse:
     """Get portfolio details."""
     try:
@@ -188,6 +192,7 @@ def update_portfolio(
     portfolio_id: str,
     request: UpdatePortfolioRequest,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> PortfolioResponse:
     """Update portfolio metadata."""
     try:
@@ -222,6 +227,7 @@ def delete_portfolio(
     tenant_id: str,
     portfolio_id: str,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Delete a portfolio."""
     try:
@@ -239,6 +245,7 @@ def get_portfolio_overview(
     tenant_id: str,
     portfolio_id: str,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Get portfolio overview with cash, positions, config, and KPIs."""
     try:
@@ -259,6 +266,7 @@ def get_portfolio_positions(
     tenant_id: str,
     portfolio_id: str,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> List[Dict[str, Any]]:
     """Get all positions in a portfolio."""
     try:
@@ -300,6 +308,7 @@ def create_position_in_portfolio(
     portfolio_id: str,
     request: CreatePositionRequest,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, str]:
     """Create a new position in a portfolio."""
     try:
@@ -372,6 +381,7 @@ def add_position_to_portfolio(
     portfolio_id: str,
     position_id: str,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, str]:
     """Add an existing position to a portfolio."""
     try:
@@ -400,6 +410,7 @@ def remove_position_from_portfolio(
     portfolio_id: str,
     position_id: str,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Remove a position from a portfolio."""
     try:
@@ -422,6 +433,7 @@ def start_position_trading(
     portfolio_id: str,
     position_id: str,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Start trading for a position (per usage model: user presses "Start" on a Position).
@@ -477,6 +489,7 @@ def pause_position_trading(
     portfolio_id: str,
     position_id: str,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Pause trading for a position.
@@ -518,6 +531,7 @@ def get_position_baseline(
     tenant_id: str,
     portfolio_id: str,
     position_id: str,
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Get the latest baseline for a position (per usage model: baseline comparison).
@@ -546,6 +560,7 @@ def get_position_events(
     position_id: str,
     event_type: Optional[str] = Query(None, description="Filter by event type"),
     limit: Optional[int] = Query(100, description="Maximum number of events to return"),
+    user: CurrentUser = Depends(get_current_user),
 ) -> List[Dict[str, Any]]:
     """
     Get event log for a position (per usage model: chronological event log).
@@ -578,6 +593,7 @@ def get_position_timeline(
     position_id: str,
     mode: Optional[str] = Query(None, description="Filter by mode (LIVE/SIMULATION)"),
     limit: Optional[int] = Query(100, description="Maximum number of timeline rows to return"),
+    user: CurrentUser = Depends(get_current_user),
 ) -> List[Dict[str, Any]]:
     """
     Get detailed evaluation timeline for a position (Trade Screen - Event Log).
@@ -611,6 +627,7 @@ def get_portfolio_summary(
     tenant_id: str,
     portfolio_id: str,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> PortfolioSummaryResponse:
     """Get portfolio summary with aggregated metrics."""
     try:
@@ -631,14 +648,51 @@ def get_portfolio_summary(
 def get_portfolio_analytics(
     tenant_id: str,
     portfolio_id: str,
-    days: int = Query(30, description="Number of days of analytics data"),
+    days: int = Query(0, description="Number of days (legacy). 0 = full history."),
     position_id: Optional[str] = Query(None, description="Optional position ID to filter analytics"),
+    start_date: Optional[str] = Query(None, description="Start date YYYY-MM-DD (overrides days if provided)"),
+    end_date: Optional[str] = Query(None, description="End date YYYY-MM-DD (defaults to today)"),
+    resolution: str = Query("daily", description="Aggregation resolution: daily | weekly | hourly"),
+    benchmarks: Optional[str] = Query(None, description="Comma-separated benchmarks: buy_hold,spy,custom"),
+    custom_ticker: Optional[str] = Query(None, description="Ticker for the 'custom' benchmark"),
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """Get detailed portfolio analytics, optionally filtered by position."""
+    """Get detailed portfolio analytics, optionally filtered by position.
+
+    Date range priority:
+    - If start_date is provided, it is used as-is.
+    - Else if days > 0, compute start_date = today - days.
+    - Else (days == 0 and no start_date) → full history.
+    """
+    from datetime import date as date_cls
     try:
+        # Parse explicit dates if supplied
+        parsed_start: Optional[datetime] = None
+        parsed_end: Optional[datetime] = None
+
+        if start_date:
+            parsed_start = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        if end_date:
+            parsed_end = datetime.strptime(end_date, "%Y-%m-%d").replace(
+                hour=23, minute=59, second=59, tzinfo=timezone.utc
+            )
+
+        # Parse benchmarks comma-separated list
+        benchmark_list: Optional[List[str]] = None
+        if benchmarks:
+            benchmark_list = [b.strip().lower() for b in benchmarks.split(",") if b.strip()]
+
         analytics = portfolio_service.get_portfolio_analytics(
-            tenant_id=tenant_id, portfolio_id=portfolio_id, days=days, position_id=position_id
+            tenant_id=tenant_id,
+            portfolio_id=portfolio_id,
+            days=days,
+            position_id=position_id,
+            start_date=parsed_start,
+            end_date=parsed_end,
+            resolution=resolution,
+            benchmarks=benchmark_list,
+            custom_ticker=custom_ticker,
         )
         if not analytics:
             raise HTTPException(status_code=404, detail="Portfolio not found")
@@ -656,6 +710,7 @@ def deposit_cash(
     portfolio_id: str,
     request: CashTransactionRequest,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Deposit cash into a portfolio."""
     try:
@@ -697,6 +752,7 @@ def withdraw_cash(
     portfolio_id: str,
     request: CashTransactionRequest,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Withdraw cash from a portfolio."""
     try:
@@ -747,6 +803,7 @@ def get_portfolio_config(
     tenant_id: str,
     portfolio_id: str,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Get portfolio configuration."""
     try:
@@ -784,6 +841,7 @@ def update_portfolio_config(
     portfolio_id: str,
     request: PortfolioConfigRequest,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Update portfolio configuration."""
     try:
@@ -835,6 +893,7 @@ def get_portfolio_trading_state(
     tenant_id: str,
     portfolio_id: str,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Get portfolio trading state.
@@ -890,6 +949,7 @@ def set_portfolio_trading_state(
     portfolio_id: str,
     request: SetTradingStateRequest,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Set portfolio trading state.
@@ -945,6 +1005,7 @@ def get_effective_config(
     tenant_id: str,
     portfolio_id: str,
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Get effective configuration (what the engine actually uses)."""
     try:

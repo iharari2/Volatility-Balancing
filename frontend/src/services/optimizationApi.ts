@@ -22,13 +22,18 @@ class OptimizationApiService {
     this.baseUrl = `${API_BASE_URL}/optimization`;
   }
 
+  private getHeaders(extra: Record<string, string> = {}): Record<string, string> {
+    const token = localStorage.getItem('auth_token');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json', ...extra };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return headers;
+  }
+
   // Configuration Management
   async createConfig(config: CreateConfigRequest): Promise<ConfigResponse> {
     const response = await fetch(`${this.baseUrl}/configs`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: this.getHeaders(),
       body: JSON.stringify(config),
     });
 
@@ -43,7 +48,7 @@ class OptimizationApiService {
   }
 
   async getConfig(id: string): Promise<ConfigResponse> {
-    const response = await fetch(`${this.baseUrl}/configs/${id}`);
+    const response = await fetch(`${this.baseUrl}/configs/${id}`, { headers: this.getHeaders() });
 
     if (!response.ok) {
       const error = await response.json();
@@ -56,7 +61,7 @@ class OptimizationApiService {
   }
 
   async getAllConfigs(): Promise<ConfigResponse[]> {
-    const response = await fetch(`${this.baseUrl}/configs`);
+    const response = await fetch(`${this.baseUrl}/configs`, { headers: this.getHeaders() });
 
     if (!response.ok) {
       const error = await response.json();
@@ -71,9 +76,7 @@ class OptimizationApiService {
   async updateConfig(id: string, updates: Partial<CreateConfigRequest>): Promise<ConfigResponse> {
     const response = await fetch(`${this.baseUrl}/configs/${id}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: this.getHeaders(),
       body: JSON.stringify(updates),
     });
 
@@ -90,6 +93,7 @@ class OptimizationApiService {
   async deleteConfig(id: string): Promise<{ message: string; config_id: string }> {
     const response = await fetch(`${this.baseUrl}/configs/${id}`, {
       method: 'DELETE',
+      headers: this.getHeaders(),
     });
 
     if (!response.ok) {
@@ -105,6 +109,7 @@ class OptimizationApiService {
   async resetConfig(id: string): Promise<{ message: string; config_id: string; status: string }> {
     const response = await fetch(`${this.baseUrl}/configs/${id}/reset`, {
       method: 'POST',
+      headers: this.getHeaders(),
     });
 
     if (!response.ok) {
@@ -121,6 +126,7 @@ class OptimizationApiService {
   async startOptimization(id: string): Promise<StartResponse> {
     const response = await fetch(`${this.baseUrl}/configs/${id}/start`, {
       method: 'POST',
+      headers: this.getHeaders(),
     });
 
     if (!response.ok) {
@@ -134,7 +140,7 @@ class OptimizationApiService {
   }
 
   async getProgress(id: string): Promise<ProgressResponse> {
-    const response = await fetch(`${this.baseUrl}/configs/${id}/progress`);
+    const response = await fetch(`${this.baseUrl}/configs/${id}/progress`, { headers: this.getHeaders() });
 
     if (!response.ok) {
       const error = await response.json();
@@ -148,7 +154,7 @@ class OptimizationApiService {
 
   // Results and Analysis
   async getResults(id: string): Promise<OptimizationResult[]> {
-    const response = await fetch(`${this.baseUrl}/configs/${id}/results`);
+    const response = await fetch(`${this.baseUrl}/configs/${id}/results`, { headers: this.getHeaders() });
 
     if (!response.ok) {
       const error = await response.json();
@@ -172,7 +178,7 @@ class OptimizationApiService {
       metric: metric,
     });
 
-    const response = await fetch(`${this.baseUrl}/configs/${id}/heatmap?${params}`);
+    const response = await fetch(`${this.baseUrl}/configs/${id}/heatmap?${params}`, { headers: this.getHeaders() });
 
     if (!response.ok) {
       const error = await response.json();
@@ -186,7 +192,7 @@ class OptimizationApiService {
 
   // Metadata
   async getMetrics(): Promise<OptimizationMetric[]> {
-    const response = await fetch(`${this.baseUrl}/metrics`);
+    const response = await fetch(`${this.baseUrl}/metrics`, { headers: this.getHeaders() });
 
     if (!response.ok) {
       const error = await response.json();
@@ -201,7 +207,7 @@ class OptimizationApiService {
   }
 
   async getParameterTypes(): Promise<ParameterTypeInfo[]> {
-    const response = await fetch(`${this.baseUrl}/parameter-types`);
+    const response = await fetch(`${this.baseUrl}/parameter-types`, { headers: this.getHeaders() });
 
     if (!response.ok) {
       const error = await response.json();
@@ -217,7 +223,7 @@ class OptimizationApiService {
   // Utility Methods
   async checkHealth(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseUrl}/metrics`);
+      const response = await fetch(`${this.baseUrl}/metrics`, { headers: this.getHeaders() });
       return response.ok;
     } catch {
       return false;

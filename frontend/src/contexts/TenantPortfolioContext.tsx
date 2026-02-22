@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { portfolioApi } from '../lib/api';
+import { useAuth } from './AuthContext';
 
 interface Tenant {
   id: string;
@@ -48,16 +49,20 @@ interface TenantPortfolioProviderProps {
 }
 
 export function TenantPortfolioProvider({ children }: TenantPortfolioProviderProps) {
+  const { user } = useAuth();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
   const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Load tenants and portfolios on mount
+  // Derive tenant from authenticated user
+  const tenantId = user?.tenant_id || 'default';
+
+  // Load tenants and portfolios when user is available
   useEffect(() => {
     loadInitialData();
-  }, []);
+  }, [tenantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load portfolios when tenant changes
   useEffect(() => {
@@ -69,14 +74,12 @@ export function TenantPortfolioProvider({ children }: TenantPortfolioProviderPro
   const loadInitialData = async () => {
     setLoading(true);
     try {
-      // TODO: Fetch from API
-      // For now, use default tenant
-      const defaultTenant: Tenant = { id: 'default', name: 'Default Tenant' };
-      setTenants([defaultTenant]);
-      setSelectedTenantId('default');
+      const tenant: Tenant = { id: tenantId, name: user?.display_name ? `${user.display_name}'s Tenant` : 'My Tenant' };
+      setTenants([tenant]);
+      setSelectedTenantId(tenantId);
 
-      // Load portfolios for default tenant
-      await loadPortfolios('default');
+      // Load portfolios for user's tenant
+      await loadPortfolios(tenantId);
     } catch (error) {
       console.error('Error loading initial data:', error);
     } finally {

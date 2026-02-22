@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
 from app.di import container
+from app.auth import get_current_user, CurrentUser
 from application.use_cases.process_dividend_uc import ProcessDividendUC
 
 
@@ -41,7 +42,7 @@ def get_dividend_uc() -> ProcessDividendUC:
 
 @router.post("/announce")
 async def announce_dividend(
-    request: DividendAnnouncementRequest, dividend_uc: ProcessDividendUC = Depends(get_dividend_uc)
+    request: DividendAnnouncementRequest, dividend_uc: ProcessDividendUC = Depends(get_dividend_uc), user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Announce a new dividend."""
     try:
@@ -76,6 +77,7 @@ async def process_ex_dividend_date(
     portfolio_id: str,
     position_id: str,
     dividend_uc: ProcessDividendUC = Depends(get_dividend_uc),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Process ex-dividend date for a position."""
     try:
@@ -123,6 +125,7 @@ async def process_dividend_payment(
     position_id: str,
     request: DividendPaymentRequest,
     dividend_uc: ProcessDividendUC = Depends(get_dividend_uc),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Process dividend payment for a receivable."""
     try:
@@ -154,6 +157,7 @@ async def get_dividend_status(
     portfolio_id: str,
     position_id: str,
     dividend_uc: ProcessDividendUC = Depends(get_dividend_uc),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Get dividend status for a position."""
     try:
@@ -173,7 +177,7 @@ async def get_dividend_status(
 
 @router.get("/market/{ticker}/info")
 async def get_dividend_info(
-    ticker: str, dividend_uc: ProcessDividendUC = Depends(get_dividend_uc)
+    ticker: str, dividend_uc: ProcessDividendUC = Depends(get_dividend_uc), user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Get dividend information for a ticker from market data."""
     try:
@@ -204,7 +208,7 @@ async def get_dividend_info(
 
 @router.get("/market/{ticker}/upcoming")
 async def get_upcoming_dividends(
-    ticker: str, dividend_uc: ProcessDividendUC = Depends(get_dividend_uc)
+    ticker: str, dividend_uc: ProcessDividendUC = Depends(get_dividend_uc), user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Get upcoming dividends for a ticker."""
     try:

@@ -18,6 +18,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 
 from app.di import container
+from app.auth import get_current_user, CurrentUser
 from application.services.portfolio_service import PortfolioService
 from app.routes.portfolios import get_portfolio_service
 
@@ -134,6 +135,7 @@ class CockpitResponse(BaseModel):
 def list_portfolios(
     tenant_id: str = Query("default", description="Tenant scope for portfolios"),
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> List[PortfolioListItem]:
     try:
         portfolios = portfolio_service.list_portfolios(tenant_id=tenant_id)
@@ -159,6 +161,7 @@ def list_positions_for_portfolio(
     portfolio_id: str,
     tenant_id: str = Query("default", description="Tenant scope for portfolios"),
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> List[PositionSummaryItem]:
     try:
         positions = portfolio_service.get_portfolio_positions(
@@ -216,6 +219,7 @@ def get_position_cockpit(
     timeline_limit: int = Query(200, description="Max timeline rows to return"),
     quote_limit: int = Query(20, description="Max recent quotes to return"),
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> CockpitResponse:
     try:
         cockpit = portfolio_service.get_position_cockpit(

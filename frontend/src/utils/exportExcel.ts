@@ -5,9 +5,10 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000
  */
 export async function exportToExcel(url: string, filename: string): Promise<void> {
   const fullUrl = `${API_BASE_URL}${url}`;
-  const response = await fetch(fullUrl, {
-    headers: { Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
-  });
+  const token = localStorage.getItem('auth_token');
+  const headers: Record<string, string> = { Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const response = await fetch(fullUrl, { headers });
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));

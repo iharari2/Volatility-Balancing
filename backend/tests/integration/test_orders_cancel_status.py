@@ -8,9 +8,14 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.di import container
+from app.auth import get_current_user, CurrentUser
 from domain.entities.position import Position
 from domain.entities.order import Order
 from datetime import datetime, timezone
+
+_test_user = CurrentUser(
+    user_id="test-user", tenant_id="default", email="test@test.com", role="owner"
+)
 
 
 @pytest.fixture(autouse=True)
@@ -23,6 +28,7 @@ def reset_container():
 @pytest.fixture
 def client():
     """Create test client."""
+    app.dependency_overrides[get_current_user] = lambda: _test_user
     return TestClient(app)
 
 

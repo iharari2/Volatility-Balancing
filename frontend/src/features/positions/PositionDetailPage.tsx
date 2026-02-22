@@ -16,7 +16,7 @@ import {
   Edit,
   Anchor,
 } from 'lucide-react';
-import { portfolioApi, marketApi } from '../../lib/api';
+import { portfolioApi, marketApi, getAuthHeaders } from '../../lib/api';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import { marketHoursService, MarketStatus } from '../../services/marketHoursService';
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
@@ -138,6 +138,7 @@ export default function PositionDetailPage() {
     try {
       const response = await fetch(url, {
         ...options,
+        headers: { ...getAuthHeaders(), ...options.headers },
         signal: controller.signal,
       });
       clearTimeout(timeoutId);

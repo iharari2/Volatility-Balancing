@@ -5,7 +5,7 @@ import { usePortfolio } from '../../contexts/PortfolioContext';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import SimulationResults from './SimulationResults';
 import SimulationSetup, { type SimulationConfig } from './SimulationSetup';
-import { simulationApi } from '../../lib/api';
+import { simulationApi, getAuthHeaders } from '../../lib/api';
 import toast from 'react-hot-toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
@@ -253,7 +253,8 @@ export default function SimulationLabPage() {
       if (config.comparisonTicker && !result.comparison_data) {
         try {
           const comparisonResponse = await fetch(
-            `/api/v1/market/historical/${config.comparisonTicker.toUpperCase().trim()}?start_date=${startDateISO}&end_date=${endDateISO}`
+            `/api/v1/market/historical/${config.comparisonTicker.toUpperCase().trim()}?start_date=${startDateISO}&end_date=${endDateISO}`,
+            { headers: { ...getAuthHeaders() } }
           );
           if (comparisonResponse.ok) {
             const comparisonData = await comparisonResponse.json();
@@ -307,7 +308,7 @@ export default function SimulationLabPage() {
 
   const handleDelete = useCallback(async (simulationId: string) => {
     try {
-      const resp = await fetch(`${API_BASE}/v1/simulations/${simulationId}`, { method: 'DELETE' });
+      const resp = await fetch(`${API_BASE}/v1/simulations/${simulationId}`, { method: 'DELETE', headers: { ...getAuthHeaders() } });
       if (!resp.ok) throw new Error(`Delete failed: ${resp.statusText}`);
       setSimulationResult(null);
       toast.success('Simulation deleted');

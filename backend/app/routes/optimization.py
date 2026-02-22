@@ -11,6 +11,7 @@ import traceback
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 
+from app.auth import get_current_user, CurrentUser
 from application.use_cases.parameter_optimization_uc import (
     ParameterOptimizationUC,
     CreateOptimizationRequest,
@@ -285,6 +286,7 @@ class OptimizationResultResponse(BaseModel):
 async def create_optimization_config(
     request: CreateOptimizationRequestModel,
     optimization_uc: ParameterOptimizationUC = Depends(get_parameter_optimization_uc),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Create a new optimization configuration."""
     try:
@@ -301,6 +303,7 @@ async def list_optimization_configs(
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     optimization_uc: ParameterOptimizationUC = Depends(get_parameter_optimization_uc),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """List optimization configurations."""
     try:
@@ -314,6 +317,7 @@ async def list_optimization_configs(
 async def get_optimization_config(
     config_id: str,
     optimization_uc: ParameterOptimizationUC = Depends(get_parameter_optimization_uc),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Get a specific optimization configuration."""
     try:
@@ -354,6 +358,7 @@ async def update_optimization_config(
     config_id: str,
     request: UpdateOptimizationRequestModel,
     optimization_uc: ParameterOptimizationUC = Depends(get_parameter_optimization_uc),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Update an optimization configuration. Only allowed when status is DRAFT or FAILED."""
     try:
@@ -421,6 +426,7 @@ async def update_optimization_config(
 async def delete_optimization_config(
     config_id: str,
     optimization_uc: ParameterOptimizationUC = Depends(get_parameter_optimization_uc),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Delete an optimization configuration and all associated results."""
     try:
@@ -455,6 +461,7 @@ async def delete_optimization_config(
 async def reset_optimization_config(
     config_id: str,
     optimization_uc: ParameterOptimizationUC = Depends(get_parameter_optimization_uc),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Reset a COMPLETED or FAILED optimization back to DRAFT for rerun. Clears previous results."""
     try:
@@ -508,6 +515,7 @@ def _run_optimization_background(optimization_uc: ParameterOptimizationUC, confi
 async def start_optimization(
     config_id: str,
     optimization_uc: ParameterOptimizationUC = Depends(get_parameter_optimization_uc),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Start an optimization run (non-blocking)."""
     try:
@@ -546,6 +554,7 @@ async def start_optimization(
 async def get_optimization_progress(
     config_id: str,
     optimization_uc: ParameterOptimizationUC = Depends(get_parameter_optimization_uc),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Get optimization progress."""
     try:
@@ -561,6 +570,7 @@ async def get_optimization_progress(
 async def get_optimization_results(
     config_id: str,
     optimization_uc: ParameterOptimizationUC = Depends(get_parameter_optimization_uc),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Get optimization results."""
     try:
@@ -579,6 +589,7 @@ async def get_heatmap_data(
     y_parameter: str = Query(..., description="Y-axis parameter name"),
     metric: str = Query(..., description="Metric to visualize"),
     optimization_uc: ParameterOptimizationUC = Depends(get_parameter_optimization_uc),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Get heatmap data for specific parameters and metric."""
     try:
@@ -619,7 +630,7 @@ async def get_heatmap_data(
 
 
 @router.get("/metrics")
-async def get_available_metrics():
+async def get_available_metrics(user: CurrentUser = Depends(get_current_user)):
     """Get list of available optimization metrics."""
     return {
         "metrics": [
@@ -634,7 +645,7 @@ async def get_available_metrics():
 
 
 @router.get("/parameter-types")
-async def get_parameter_types():
+async def get_parameter_types(user: CurrentUser = Depends(get_current_user)):
     """Get list of available parameter types."""
     return {
         "parameter_types": [

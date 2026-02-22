@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Download, ChevronLeft, ChevronRight, Filter, X } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { simulationApi } from '../lib/api';
+import { simulationApi, getAuthHeaders } from '../lib/api';
 import DateRangeFilter, { DateRange } from './shared/DateRangeFilter';
 import EventTypeFilter from './shared/EventTypeFilter';
 
@@ -121,7 +121,7 @@ export default function VerboseTimelineView({ simulationId, ticker }: VerboseTim
     try {
       setExporting(true);
       // Use the existing export endpoint which now includes verbose timeline
-      const response = await fetch(`/api/v1/simulations/${simulationId}/export?format=xlsx`);
+      const response = await fetch(`/api/v1/simulations/${simulationId}/export?format=xlsx`, { headers: { ...getAuthHeaders() } });
       if (!response.ok) {
         throw new Error('Export failed');
       }

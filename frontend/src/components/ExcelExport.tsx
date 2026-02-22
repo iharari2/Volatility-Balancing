@@ -5,6 +5,7 @@
 import React, { useState } from 'react';
 import { Download, FileSpreadsheet, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getAuthHeaders } from '../lib/api';
 
 interface ExcelExportProps {
   configId?: string;
@@ -95,6 +96,7 @@ const ExcelExport: React.FC<ExcelExportProps> = ({
         method: 'GET',
         headers: {
           Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          ...getAuthHeaders(),
         },
       });
 
@@ -132,7 +134,7 @@ const ExcelExport: React.FC<ExcelExportProps> = ({
 
   const loadExportFormats = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/v1/excel/export/formats`);
+      const response = await fetch(`${API_BASE_URL}/v1/excel/export/formats`, { headers: { ...getAuthHeaders() } });
       if (response.ok) {
         const data = await response.json();
         setExportFormats(data.formats || []);
@@ -144,7 +146,7 @@ const ExcelExport: React.FC<ExcelExportProps> = ({
 
   const loadExportTemplates = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/v1/excel/export/templates`);
+      const response = await fetch(`${API_BASE_URL}/v1/excel/export/templates`, { headers: { ...getAuthHeaders() } });
       if (response.ok) {
         const data = await response.json();
         setExportTemplates(data.templates || []);

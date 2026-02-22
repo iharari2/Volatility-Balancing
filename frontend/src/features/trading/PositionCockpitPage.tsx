@@ -30,6 +30,7 @@ import EmptyState from '../../components/shared/EmptyState';
 import DateRangeFilter, { DateRange } from '../../components/shared/DateRangeFilter';
 import EventTypeFilter from '../../components/shared/EventTypeFilter';
 import toast from 'react-hot-toast';
+import { getAuthHeaders } from '../../lib/api';
 
 // Action types for filtering
 const actionFilterTypes = [
@@ -127,6 +128,7 @@ export default function PositionCockpitPage() {
         getPositionEvents(tenantId, portfolioId, positionId, 500),
         fetch(
           `/api/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/marketdata?limit=50`,
+          { headers: { ...getAuthHeaders() } },
         ),
       ]);
       setCockpitData(cockpit);
@@ -167,6 +169,7 @@ export default function PositionCockpitPage() {
       try {
         const response = await fetch(
           `/api/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/marketdata?limit=50`,
+          { headers: { ...getAuthHeaders() } },
         );
         if (response.ok) {
           const data = await response.json();
@@ -201,7 +204,7 @@ export default function PositionCockpitPage() {
   useEffect(() => {
     const loadWorkerStatus = async () => {
       try {
-        const response = await fetch('/api/v1/trading/worker/status');
+        const response = await fetch('/api/v1/trading/worker/status', { headers: { ...getAuthHeaders() } });
         if (response.ok) {
           const data = await response.json();
           setWorkerStatus(data);
@@ -317,13 +320,14 @@ export default function PositionCockpitPage() {
     try {
       const response = await fetch(
         `/api/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/${endpoint}`,
-        { method: 'POST' },
+        { method: 'POST', headers: { ...getAuthHeaders() } },
       );
       if (response.ok) {
         toast.success(`Position ${isRunning ? 'paused' : 'started'} successfully`);
         // Reload cockpit data
         const cockpitResponse = await fetch(
           `/api/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/cockpit`,
+          { headers: { ...getAuthHeaders() } },
         );
         if (cockpitResponse.ok) {
           const data = await cockpitResponse.json();
@@ -377,13 +381,14 @@ export default function PositionCockpitPage() {
     try {
       const response = await fetch(
         `/api/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/baseline/reset`,
-        { method: 'POST' },
+        { method: 'POST', headers: { ...getAuthHeaders() } },
       );
       if (response.ok) {
         toast.success('Baseline reset successfully');
         // Reload cockpit data
         const cockpitResponse = await fetch(
           `/api/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/cockpit`,
+          { headers: { ...getAuthHeaders() } },
         );
         if (cockpitResponse.ok) {
           const data = await cockpitResponse.json();
@@ -404,6 +409,7 @@ export default function PositionCockpitPage() {
     try {
       const response = await fetch(
         `/api/v1/excel/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/export`,
+        { headers: { ...getAuthHeaders() } },
       );
       if (response.ok) {
         const blob = await response.blob();

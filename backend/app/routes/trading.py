@@ -6,10 +6,11 @@ API routes for continuous trading service management.
 """
 
 from typing import Dict, Any, Optional
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 
 from app.di import container
+from app.auth import get_current_user, CurrentUser
 from application.services.continuous_trading_service import (
     get_continuous_trading_service,
 )
@@ -35,7 +36,7 @@ class TradingStatusResponse(BaseModel):
 
 @router.post("/trading/start/{position_id}")
 def start_trading(
-    position_id: str, request: Optional[StartTradingRequest] = None
+    position_id: str, request: Optional[StartTradingRequest] = None, user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Start continuous trading for a position.
@@ -108,7 +109,7 @@ def start_trading(
 
 
 @router.post("/trading/stop/{position_id}")
-def stop_trading(position_id: str) -> Dict[str, Any]:
+def stop_trading(position_id: str, user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     """Stop continuous trading for a position."""
     try:
         service = get_continuous_trading_service()
@@ -130,7 +131,7 @@ def stop_trading(position_id: str) -> Dict[str, Any]:
 
 
 @router.post("/trading/pause/{position_id}")
-def pause_trading(position_id: str) -> Dict[str, Any]:
+def pause_trading(position_id: str, user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     """Pause continuous trading (can be resumed)."""
     try:
         service = get_continuous_trading_service()
@@ -152,7 +153,7 @@ def pause_trading(position_id: str) -> Dict[str, Any]:
 
 
 @router.post("/trading/resume/{position_id}")
-def resume_trading(position_id: str) -> Dict[str, Any]:
+def resume_trading(position_id: str, user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     """Resume paused continuous trading."""
     try:
         service = get_continuous_trading_service()
@@ -174,7 +175,7 @@ def resume_trading(position_id: str) -> Dict[str, Any]:
 
 
 @router.get("/trading/status/{position_id}", response_model=TradingStatusResponse)
-def get_trading_status(position_id: str) -> TradingStatusResponse:
+def get_trading_status(position_id: str, user: CurrentUser = Depends(get_current_user)) -> TradingStatusResponse:
     """Get trading status for a position."""
     try:
         service = get_continuous_trading_service()
@@ -202,7 +203,7 @@ def get_trading_status(position_id: str) -> TradingStatusResponse:
 
 
 @router.get("/trading/active")
-def list_active_trading() -> Dict[str, Any]:
+def list_active_trading(user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     """List all actively trading positions."""
     try:
         service = get_continuous_trading_service()
@@ -234,6 +235,7 @@ def run_trading_cycle(
     position_id: Optional[str] = Query(
         None, description="Optional: run cycle for specific position only"
     ),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Manually trigger a trading cycle (for testing or on-demand execution).
@@ -309,7 +311,7 @@ def run_trading_cycle(
 
 
 @router.get("/trading/worker/status")
-def get_worker_status() -> Dict[str, Any]:
+def get_worker_status(user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     """Get status of the background trading worker."""
     try:
         from application.services.trading_worker import get_trading_worker
@@ -325,7 +327,7 @@ def get_worker_status() -> Dict[str, Any]:
 
 
 @router.get("/trading/diagnostics")
-def get_trading_diagnostics() -> Dict[str, Any]:
+def get_trading_diagnostics(user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     """
     Get comprehensive diagnostics for why trading might not be happening.
 
@@ -458,7 +460,7 @@ class WorkerEnableRequest(BaseModel):
 
 
 @router.post("/trading/worker/enable")
-def set_worker_enabled(request: WorkerEnableRequest) -> Dict[str, Any]:
+def set_worker_enabled(request: WorkerEnableRequest, user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     """Enable or disable the trading worker. State persists on the server."""
     try:
         from application.services.trading_worker import get_trading_worker

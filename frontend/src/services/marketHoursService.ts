@@ -1,3 +1,5 @@
+import { getAuthHeaders } from '../lib/api';
+
 export type MarketStatus = 'PRE_MARKET' | 'OPEN' | 'AFTER_HOURS' | 'CLOSED';
 
 export interface MarketHoursState {
@@ -20,7 +22,7 @@ class MarketHoursService {
     }
 
     try {
-      const response = await fetch('/api/market/state');
+      const response = await fetch('/api/market/state', { headers: { ...getAuthHeaders() } });
       if (response.ok) {
         const data = await response.json();
         this.cache = data as MarketHoursState;

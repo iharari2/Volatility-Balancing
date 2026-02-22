@@ -8,10 +8,11 @@ from typing import Any, Dict, List
 import logging
 import os
 import time
-from fastapi import APIRouter, HTTPException, Query, Header
+from fastapi import APIRouter, HTTPException, Query, Header, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from app.di import container
+from app.auth import get_current_user, CurrentUser
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -555,7 +556,7 @@ def _tick_position_sync(position_id: str) -> Dict[str, Any]:
 
 
 @router.post("/positions/{position_id}/tick")
-async def tick_position(position_id: str) -> Dict[str, Any]:
+async def tick_position(position_id: str, user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     return _tick_position_sync(position_id)
 
 
@@ -574,6 +575,7 @@ class SimulationRequest(BaseModel):
 def run_simulation_for_position(
     position_id: str,
     request: SimulationRequest,
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Execute a simulation for a position.
@@ -700,6 +702,7 @@ class StandaloneSimulationRequest(BaseModel):
 @router.post("/simulation/run")
 def run_standalone_simulation(
     request: StandaloneSimulationRequest,
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Execute a standalone simulation for any ticker (no position required).
@@ -804,7 +807,7 @@ def run_standalone_simulation(
 
 
 @router.post("/positions/{position_id}/anchor")
-def set_anchor_price_legacy(position_id: str, price: float = Query(...)) -> Dict[str, Any]:
+def set_anchor_price_legacy(position_id: str, price: float = Query(...), user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     """Legacy endpoint to set anchor price for a position."""
     position, tenant_id, portfolio_id = _find_position_legacy(position_id)
     if not position:
@@ -823,7 +826,7 @@ def set_anchor_price_legacy(position_id: str, price: float = Query(...)) -> Dict
 
 
 @router.post("/positions/{position_id}/evaluate")
-def evaluate_position_legacy(position_id: str, current_price: float = Query(...)) -> Dict[str, Any]:
+def evaluate_position_legacy(position_id: str, current_price: float = Query(...), user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     """Legacy endpoint to evaluate a position with a manual price."""
     position, tenant_id, portfolio_id = _find_position_legacy(position_id)
     if not position:
@@ -842,7 +845,7 @@ def evaluate_position_legacy(position_id: str, current_price: float = Query(...)
 
 
 @router.post("/positions/{position_id}/evaluate/market")
-def evaluate_position_with_market_data_legacy(position_id: str) -> Dict[str, Any]:
+def evaluate_position_with_market_data_legacy(position_id: str, user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     """Legacy endpoint to evaluate a position using market data."""
     position, tenant_id, portfolio_id = _find_position_legacy(position_id)
     if not position:
@@ -875,6 +878,7 @@ async def list_position_timeline_legacy(
     end_date: Optional[str] = Query(None, description="Filter events until this date (ISO format)"),
     event_type: Optional[str] = Query(None, description="Filter by event/evaluation type (comma-separated for multiple)"),
     action: Optional[str] = Query(None, description="Filter by action (BUY, SELL, HOLD, SKIP - comma-separated for multiple)"),
+    user: CurrentUser = Depends(get_current_user),
 ) -> List[Dict[str, Any]]:
     """Legacy endpoint to list evaluation timeline rows for a position.
 
@@ -954,6 +958,7 @@ def list_position_events_legacy(
     end_date: Optional[str] = Query(None, description="Filter events until this date (ISO format)"),
     event_type: Optional[str] = Query(None, description="Filter by event type (comma-separated for multiple)"),
     search: Optional[str] = Query(None, description="Search in event messages"),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Legacy endpoint to list events for a position.
 
@@ -1035,6 +1040,7 @@ def auto_size_order_legacy(
     position_id: str,
     current_price: float = Query(...),
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Legacy endpoint to submit an auto-sized order for a position."""
     position, tenant_id, portfolio_id = _find_position_legacy(position_id)
@@ -1099,7 +1105,7 @@ def auto_size_order_legacy(
 
 
 @router.post("/clear-positions")
-def clear_all_positions_legacy() -> Dict[str, Any]:
+def clear_all_positions_legacy(user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     """Legacy endpoint to clear all positions."""
     # Clear all positions by clearing portfolios
     tenant_id = "default"

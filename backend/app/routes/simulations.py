@@ -9,6 +9,7 @@ from datetime import datetime
 from uuid import UUID
 
 from app.di import container
+from app.auth import get_current_user, CurrentUser
 from application.services.excel_export_service import ExcelExportService
 from application.services.verbose_timeline_service import VerboseTimelineService
 
@@ -32,6 +33,7 @@ def list_simulations(
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of simulations to return"),
     offset: int = Query(0, ge=0, description="Number of simulations to skip"),
     ticker: Optional[str] = Query(None, description="Filter by ticker symbol"),
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     """List all available simulations."""
     try:
@@ -66,7 +68,7 @@ def list_simulations(
 
 
 @router.get("/{simulation_id}")
-def get_simulation(simulation_id: str) -> dict:
+def get_simulation(simulation_id: str, user: CurrentUser = Depends(get_current_user)) -> dict:
     """Get a specific simulation by ID."""
     try:
         simulation = container.simulation.get_simulation_result(UUID(simulation_id))
@@ -94,6 +96,7 @@ async def export_simulation(
     simulation_id: str,
     format: str = Query("xlsx", description="Export format (xlsx, csv)"),
     excel_service: ExcelExportService = Depends(get_excel_export_service),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Export a specific simulation to Excel format."""
     try:
@@ -168,6 +171,7 @@ async def export_simulation(
 def get_verbose_timeline(
     simulation_id: str,
     timeline_service: VerboseTimelineService = Depends(get_verbose_timeline_service),
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     """Get verbose timeline view for a simulation."""
     try:
@@ -240,7 +244,7 @@ def get_verbose_timeline(
 
 
 @router.delete("/{simulation_id}")
-def delete_simulation(simulation_id: str) -> dict:
+def delete_simulation(simulation_id: str, user: CurrentUser = Depends(get_current_user)) -> dict:
     """Delete a simulation by ID."""
     try:
         success = container.simulation.delete_simulation_result(UUID(simulation_id))

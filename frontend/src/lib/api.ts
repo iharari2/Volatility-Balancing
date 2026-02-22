@@ -20,12 +20,18 @@ class ApiError extends Error {
   }
 }
 
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('auth_token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
 
   const config: RequestInit = {
     headers: {
       'Content-Type': 'application/json',
+      ...getAuthHeaders(),
       ...options.headers,
     },
     ...options,
@@ -34,6 +40,14 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   const response = await fetch(url, config);
 
   if (!response.ok) {
+    // Handle 401 globally: clear token, redirect to /login
+    if (response.status === 401) {
+      localStorage.removeItem('auth_token');
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
+
     let errorMessage = 'Request failed';
     let errorData: any = null;
     try {
@@ -865,7 +879,7 @@ export const explainabilityApi = {
     const query = buildExplainabilityQuery(params);
     const url = `${API_BASE}/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/explainability/export${query}`;
 
-    const response = await fetch(url);
+    const response = await fetch(url, { headers: getAuthHeaders() });
     if (!response.ok) {
       throw new ApiError(response.status, 'Export failed');
     }
@@ -898,7 +912,7 @@ export const explainabilityApi = {
     const query = buildExplainabilityQuery(params);
     const url = `${API_BASE}/v1/simulations/${simulationId}/explainability/export${query}`;
 
-    const response = await fetch(url);
+    const response = await fetch(url, { headers: getAuthHeaders() });
     if (!response.ok) {
       throw new ApiError(response.status, 'Export failed');
     }
@@ -915,4 +929,34 @@ export const explainabilityApi = {
   },
 };
 
-export { ApiError, request };
+// Auth API
+export interface AuthUser {
+  id: string;
+  tenant_id: string;
+  email: string;
+  display_name: string;
+  role: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: AuthUser;
+}
+
+export const authApi = {
+  register: (email: string, password: string, displayName?: string) =>
+    request<AuthResponse>('/v1/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, display_name: displayName || '' }),
+    }),
+
+  login: (email: string, password: string) =>
+    request<AuthResponse>('/v1/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }),
+
+  me: () => request<AuthUser>('/v1/auth/me'),
+};
+
+export { ApiError, request, getAuthHeaders };

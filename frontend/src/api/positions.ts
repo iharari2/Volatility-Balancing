@@ -125,12 +125,18 @@ export interface TimelineEvent {
   [key: string]: any;
 }
 
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('auth_token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
 
   const config: RequestInit = {
     headers: {
       'Content-Type': 'application/json',
+      ...getAuthHeaders(),
       ...options.headers,
     },
     ...options,

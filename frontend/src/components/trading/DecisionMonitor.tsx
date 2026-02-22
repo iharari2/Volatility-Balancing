@@ -18,6 +18,7 @@ import {
   CheckCircle,
   XCircle
 } from 'lucide-react';
+import { getAuthHeaders } from '../../lib/api';
 
 interface TimelineRow {
   id?: string;
@@ -72,7 +73,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 async function fetchLatestTimeline(portfolioId: string, positionId: string): Promise<TimelineRow[]> {
   const url = `${API_BASE}/v1/tenants/${TENANT_ID}/portfolios/${portfolioId}/positions/${positionId}/timeline?limit=10`;
-  const response = await fetch(url);
+  const response = await fetch(url, { headers: { ...getAuthHeaders() } });
   if (!response.ok) {
     throw new Error('Failed to fetch timeline');
   }

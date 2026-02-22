@@ -64,7 +64,10 @@ export interface CockpitResponse {
 }
 
 async function request<T>(endpoint: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${endpoint}`);
+  const token = localStorage.getItem('auth_token');
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const response = await fetch(`${API_BASE}${endpoint}`, { headers });
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
     throw new Error(error.detail || `Request failed: ${response.status}`);

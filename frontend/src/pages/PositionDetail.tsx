@@ -11,6 +11,7 @@ import DividendManagement from '../components/DividendManagement';
 import TradingConfigPanel from '../components/TradingConfigPanel';
 import { useConfiguration } from '../contexts/ConfigurationContext';
 import { useTenantPortfolio } from '../contexts/TenantPortfolioContext';
+import { getAuthHeaders } from '../lib/api';
 
 export default function PositionDetail() {
   const { id } = useParams<{ id: string }>();
@@ -273,6 +274,7 @@ export default function PositionDetail() {
                     method: 'PUT',
                     headers: {
                       'Content-Type': 'application/json',
+                      ...getAuthHeaders(),
                     },
                     body: JSON.stringify({
                       order_policy: {

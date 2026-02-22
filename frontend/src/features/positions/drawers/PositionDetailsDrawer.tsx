@@ -2,6 +2,7 @@ import { X, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { PortfolioPosition } from '../../../services/portfolioScopedApi';
+import { getAuthHeaders } from '../../../lib/api';
 
 interface PositionDetailsDrawerProps {
   position: PortfolioPosition;
@@ -57,6 +58,7 @@ export default function PositionDetailsDrawer({
         // Load baseline
         const baselineRes = await fetch(
           `/api/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions/${position.id}/baseline`,
+          { headers: { ...getAuthHeaders() } },
         );
         if (baselineRes.ok) {
           const baselineData = await baselineRes.json();
@@ -72,6 +74,7 @@ export default function PositionDetailsDrawer({
         // Load events
         const eventsRes = await fetch(
           `/api/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions/${position.id}/events?limit=50`,
+          { headers: { ...getAuthHeaders() } },
         );
         if (eventsRes.ok) {
           const eventsData = await eventsRes.json();
