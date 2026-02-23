@@ -215,13 +215,15 @@ def get_position_cockpit(
     portfolio_id: str,
     position_id: str,
     window: str = Query("7d", description="Timeline window, e.g. 7d, 24h"),
+    tenant_id: str = Query("default", description="Tenant scope (overridden by auth)"),
     timeline_limit: int = Query(200, description="Max timeline rows to return"),
     quote_limit: int = Query(20, description="Max recent quotes to return"),
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
     user: CurrentUser = Depends(get_current_user),
 ) -> CockpitResponse:
     try:
-        tenant_id = user.tenant_id
+        if isinstance(user, CurrentUser):
+            tenant_id = user.tenant_id
         cockpit = portfolio_service.get_position_cockpit(
             tenant_id=tenant_id, portfolio_id=portfolio_id, position_id=position_id
         )
