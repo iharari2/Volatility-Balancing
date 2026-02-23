@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Briefcase,
@@ -12,10 +12,12 @@ import {
   X,
   ChevronDown,
   TrendingUp,
-  TrendingDown,
+  LogOut,
+  User,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 const navigation = [
   { name: 'Workspace', href: '/', icon: LayoutDashboard },
@@ -34,7 +36,14 @@ interface SidebarProps {
 
 export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const location = useLocation();
+  const navigate = useNavigate();
   const { portfolios, selectedPortfolio, setSelectedPortfolioId, loading } = useTenantPortfolio();
+  const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   const sidebarContent = (
     <div className="flex flex-col flex-grow bg-white border-r border-gray-200 h-full overflow-y-auto">
@@ -93,20 +102,8 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
               <span className="text-[10px] text-primary-400 font-bold uppercase block tracking-wider">
                 Total Value
               </span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-lg font-black text-primary-900 leading-none">
-                  ${(selectedPortfolio.totalValue || 0).toLocaleString()}
-                </span>
-                <span className="text-xs font-bold text-success-600">+2.4%</span>
-              </div>
-            </div>
-
-            <div className="pt-1 border-t border-primary-100/50">
-              <span className="text-[10px] text-primary-400 font-bold uppercase block tracking-wider">
-                Strategy
-              </span>
-              <span className="text-xs font-bold text-primary-800 uppercase tracking-tight">
-                Standard Balancing
+              <span className="text-lg font-black text-primary-900 leading-none">
+                ${(selectedPortfolio.totalValue || 0).toLocaleString()}
               </span>
             </div>
           </div>
@@ -145,18 +142,29 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
         })}
       </nav>
 
-      {/* Footer Branding or Version */}
-      <div className="p-6 border-t border-gray-50 mt-auto flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gray-900 flex items-center justify-center text-white text-[10px] font-bold">
-            VB
+      {/* User footer */}
+      <div className="p-4 border-t border-gray-100 mt-auto flex-shrink-0">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-full bg-primary-600 flex items-center justify-center text-white flex-shrink-0">
+              <User className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-gray-900 truncate">
+                {user?.display_name || user?.email || 'User'}
+              </p>
+              {user?.display_name && (
+                <p className="text-[10px] text-gray-400 truncate">{user.email}</p>
+              )}
+            </div>
           </div>
-          <div>
-            <p className="text-xs font-bold text-gray-900">Volatility v2.0</p>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">
-              Powered by Engine
-            </p>
-          </div>
+          <button
+            onClick={handleLogout}
+            title="Sign out"
+            className="flex-shrink-0 p-1.5 text-gray-400 hover:text-red-600 rounded transition-colors"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </div>

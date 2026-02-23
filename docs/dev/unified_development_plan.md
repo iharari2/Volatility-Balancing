@@ -1,7 +1,7 @@
 ---
 owner: Development Team
 status: active
-last_updated: 2026-02-19
+last_updated: 2026-02-23
 ---
 
 # Volatility Balancing — Development Plan
@@ -18,8 +18,10 @@ last_updated: 2026-02-19
 | Excel Export | 100% ✅ |
 | Broker Integration (Alpaca) | 100% ✅ |
 | Monitoring Dashboard | 100% ✅ |
-| Trading Interface | 85% 🟡 |
-| Event Tracking | 10% ❌ |
+| Authentication (JWT + multi-tenant) | 100% ✅ |
+| Analytics & Reporting | 100% ✅ |
+| Event Tracking / Explainability | 100% ✅ |
+| Trading Interface | 100% ✅ |
 | Real-time Data UI | 20% ⏸️ (low priority) |
 
 ---
@@ -48,6 +50,8 @@ last_updated: 2026-02-19
 | — | Bug Fixes | Order fill persistence, workspace Orders Excel scoped to position, Dividends Excel export |
 | 20 | Analysis Enhancements | Real data in overview tables; PerformanceChart vs market API; commission, dividend, guardrail band charts in simulation |
 | 20b | Optimization Config Management | Edit, rerun, delete actions on saved configs (backend PUT/DELETE/reset + frontend UI) |
+| 21 | Analytics Deep Enhancements | Date range + chart brush, resolution (daily/weekly/hourly), benchmark selector, analytics Excel export, event markers fix |
+| 22 | JWT Authentication | User accounts, JWT tokens, protected routes, login page, change-password, tenant isolation |
 
 ---
 
