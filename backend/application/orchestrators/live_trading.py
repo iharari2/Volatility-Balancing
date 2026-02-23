@@ -32,6 +32,7 @@ class LiveTradingOrchestrator:
         portfolio_repo: Optional[PortfolioRepo] = None,
         market_data_repo: Optional[MarketDataRepo] = None,
         evaluate_position_uc: Optional["EvaluatePositionUC"] = None,
+        orders_repo=None,
     ):
         self.market_data = market_data
         self.order_service = order_service
@@ -41,6 +42,7 @@ class LiveTradingOrchestrator:
         self.portfolio_repo = portfolio_repo
         self.market_data_repo = market_data_repo  # For getting PriceData with is_market_hours
         self.evaluate_position_uc = evaluate_position_uc
+        self.orders_repo = orders_repo
 
     def run_cycle(self, source: str = "worker") -> None:
         """
@@ -505,10 +507,23 @@ class LiveTradingOrchestrator:
                     if not allow_after_hours:
                         return trace_id  # Blocked by market hours policy
 
-            # Submit live order
+            # Check for pending/unfilled orders before submitting
             import logging
 
             logger = logging.getLogger(__name__)
+
+            if self.orders_repo:
+                open_statuses = {"created", "submitted", "pending", "working", "partial"}
+                existing_orders = self.orders_repo.list_for_position(position_id, limit=20)
+                for existing_order in existing_orders:
+                    if existing_order.status in open_statuses:
+                        logger.warning(
+                            f"Skipping order for position {position_id}: "
+                            f"pending order {existing_order.id} is still {existing_order.status}"
+                        )
+                        return trace_id
+
+            # Submit live order
             logger.info(
                 f"Submitting order for position {position_id}: "
                 f"side={guardrail_decision.trade_intent.side}, "
@@ -527,12 +542,18 @@ class LiveTradingOrchestrator:
                 )
                 logger.info(f"Order submitted successfully: order_id={order_id}")
             except Exception as order_error:
-                logger.error(
-                    f"Failed to submit order for position {position_id}: {order_error}",
-                    exc_info=True,
-                )
-                # Re-raise so it gets caught by outer exception handler
-                raise
+                from domain.errors import GuardrailBreach
+
+                if isinstance(order_error, GuardrailBreach):
+                    logger.warning(
+                        f"Order blocked by guardrail for position {position_id}: {order_error}"
+                    )
+                else:
+                    logger.error(
+                        f"Failed to submit order for position {position_id}: {order_error}",
+                        exc_info=True,
+                    )
+                return trace_id  # Don't re-raise guardrail breaches
 
             return trace_id
 

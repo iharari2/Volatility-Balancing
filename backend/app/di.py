@@ -554,6 +554,7 @@ class _Container:
             portfolio_repo=self.portfolio_repo,
             market_data_repo=self.market_data,  # Pass MarketDataRepo for is_market_hours check
             evaluate_position_uc=self.evaluate_position_uc,  # Pass use case for consistent evaluation
+            orders_repo=self.orders,  # For pending order check before submission
         )
 
         self.simulation_orchestrator = SimulationOrchestrator(
