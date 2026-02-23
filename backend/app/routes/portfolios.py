@@ -526,6 +526,130 @@ def pause_position_trading(
         raise HTTPException(status_code=500, detail=f"Error pausing position trading: {str(e)}")
 
 
+class AdjustPositionBody(BaseModel):
+    operation: str  # BUY | SELL | SET_QTY
+    qty: float
+    price: Optional[float] = None
+    reason: str = "Manual adjustment"
+
+
+@router.post("/{portfolio_id}/positions/{position_id}/adjust", status_code=200)
+def adjust_position(
+    tenant_id: str,
+    portfolio_id: str,
+    position_id: str,
+    body: AdjustPositionBody,
+    user: CurrentUser = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Manually adjust a position's quantity.
+
+    Operations:
+    - BUY: add qty shares (position_id may be ticker symbol or UUID)
+    - SELL: remove qty shares
+    - SET_QTY: set exact qty
+    """
+    from app.di import container
+
+    # position_id may be a ticker symbol — look up by asset within the portfolio
+    position = container.positions.get(
+        tenant_id=tenant_id, portfolio_id=portfolio_id, position_id=position_id
+    )
+    if position is None:
+        # Try lookup by asset symbol
+        all_positions = container.positions.list_all(
+            tenant_id=tenant_id, portfolio_id=portfolio_id
+        )
+        position = next(
+            (p for p in all_positions if p.asset_symbol == position_id), None
+        )
+    if position is None:
+        raise HTTPException(status_code=404, detail="Position not found")
+
+    op = body.operation.upper()
+    if op == "SET_QTY":
+        new_qty = body.qty
+    elif op == "BUY":
+        new_qty = position.qty + body.qty
+    elif op == "SELL":
+        new_qty = position.qty - body.qty
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown operation: {body.operation}")
+
+    if new_qty < 0:
+        raise HTTPException(status_code=400, detail="Resulting quantity cannot be negative")
+
+    position.qty = new_qty
+    container.positions.update(position)
+
+    # Log to position_events if available
+    try:
+        from datetime import datetime, timezone
+        container.position_event.save({
+            "position_id": position.id,
+            "timestamp": datetime.now(timezone.utc),
+            "event_type": "TRADE",
+            "action": op if op in ("BUY", "SELL") else "NONE",
+            "action_reason": body.reason,
+            "qty_before": position.qty,  # already updated above
+            "qty_after": new_qty,
+        })
+    except Exception:
+        pass  # non-critical
+
+    return {
+        "position_id": position.id,
+        "asset": position.asset_symbol,
+        "qty": new_qty,
+        "operation": op,
+        "reason": body.reason,
+    }
+
+
+class SetAnchorBody(BaseModel):
+    anchor_price: float
+
+
+@router.post("/{portfolio_id}/positions/{position_id}/anchor", status_code=200)
+def set_anchor_price(
+    tenant_id: str,
+    portfolio_id: str,
+    position_id: str,
+    body: SetAnchorBody,
+    user: CurrentUser = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Set the anchor price for a position (manual correction)."""
+    from app.di import container
+
+    position = container.positions.get(
+        tenant_id=tenant_id, portfolio_id=portfolio_id, position_id=position_id
+    )
+    if position is None:
+        # Try by asset symbol
+        all_positions = container.positions.list_all(
+            tenant_id=tenant_id, portfolio_id=portfolio_id
+        )
+        position = next(
+            (p for p in all_positions if p.asset_symbol == position_id), None
+        )
+    if position is None:
+        raise HTTPException(status_code=404, detail="Position not found")
+
+    if body.anchor_price <= 0:
+        raise HTTPException(status_code=400, detail="Anchor price must be positive")
+
+    old_anchor = position.anchor_price
+    position.anchor_price = body.anchor_price
+    container.positions.update(position)
+
+    return {
+        "position_id": position.id,
+        "asset": position.asset_symbol,
+        "anchor_price": body.anchor_price,
+        "previous_anchor": old_anchor,
+    }
+
+
 @router.get("/{portfolio_id}/positions/{position_id}/baseline", status_code=200)
 def get_position_baseline(
     tenant_id: str,
