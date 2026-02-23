@@ -434,6 +434,7 @@ class PortfolioScopedApi {
 
   /**
    * Build analytics Excel export URL with current filter state.
+   * Uses the same /api/v1 proxy path as the rest of the service.
    */
   getAnalyticsExportUrl(
     tenantId: string,
@@ -443,13 +444,12 @@ class PortfolioScopedApi {
     endDate?: string,
     resolution?: string,
   ): string {
-    const base = import.meta.env.VITE_API_BASE_URL || '';
     const params = new URLSearchParams({ tenant_id: tenantId, portfolio_id: portfolioId });
     if (positionId && positionId !== 'all') params.set('position_id', positionId);
     if (startDate) params.set('start_date', startDate);
     if (endDate) params.set('end_date', endDate);
     if (resolution) params.set('resolution', resolution);
-    return `${base}/v1/excel/analytics/export?${params.toString()}`;
+    return `/api/v1/excel/analytics/export?${params.toString()}`;
   }
 
   /**
