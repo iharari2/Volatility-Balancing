@@ -84,6 +84,10 @@ SQL_URL=postgresql://vb_user:CHANGE_ME@127.0.0.1:5432/volatility_balancing
 APP_BROKER=stub          # Change to "alpaca" when ready for live trading
 TRADING_WORKER_ENABLED=true
 
+# JWT Authentication (MUST change secret in production):
+JWT_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+CORS_ORIGINS=http://YOUR_DOMAIN
+
 # If using Alpaca paper trading:
 # APP_BROKER=alpaca
 # ALPACA_API_KEY=your_key
@@ -394,6 +398,9 @@ Key variables for production:
 | `SQL_URL` | Yes | - | PostgreSQL connection string |
 | `APP_BROKER` | Yes | `stub` | Broker: `stub` or `alpaca` |
 | `TRADING_WORKER_ENABLED` | No | `true` | Enable continuous trading loop |
+| `JWT_SECRET_KEY` | Yes | `CHANGE-ME-IN-PRODUCTION` | HMAC signing key for JWT tokens (generate a strong random string) |
+| `JWT_EXPIRE_HOURS` | No | `24` | JWT token lifetime in hours |
+| `CORS_ORIGINS` | No | `http://localhost:5173,http://localhost:5174` | Allowed CORS origins (set to your domain) |
 | `ALPACA_API_KEY` | If broker=alpaca | - | Alpaca API key |
 | `ALPACA_SECRET_KEY` | If broker=alpaca | - | Alpaca secret key |
 | `ALPACA_PAPER` | No | `true` | Use Alpaca paper trading |
