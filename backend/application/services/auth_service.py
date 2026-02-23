@@ -1,24 +1,24 @@
 from __future__ import annotations
 
-import hashlib
-import base64
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from domain.entities.user import User
 from domain.ports.user_repo import UserRepo
 
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+def _hash_password(password: str) -> str:
+    """Hash password using bcrypt directly."""
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("ascii")
 
 
-def _prehash(password: str) -> str:
-    """Pre-hash password with SHA-256 to avoid bcrypt's 72-byte limit."""
-    return base64.b64encode(hashlib.sha256(password.encode("utf-8")).digest()).decode("ascii")
+def _verify_password(password: str, hashed: str) -> bool:
+    """Verify password against bcrypt hash."""
+    return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("ascii"))
 
 
 class AuthService:
@@ -53,7 +53,7 @@ class AuthService:
             id=str(uuid.uuid4()),
             tenant_id=tenant_id,
             email=email,
-            hashed_password=pwd_context.hash(_prehash(password)),
+            hashed_password=_hash_password(password),
             display_name=display_name or email.split("@")[0],
             role="owner",
         )
@@ -63,7 +63,7 @@ class AuthService:
 
     def login(self, email: str, password: str) -> Tuple[User, str]:
         user = self.user_repo.get_by_email_global(email)
-        if not user or not pwd_context.verify(_prehash(password), user.hashed_password):
+        if not user or not _verify_password(password, user.hashed_password):
             raise ValueError("Invalid email or password")
         if not user.is_active:
             raise ValueError("Account is disabled")
@@ -74,11 +74,11 @@ class AuthService:
         user = self.user_repo.get_by_id(user_id)
         if not user:
             raise ValueError("User not found")
-        if not pwd_context.verify(_prehash(current_password), user.hashed_password):
+        if not _verify_password(current_password, user.hashed_password):
             raise ValueError("Current password is incorrect")
         if len(new_password) < 6:
             raise ValueError("New password must be at least 6 characters")
-        user.hashed_password = pwd_context.hash(_prehash(new_password))
+        user.hashed_password = _hash_password(new_password)
         user.updated_at = datetime.now(timezone.utc)
         self.user_repo.update(user)
 
