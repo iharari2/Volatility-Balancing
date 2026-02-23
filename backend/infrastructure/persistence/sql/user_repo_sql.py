@@ -62,6 +62,18 @@ class SQLUserRepo:
             s.commit()
             return user
 
+    def update(self, user: User) -> User:
+        with self._sf() as s:
+            m = s.query(UserModel).filter(UserModel.id == user.id).first()
+            if m:
+                m.hashed_password = user.hashed_password
+                m.display_name = user.display_name
+                m.role = user.role
+                m.is_active = user.is_active
+                m.updated_at = user.updated_at
+                s.commit()
+            return user
+
     def count_by_tenant(self, tenant_id: str) -> int:
         with self._sf() as s:
             return s.query(UserModel).filter(UserModel.tenant_id == tenant_id).count()

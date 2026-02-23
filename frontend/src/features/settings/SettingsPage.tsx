@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check, AlertCircle } from 'lucide-react';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { authApi } from '../../lib/api';
 
 // Storage keys
 const TENANT_DEFAULTS_KEY = 'vb_tenant_defaults';
@@ -25,6 +27,8 @@ const DEFAULT_SYSTEM_SETTINGS = {
 
 export default function SettingsPage() {
   const { selectedTenant } = useTenantPortfolio();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   // Tenant defaults state
   const [triggerUpPct, setTriggerUpPct] = useState(DEFAULT_TENANT_DEFAULTS.triggerUpPct);
@@ -37,6 +41,13 @@ export default function SettingsPage() {
   // System settings state
   const [theme, setTheme] = useState<'light' | 'dark'>(DEFAULT_SYSTEM_SETTINGS.theme);
   const [refreshInterval, setRefreshInterval] = useState(DEFAULT_SYSTEM_SETTINGS.refreshInterval);
+
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordStatus, setPasswordStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [passwordError, setPasswordError] = useState('');
 
   // Feedback state
   const [tenantSaveStatus, setTenantSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -110,6 +121,39 @@ export default function SettingsPage() {
     }
   };
 
+  const handleChangePassword = async () => {
+    setPasswordError('');
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Passwords do not match');
+      setPasswordStatus('error');
+      setTimeout(() => setPasswordStatus('idle'), 3000);
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters');
+      setPasswordStatus('error');
+      setTimeout(() => setPasswordStatus('idle'), 3000);
+      return;
+    }
+    try {
+      await authApi.changePassword(currentPassword, newPassword);
+      setPasswordStatus('success');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setPasswordStatus('idle'), 3000);
+    } catch (err: any) {
+      setPasswordError(err.message || 'Failed to change password');
+      setPasswordStatus('error');
+      setTimeout(() => setPasswordStatus('idle'), 3000);
+    }
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -122,6 +166,74 @@ export default function SettingsPage() {
             Back to Workspace
           </Link>
           <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
+        </div>
+      </div>
+
+      {/* Account */}
+      <div className="bg-white shadow rounded-lg p-6">
+        <h2 className="text-lg font-medium text-gray-900 mb-4">Account</h2>
+        <div className="space-y-4">
+          <div className="text-sm text-gray-600">
+            Signed in as <span className="font-medium text-gray-900">{user?.email}</span>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Change Password</label>
+            <div className="space-y-3 max-w-sm">
+              <input
+                type="password"
+                placeholder="Current password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+              />
+              <input
+                type="password"
+                placeholder="New password (min 6 characters)"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+              />
+              <input
+                type="password"
+                placeholder="Confirm new password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleChangePassword}
+              disabled={!currentPassword || !newPassword || !confirmPassword}
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Change Password
+            </button>
+            {passwordStatus === 'success' && (
+              <span className="inline-flex items-center gap-1 text-sm text-green-600">
+                <Check className="h-4 w-4" />
+                Password changed
+              </span>
+            )}
+            {passwordStatus === 'error' && (
+              <span className="inline-flex items-center gap-1 text-sm text-red-600">
+                <AlertCircle className="h-4 w-4" />
+                {passwordError}
+              </span>
+            )}
+          </div>
+
+          <div className="pt-4 border-t">
+            <button
+              onClick={handleLogout}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            >
+              Sign Out
+            </button>
+          </div>
         </div>
       </div>
 

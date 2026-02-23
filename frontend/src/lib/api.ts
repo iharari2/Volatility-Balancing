@@ -957,6 +957,12 @@ export const authApi = {
     }),
 
   me: () => request<AuthUser>('/v1/auth/me'),
+
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ message: string }>('/v1/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    }),
 };
 
 export { ApiError, request, getAuthHeaders };

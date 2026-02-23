@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import base64
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
@@ -12,6 +14,11 @@ from domain.ports.user_repo import UserRepo
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def _prehash(password: str) -> str:
+    """Pre-hash password with SHA-256 to avoid bcrypt's 72-byte limit."""
+    return base64.b64encode(hashlib.sha256(password.encode("utf-8")).digest()).decode("ascii")
 
 
 class AuthService:
@@ -46,7 +53,7 @@ class AuthService:
             id=str(uuid.uuid4()),
             tenant_id=tenant_id,
             email=email,
-            hashed_password=pwd_context.hash(password),
+            hashed_password=pwd_context.hash(_prehash(password)),
             display_name=display_name or email.split("@")[0],
             role="owner",
         )
@@ -56,12 +63,24 @@ class AuthService:
 
     def login(self, email: str, password: str) -> Tuple[User, str]:
         user = self.user_repo.get_by_email_global(email)
-        if not user or not pwd_context.verify(password, user.hashed_password):
+        if not user or not pwd_context.verify(_prehash(password), user.hashed_password):
             raise ValueError("Invalid email or password")
         if not user.is_active:
             raise ValueError("Account is disabled")
         token = self.create_access_token(user)
         return user, token
+
+    def change_password(self, user_id: str, current_password: str, new_password: str) -> None:
+        user = self.user_repo.get_by_id(user_id)
+        if not user:
+            raise ValueError("User not found")
+        if not pwd_context.verify(_prehash(current_password), user.hashed_password):
+            raise ValueError("Current password is incorrect")
+        if len(new_password) < 6:
+            raise ValueError("New password must be at least 6 characters")
+        user.hashed_password = pwd_context.hash(_prehash(new_password))
+        user.updated_at = datetime.now(timezone.utc)
+        self.user_repo.update(user)
 
     def create_access_token(self, user: User) -> str:
         expire = datetime.now(timezone.utc) + timedelta(hours=self.token_expire_hours)

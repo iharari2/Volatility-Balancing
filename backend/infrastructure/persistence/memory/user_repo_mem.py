@@ -28,6 +28,10 @@ class InMemoryUserRepo:
         self._users[user.id] = user
         return user
 
+    def update(self, user: User) -> User:
+        self._users[user.id] = user
+        return user
+
     def count_by_tenant(self, tenant_id: str) -> int:
         return sum(1 for u in self._users.values() if u.tenant_id == tenant_id)
 

@@ -75,6 +75,24 @@ def login(
     )
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.post("/change-password")
+def change_password(
+    body: ChangePasswordRequest,
+    user: CurrentUser = Depends(get_current_user),
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    try:
+        auth_service.change_password(user.user_id, body.current_password, body.new_password)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"message": "Password changed successfully"}
+
+
 @router.get("/me", response_model=UserResponse)
 def me(user: CurrentUser = Depends(get_current_user)):
     return UserResponse(
