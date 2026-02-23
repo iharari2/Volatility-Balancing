@@ -133,11 +133,11 @@ class CockpitResponse(BaseModel):
 
 @router.get("/portfolios", response_model=List[PortfolioListItem])
 def list_portfolios(
-    tenant_id: str = Query("default", description="Tenant scope for portfolios"),
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
     user: CurrentUser = Depends(get_current_user),
 ) -> List[PortfolioListItem]:
     try:
+        tenant_id = user.tenant_id
         portfolios = portfolio_service.list_portfolios(tenant_id=tenant_id)
         return [
             PortfolioListItem(
@@ -159,11 +159,11 @@ def list_portfolios(
 )
 def list_positions_for_portfolio(
     portfolio_id: str,
-    tenant_id: str = Query("default", description="Tenant scope for portfolios"),
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
     user: CurrentUser = Depends(get_current_user),
 ) -> List[PositionSummaryItem]:
     try:
+        tenant_id = user.tenant_id
         positions = portfolio_service.get_portfolio_positions(
             tenant_id=tenant_id, portfolio_id=portfolio_id
         )
@@ -215,13 +215,13 @@ def get_position_cockpit(
     portfolio_id: str,
     position_id: str,
     window: str = Query("7d", description="Timeline window, e.g. 7d, 24h"),
-    tenant_id: str = Query("default", description="Tenant scope for portfolios"),
     timeline_limit: int = Query(200, description="Max timeline rows to return"),
     quote_limit: int = Query(20, description="Max recent quotes to return"),
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
     user: CurrentUser = Depends(get_current_user),
 ) -> CockpitResponse:
     try:
+        tenant_id = user.tenant_id
         cockpit = portfolio_service.get_position_cockpit(
             tenant_id=tenant_id, portfolio_id=portfolio_id, position_id=position_id
         )

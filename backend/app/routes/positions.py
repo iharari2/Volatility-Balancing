@@ -1108,7 +1108,7 @@ def auto_size_order_legacy(
 def clear_all_positions_legacy(user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     """Legacy endpoint to clear all positions."""
     # Clear all positions by clearing portfolios
-    tenant_id = "default"
+    tenant_id = user.tenant_id
     portfolios = container.portfolio_repo.list_all(tenant_id=tenant_id)
 
     count = 0

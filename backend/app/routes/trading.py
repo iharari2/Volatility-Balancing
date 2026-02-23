@@ -51,7 +51,7 @@ def start_trading(
         # Verify position exists - search across portfolios (legacy support)
         # TODO: Update to require tenant_id and portfolio_id
         position = None
-        tenant_id = "default"
+        tenant_id = user.tenant_id
         portfolios = container.portfolio_repo.list_all(tenant_id=tenant_id)
         for portfolio in portfolios:
             pos = container.positions.get(
@@ -260,7 +260,7 @@ def run_trading_cycle(
 
             try:
                 if container.portfolio_repo:
-                    portfolios = container.portfolio_repo.list_all(tenant_id="default")
+                    portfolios = container.portfolio_repo.list_all(tenant_id=user.tenant_id)
                     for portfolio in portfolios:
                         positions = container.positions.list_all(
                             tenant_id=portfolio.tenant_id,
@@ -368,7 +368,7 @@ def get_trading_diagnostics(user: CurrentUser = Depends(get_current_user)) -> Di
             diagnostics["issues"].append(f"Could not get worker status: {e}")
 
         # Check portfolios
-        tenant_id = "default"
+        tenant_id = user.tenant_id
         portfolios = container.portfolio_repo.list_all(tenant_id=tenant_id)
 
         for portfolio in portfolios:

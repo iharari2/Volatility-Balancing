@@ -20,7 +20,7 @@ from application.use_cases.simulation_unified_uc import SimulationUnifiedUC
 router = APIRouter(prefix="/v1/excel", tags=["excel-export"])
 
 
-def get_ticker_for_position(position_id: str, requested_ticker: str = None) -> str:
+def get_ticker_for_position(position_id: str, requested_ticker: str = None, tenant_id: str = "default") -> str:
     """Get ticker for a position - use requested ticker if provided, otherwise use position-based lookup"""
 
     # If a specific ticker is requested, use it directly
@@ -29,7 +29,6 @@ def get_ticker_for_position(position_id: str, requested_ticker: str = None) -> s
 
     # Search for position in database to get real ticker
     try:
-        tenant_id = "default"
         portfolios = container.portfolio_repo.list_all(tenant_id=tenant_id)
         for portfolio in portfolios:
             pos = container.positions.get(
@@ -373,7 +372,7 @@ async def export_trading_data(
         positions_data = []
         if position_ids:
             # Search across all portfolios for legacy support
-            tenant_id = "default"
+            tenant_id = user.tenant_id
             for pos_id in position_ids:
                 try:
                     position = None
@@ -490,7 +489,7 @@ async def export_position_data(
         # Get position data - search across portfolios (legacy support)
         # TODO: Update to require tenant_id and portfolio_id
         position = None
-        tenant_id = "default"
+        tenant_id = user.tenant_id
         try:
             portfolios = container.portfolio_repo.list_all(tenant_id=tenant_id)
             for portfolio in portfolios:
@@ -747,7 +746,7 @@ async def export_positions(
         # Get all positions - search across all portfolios (legacy support)
         # TODO: Update to require tenant_id and portfolio_id
         positions = []
-        tenant_id = "default"
+        tenant_id = user.tenant_id
         try:
             portfolios = container.portfolio_repo.list_all(tenant_id=tenant_id)
             for portfolio in portfolios:
@@ -895,7 +894,7 @@ async def export_trades(
         # Get all trades - search across all positions (legacy support)
         # TODO: Update to require tenant_id and portfolio_id
         trades = []
-        tenant_id = "default"
+        tenant_id = user.tenant_id
         try:
             portfolios = container.portfolio_repo.list_all(tenant_id=tenant_id)
             for portfolio in portfolios:
@@ -958,7 +957,7 @@ async def export_orders(
         # Get all orders - search across all positions (legacy support)
         # TODO: Update to require tenant_id and portfolio_id
         orders = []
-        tenant_id = "default"
+        tenant_id = user.tenant_id
         try:
             portfolios = container.portfolio_repo.list_all(tenant_id=tenant_id)
             for portfolio in portfolios:
@@ -1215,7 +1214,7 @@ async def export_enhanced_trading_data(
     """Export enhanced trading data with comprehensive audit trail."""
     try:
         # Get all trading data - search across all portfolios (legacy support)
-        tenant_id = "default"
+        tenant_id = user.tenant_id
         positions = []
         try:
             portfolios = container.portfolio_repo.list_all(tenant_id=tenant_id)
@@ -1434,7 +1433,7 @@ async def export_position_comprehensive_data(
 
         mock_position = Position(
             id=position_id,
-            tenant_id="default",
+            tenant_id=user.tenant_id,
             portfolio_id="demo_portfolio",
             asset_symbol=get_ticker_for_position(position_id, ticker),
             qty=100.0,
@@ -1527,7 +1526,7 @@ async def export_activity_log(
         # Get position - search across portfolios (legacy support)
         # TODO: Update to require tenant_id and portfolio_id
         position = None
-        tenant_id = "default"
+        tenant_id = user.tenant_id
         portfolios = container.portfolio_repo.list_all(tenant_id=tenant_id)
         for portfolio in portfolios:
             pos = container.positions.get(
