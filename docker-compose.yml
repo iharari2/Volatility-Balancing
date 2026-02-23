@@ -20,13 +20,22 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     environment:
-      # Add your DB/Redis env vars here, example:
-      # DATABASE_URL: postgresql://postgres:postgres@postgres:5432/app
-      # REDIS_URL: redis://redis:6379/0
       PYTHONUNBUFFERED: '1'
+      # Persistence
+      APP_PERSISTENCE: sql
+      APP_EVENTS: sql
+      APP_IDEMPOTENCY: memory
+      APP_AUTO_CREATE: 'true'
+      SQL_URL: postgresql://postgres:postgres@postgres:5432/app
+      REDIS_URL: redis://redis:6379/0
+      # Auth
+      JWT_SECRET_KEY: CHANGE-ME-IN-PRODUCTION
+      JWT_EXPIRE_HOURS: '24'
+      # Broker
+      APP_BROKER: stub
+      STUB_BROKER_FILL_MODE: immediate
     ports:
       - '8000:8000'
-      - '5174:5174'
     depends_on:
       - postgres
       - redis
