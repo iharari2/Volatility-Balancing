@@ -224,7 +224,8 @@ class EvaluatePositionUC:
         return result
 
     def evaluate_with_market_data(
-        self, tenant_id: str, portfolio_id: str, position_id: str
+        self, tenant_id: str, portfolio_id: str, position_id: str,
+        source: str = "api/manual",
     ) -> Dict[str, Any]:
         """Evaluate position using real-time market data with after-hours support."""
 
@@ -388,7 +389,7 @@ class EvaluatePositionUC:
             action=self._derive_action_for_timeline(
                 trigger_result, order_proposal or rebalance_proposal
             ),
-            source="api/manual",  # TODO: Pass source from caller
+            source=source,
         )
 
         return result

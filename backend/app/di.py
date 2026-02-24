@@ -549,12 +549,9 @@ class _Container:
             market_data=market_data_adapter,
             order_service=order_service_adapter,
             position_repo=position_repo_adapter,
-            trigger_config_provider=trigger_config_provider,
-            guardrail_config_provider=guardrail_config_provider,
             portfolio_repo=self.portfolio_repo,
-            market_data_repo=self.market_data,  # Pass MarketDataRepo for is_market_hours check
-            evaluate_position_uc=self.evaluate_position_uc,  # Pass use case for consistent evaluation
-            orders_repo=self.orders,  # For pending order check before submission
+            evaluate_position_uc=self.evaluate_position_uc,
+            orders_repo=self.orders,
         )
 
         self.simulation_orchestrator = SimulationOrchestrator(
