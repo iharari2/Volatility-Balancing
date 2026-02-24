@@ -288,22 +288,10 @@ class PortfolioScopedApi {
     portfolioId: string,
     transaction: CashTransactionRequest,
   ): Promise<ApiResponse<void>> {
-    // Use /api/v1 prefix for portfolio routes
-    const url = `/api/v1/tenants/${tenantId}/portfolios/${portfolioId}/cash/deposit`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(transaction),
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw new Error(error.detail || `Request failed: ${response.status}`);
-    }
-
-    return response.json();
+    return request<ApiResponse<void>>(
+      `/tenants/${tenantId}/portfolios/${portfolioId}/cash/deposit`,
+      { method: 'POST', body: JSON.stringify(transaction) },
+    );
   }
 
   /**
@@ -314,40 +302,20 @@ class PortfolioScopedApi {
     portfolioId: string,
     transaction: CashTransactionRequest,
   ): Promise<ApiResponse<void>> {
-    // Use /api/v1 prefix for portfolio routes
-    const url = `/api/v1/tenants/${tenantId}/portfolios/${portfolioId}/cash/withdraw`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(transaction),
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw new Error(error.detail || `Request failed: ${response.status}`);
-    }
-
-    return response.json();
+    return request<ApiResponse<void>>(
+      `/tenants/${tenantId}/portfolios/${portfolioId}/cash/withdraw`,
+      { method: 'POST', body: JSON.stringify(transaction) },
+    );
   }
 
   /**
    * Remove a position from portfolio
    */
   async removePosition(tenantId: string, portfolioId: string, positionId: string): Promise<void> {
-    const url = `/api/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}`;
-    const response = await fetch(url, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw new Error(error.detail || `Request failed: ${response.status}`);
-    }
+    return request<void>(
+      `/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}`,
+      { method: 'DELETE' },
+    );
   }
 
   /**

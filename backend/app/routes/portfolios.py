@@ -1163,3 +1163,26 @@ def get_effective_config(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting effective config: {str(e)}")
+
+
+@router.get("/{portfolio_id}/config/overrides", response_model=List[Dict[str, Any]])
+def get_config_overrides(
+    tenant_id: str,
+    portfolio_id: str,
+    user: CurrentUser = Depends(get_current_user),
+) -> List[Dict[str, Any]]:
+    """Get per-asset configuration overrides for a portfolio. Returns empty list when none are set."""
+    # Per-asset overrides are stored in the ConfigRepo per position, not portfolio-wide.
+    # Return an empty list until a portfolio-level overrides store is implemented.
+    return []
+
+
+@router.put("/{portfolio_id}/config/overrides", status_code=200)
+def update_config_overrides(
+    tenant_id: str,
+    portfolio_id: str,
+    body: Dict[str, Any],
+    user: CurrentUser = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Update per-asset configuration overrides. Placeholder — returns accepted."""
+    return {"message": "Overrides accepted", "count": len(body.get("overrides", []))}
