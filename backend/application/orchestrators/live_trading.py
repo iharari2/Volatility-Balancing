@@ -224,6 +224,19 @@ class LiveTradingOrchestrator:
 
                         # Only submit if validation passed
                         if is_valid:
+                            # Check for pending/unfilled orders before submitting
+                            if self.orders_repo:
+                                open_statuses = {"created", "submitted", "pending", "working", "partial"}
+                                existing_orders = self.orders_repo.list_for_position(position_id, limit=20)
+                                for existing_order in existing_orders:
+                                    if existing_order.status in open_statuses:
+                                        logger.warning(
+                                            f"Unified path: Skipping order for position {position_id}: "
+                                            f"pending order {existing_order.id} is still {existing_order.status}"
+                                        )
+                                        unified_path_handled = True
+                                        return trace_id
+
                             try:
                                 import logging
 
@@ -325,6 +338,7 @@ class LiveTradingOrchestrator:
                                 f"Unified path: Order validation failed for position {position_id}: "
                                 f"rejections={rejections}"
                             )
+                            unified_path_handled = True  # Don't fall through to old path
                     else:
                         if not trigger_detected:
                             logger.debug(
@@ -334,9 +348,8 @@ class LiveTradingOrchestrator:
                             logger.debug(
                                 f"Unified path: No order proposal for position {position_id}"
                             )
-
-                    # Note: We still continue with the rest of the method for trace logging
-                    # and potentially order submission until we fully unify the paths.
+                        # Unified path evaluated but no trade needed — don't fall through to old path
+                        unified_path_handled = True
                 else:
                     logger.warning(
                         f"Unified path: Could not find portfolio_id for position {position_id}, "
