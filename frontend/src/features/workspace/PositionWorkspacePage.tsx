@@ -7,6 +7,8 @@ import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import { marketHoursService, MarketStatus } from '../../services/marketHoursService';
 import LeftPanel from './components/LeftPanel/LeftPanel';
 import RightPanel from './components/RightPanel/RightPanel';
+import { useMarketPrice } from '../../hooks/useMarketData';
+import MarketDataBadge from '../../components/shared/MarketDataBadge';
 
 function WorkspaceTopBar() {
   const { selectedPortfolio } = useTenantPortfolio();
@@ -16,6 +18,7 @@ function WorkspaceTopBar() {
   const [mode] = useState<'Live' | 'Simulation' | 'Sandbox'>('Live');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const marketPriceQuery = useMarketPrice(selectedPosition?.asset_symbol ?? '');
 
   useEffect(() => {
     const updateMarketStatus = async () => {
@@ -143,6 +146,15 @@ function WorkspaceTopBar() {
           <span className={`badge ${marketHoursService.getStatusColor(marketStatus)} text-[10px]`}>
             {marketHoursService.getStatusLabel(marketStatus)}
           </span>
+          {selectedPosition && marketPriceQuery.data && (
+            <MarketDataBadge
+              isFresh={marketPriceQuery.data.is_fresh}
+              isMarketHours={marketPriceQuery.data.is_market_hours}
+              source={marketPriceQuery.data.source}
+              dataUpdatedAt={marketPriceQuery.dataUpdatedAt}
+              compact
+            />
+          )}
         </div>
       </div>
 

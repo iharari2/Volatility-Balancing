@@ -22,7 +22,7 @@ last_updated: 2026-02-26
 | Analytics & Reporting | 100% ✅ |
 | Event Tracking / Explainability | 100% ✅ |
 | Trading Interface | 100% ✅ |
-| Real-time Data UI | 20% ⏸️ (low priority) |
+| Real-time Data UI | 100% ✅ |
 
 ---
 
@@ -55,6 +55,7 @@ last_updated: 2026-02-26
 | 23 | Schema & Endpoints | Alembic migrations for schema management; manual adjust + anchor endpoints |
 | 24 | Remove Dual Evaluation Paths | Single evaluation path via `evaluate_with_market_data()`; −486 lines; eliminates duplicate orders |
 | 25 | Audit Traceability Tool | CLI script + 28 integration tests verifying cross-table consistency (timeline ↔ orders ↔ trades) |
+| 26 | Real-time Data UI Indicators | `MarketDataBadge` component; freshness dot + source chip + elapsed timer wired into OverviewTab, TradingTab, WorkspaceTopBar |
 
 ---
 

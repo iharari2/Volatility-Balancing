@@ -1,6 +1,6 @@
 # Development Plan Status
 
-**Last Updated**: 2026-02-26 (post-Iteration 25)
+**Last Updated**: 2026-02-26 (post-Iteration 26)
 
 > Iteration details are summarized in [`unified_development_plan.md`](unified_development_plan.md).
 > This file tracks per-commit specifics for reference.
@@ -41,3 +41,4 @@
 | 23 | Schema & Endpoints | `e18d10f`, `cf7028a` | Alembic migrations for schema management; adjust + anchor endpoints for manual position management |
 | 24 | Remove Dual Evaluation Paths | `8ba41d6`, `421b763`, `53cc1ea`, `fc65acc` | Pending order guard, dual-path fix, auth headers fix, orchestrator rewrite (−486 lines) |
 | 25 | Audit Traceability Tool | `f10a158` | `scripts/audit_traceability.py` CLI; 28 integration tests; checks GAP-1 through GAP-4 |
+| 26 | Real-time Data UI Indicators | — | `MarketDataBadge` component; freshness dot + source chip + elapsed timer; wired into OverviewTab, TradingTab, WorkspaceTopBar |

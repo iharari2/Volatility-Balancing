@@ -15,6 +15,8 @@ import { useWorkspace } from '../../WorkspaceContext';
 import { useTenantPortfolio } from '../../../../contexts/TenantPortfolioContext';
 import { getPositionCockpit, CockpitResponse } from '../../../../api/cockpit';
 import LoadingSpinner from '../../../../components/shared/LoadingSpinner';
+import { useMarketPrice } from '../../../../hooks/useMarketData';
+import MarketDataBadge from '../../../../components/shared/MarketDataBadge';
 
 interface TradingState {
   engine_state: 'NOT_CONFIGURED' | 'READY' | 'RUNNING' | 'PAUSED' | 'ERROR';
@@ -37,6 +39,7 @@ export default function TradingTab() {
   const [tradingState, setTradingState] = useState<TradingState | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshInterval, setRefreshInterval] = useState(30);
+  const marketPriceQuery = useMarketPrice(selectedPosition?.asset_symbol ?? '');
 
   const loadData = async () => {
     if (!portfolioId || !selectedPosition) {
@@ -304,9 +307,19 @@ export default function TradingTab() {
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
             <div>
               <p className="text-xs text-gray-500">Last Price</p>
-              <p className="text-lg font-bold text-gray-900">
-                {formatCurrency(cockpitData.recent_quotes[0].effective_price)}
-              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-lg font-bold text-gray-900">
+                  {formatCurrency(cockpitData.recent_quotes[0].effective_price)}
+                </p>
+                {marketPriceQuery.data && (
+                  <MarketDataBadge
+                    isFresh={marketPriceQuery.data.is_fresh}
+                    isMarketHours={marketPriceQuery.data.is_market_hours}
+                    source={marketPriceQuery.data.source}
+                    dataUpdatedAt={marketPriceQuery.dataUpdatedAt}
+                  />
+                )}
+              </div>
             </div>
             <div>
               <p className="text-xs text-gray-500">Open</p>

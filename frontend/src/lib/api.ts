@@ -325,6 +325,8 @@ export const marketApi = {
       is_market_hours: boolean;
       is_fresh: boolean;
       is_inline: boolean;
+      timestamp: string;
+      data_age_seconds: number;
       open?: number;
       high?: number;
       low?: number;

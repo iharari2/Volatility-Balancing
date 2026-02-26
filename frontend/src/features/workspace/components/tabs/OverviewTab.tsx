@@ -4,6 +4,8 @@ import { useWorkspace } from '../../WorkspaceContext';
 import { useTenantPortfolio } from '../../../../contexts/TenantPortfolioContext';
 import { getPositionCockpit, CockpitResponse } from '../../../../api/cockpit';
 import LoadingSpinner from '../../../../components/shared/LoadingSpinner';
+import { useMarketPrice } from '../../../../hooks/useMarketData';
+import MarketDataBadge from '../../../../components/shared/MarketDataBadge';
 
 const formatCurrency = (value?: number | null) => {
   if (value === null || value === undefined) return '-';
@@ -57,6 +59,7 @@ export default function OverviewTab() {
   const { selectedPosition, portfolioId } = useWorkspace();
   const [cockpitData, setCockpitData] = useState<CockpitResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const marketPriceQuery = useMarketPrice(selectedPosition?.asset_symbol ?? '');
 
   useEffect(() => {
     if (!portfolioId || !selectedPosition) {
@@ -287,7 +290,17 @@ export default function OverviewTab() {
       {/* Recent Market Data */}
       {cockpitData.recent_quotes.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-lg p-5">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">Recent Market Snapshot</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-900">Recent Market Snapshot</h3>
+            {marketPriceQuery.data && (
+              <MarketDataBadge
+                isFresh={marketPriceQuery.data.is_fresh}
+                isMarketHours={marketPriceQuery.data.is_market_hours}
+                source={marketPriceQuery.data.source}
+                dataUpdatedAt={marketPriceQuery.dataUpdatedAt}
+              />
+            )}
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
             <div>
               <p className="text-xs text-gray-500">Last Price</p>
