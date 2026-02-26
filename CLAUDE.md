@@ -126,6 +126,9 @@ claude mcp add playwright npx @playwright/mcp@latest
 
 ### General
 - **Never use fake, mock, or randomly generated data in production code.** All features must operate on real data (real market prices, real simulation results, real computations). Stubs and mocks are only acceptable in tests.
+- **Update development tracking docs after every task.** When a task produces commits or meaningful changes, update both:
+  - `docs/dev/unified_development_plan.md` — add iteration row, update test count and `last_updated`
+  - `docs/dev/development_plan_status.md` — add commit-level row(s) and update `Last Updated`
 
 ### Backend
 -

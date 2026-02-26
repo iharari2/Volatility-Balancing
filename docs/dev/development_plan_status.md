@@ -1,6 +1,6 @@
 # Development Plan Status
 
-**Last Updated**: 2026-02-19 (post-Iteration 20b)
+**Last Updated**: 2026-02-26 (post-Iteration 25)
 
 > Iteration details are summarized in [`unified_development_plan.md`](unified_development_plan.md).
 > This file tracks per-commit specifics for reference.
@@ -34,3 +34,10 @@
 | — | Fix: Orders/Trades Excel Export | `b7fbbde` | Real trades/orders data in trading Excel; API limits raised to 5000 |
 | 20 | Analysis Enhancements | `51797af` | Overview tables real data, PerformanceChart vs market API, commission/dividend/guardrail charts |
 | 20b | Optimization Config Management | — | PUT/DELETE/reset endpoints + edit/rerun/delete UI |
+| 21 | Analytics Deep Enhancements | — | Date range, resolution, benchmarks, Excel export, event markers fix |
+| 22 | JWT Authentication | — | User accounts, JWT tokens, protected routes, login page, tenant isolation |
+| — | JWT Auth Polish | `9f0d85f`, `3734b17`, `33694a3`, `d0a862c` | tenant_id wiring, user footer, passlib→bcrypt, fake data removal |
+| — | JWT Deploy & Tests | `3a95e23`, `6d02f2f`, `c6600d8`, `fdbd964` | .env JWT vars, smoke.sh auth, EC2 runbook, 14 auth integration tests |
+| 23 | Schema & Endpoints | `e18d10f`, `cf7028a` | Alembic migrations for schema management; adjust + anchor endpoints for manual position management |
+| 24 | Remove Dual Evaluation Paths | `8ba41d6`, `421b763`, `53cc1ea`, `fc65acc` | Pending order guard, dual-path fix, auth headers fix, orchestrator rewrite (−486 lines) |
+| 25 | Audit Traceability Tool | — | `scripts/audit_traceability.py` CLI; 28 integration tests; checks GAP-1 through GAP-4 |

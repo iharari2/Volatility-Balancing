@@ -1,14 +1,14 @@
 ---
 owner: Development Team
 status: active
-last_updated: 2026-02-23
+last_updated: 2026-02-26
 ---
 
 # Volatility Balancing — Development Plan
 
 ## Current State
 
-**Phase 1 complete.** Test suite: 561 passed (13 skipped) | Ruff clean | TypeScript clean | CI: all 4 jobs green.
+**Phase 1 complete.** Test suite: 603 passed (13 skipped) | Ruff clean | TypeScript clean | CI: all 4 jobs green.
 
 | Area | Completion |
 |---|---|
@@ -52,6 +52,9 @@ last_updated: 2026-02-23
 | 20b | Optimization Config Management | Edit, rerun, delete actions on saved configs (backend PUT/DELETE/reset + frontend UI) |
 | 21 | Analytics Deep Enhancements | Date range + chart brush, resolution (daily/weekly/hourly), benchmark selector, analytics Excel export, event markers fix |
 | 22 | JWT Authentication | User accounts, JWT tokens, protected routes, login page, change-password, tenant isolation |
+| 23 | Schema & Endpoints | Alembic migrations for schema management; manual adjust + anchor endpoints |
+| 24 | Remove Dual Evaluation Paths | Single evaluation path via `evaluate_with_market_data()`; −486 lines; eliminates duplicate orders |
+| 25 | Audit Traceability Tool | CLI script + 28 integration tests verifying cross-table consistency (timeline ↔ orders ↔ trades) |
 
 ---
 
