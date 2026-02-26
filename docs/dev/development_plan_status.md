@@ -40,4 +40,4 @@
 | — | JWT Deploy & Tests | `3a95e23`, `6d02f2f`, `c6600d8`, `fdbd964` | .env JWT vars, smoke.sh auth, EC2 runbook, 14 auth integration tests |
 | 23 | Schema & Endpoints | `e18d10f`, `cf7028a` | Alembic migrations for schema management; adjust + anchor endpoints for manual position management |
 | 24 | Remove Dual Evaluation Paths | `8ba41d6`, `421b763`, `53cc1ea`, `fc65acc` | Pending order guard, dual-path fix, auth headers fix, orchestrator rewrite (−486 lines) |
-| 25 | Audit Traceability Tool | — | `scripts/audit_traceability.py` CLI; 28 integration tests; checks GAP-1 through GAP-4 |
+| 25 | Audit Traceability Tool | `f10a158` | `scripts/audit_traceability.py` CLI; 28 integration tests; checks GAP-1 through GAP-4 |
