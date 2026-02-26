@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { exportToExcel } from '../../utils/exportExcel';
 import { Download, Filter, Calendar } from 'lucide-react';
 import { usePortfolio } from '../../contexts/PortfolioContext';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
@@ -177,18 +178,14 @@ export default function AnalyticsPage() {
   }, [positions, selectedPositionId]);
 
   const handleExport = async () => {
-    const { portfolioScopedApi } = await import('../../services/portfolioScopedApi');
     if (!selectedTenantId || !selectedPortfolioId) return;
     const positionFilter = selectedPositionId !== 'all' ? selectedPositionId : undefined;
-    const url = portfolioScopedApi.getAnalyticsExportUrl(
-      selectedTenantId,
-      selectedPortfolioId,
-      positionFilter,
-      effectiveStartDate,
-      effectiveEndDate,
-      effectiveResolution,
-    );
-    window.open(url, '_blank');
+    const params = new URLSearchParams({ tenant_id: selectedTenantId, portfolio_id: selectedPortfolioId });
+    if (positionFilter) params.set('position_id', positionFilter);
+    if (effectiveStartDate) params.set('start_date', effectiveStartDate);
+    if (effectiveEndDate) params.set('end_date', effectiveEndDate);
+    if (effectiveResolution) params.set('resolution', effectiveResolution);
+    await exportToExcel(`/v1/excel/analytics/export?${params.toString()}`, 'analytics.xlsx');
   };
 
   if (!selectedPortfolio) {
