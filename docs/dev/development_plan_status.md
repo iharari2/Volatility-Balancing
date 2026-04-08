@@ -1,6 +1,6 @@
 # Development Plan Status
 
-**Last Updated**: 2026-04-08 (post-Iteration 27)
+**Last Updated**: 2026-04-09 (post-Iteration 28)
 
 > Iteration details are summarized in [`unified_development_plan.md`](unified_development_plan.md).
 > This file tracks per-commit specifics for reference.
@@ -43,3 +43,4 @@
 | 25 | Audit Traceability Tool | `f10a158` | `scripts/audit_traceability.py` CLI; 28 integration tests; checks GAP-1 through GAP-4 |
 | 26 | Real-time Data UI Indicators | — | `MarketDataBadge` component; freshness dot + source chip + elapsed timer; wired into OverviewTab, TradingTab, WorkspaceTopBar |
 | 27 | Fly.io Migration | `0074885`–`5f6afb9` | Dockerfile, fly.toml, Neon DB, Cloudflare Pages frontend, CI/CD via flyctl; CORS + lint fixes |
+| 28 | User Management Console | — | `GET|PATCH /v1/admin/users`; owner-only guard; AdminUsersPage; Admin nav section in sidebar; `set-role` CLI |

@@ -969,4 +969,24 @@ export const authApi = {
     }),
 };
 
+// Admin API (owner-only)
+export interface AdminUser {
+  id: string;
+  email: string;
+  display_name: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export const adminApi = {
+  listUsers: () => request<AdminUser[]>('/v1/admin/users'),
+
+  updateUser: (userId: string, data: { role?: string; is_active?: boolean }) =>
+    request<AdminUser>(`/v1/admin/users/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+};
+
 export { ApiError, request, getAuthHeaders };

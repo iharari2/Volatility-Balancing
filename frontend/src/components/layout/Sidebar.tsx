@@ -14,6 +14,7 @@ import {
   TrendingUp,
   LogOut,
   User,
+  Users,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
@@ -27,6 +28,10 @@ const navigation = [
   { name: 'Optimization', href: '/optimization', icon: FileSearch },
   { name: 'Monitoring', href: '/monitoring', icon: Activity },
   { name: 'Settings', href: '/settings', icon: Cog },
+];
+
+const adminNavigation = [
+  { name: 'Users', href: '/admin/users', icon: Users },
 ];
 
 interface SidebarProps {
@@ -140,6 +145,39 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
             </Link>
           );
         })}
+
+        {user?.role === 'owner' && (
+          <div className="pt-4">
+            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 block px-2">
+              Admin
+            </label>
+            {adminNavigation.map((item) => {
+              const isActive = location.pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  className={`group flex items-center px-4 py-2.5 text-sm font-bold rounded-xl transition-all border-l-4 ${
+                    isActive
+                      ? 'bg-primary-600 text-white shadow-md shadow-primary-200 border-l-white transform scale-[1.02]'
+                      : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900 border-l-transparent'
+                  }`}
+                  onClick={onMobileClose}
+                >
+                  <item.icon
+                    className={`mr-3 h-5 w-5 ${
+                      isActive ? 'text-white' : 'text-gray-400 group-hover:text-primary-600'
+                    }`}
+                  />
+                  {item.name}
+                  {isActive && (
+                    <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white animate-pulse"></div>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </nav>
 
       {/* User footer */}

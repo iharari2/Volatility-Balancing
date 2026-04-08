@@ -98,3 +98,23 @@ class AuthService:
             return jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
         except JWTError:
             return None
+
+    def list_users(self, tenant_id: str) -> list[User]:
+        return self.user_repo.list_by_tenant(tenant_id)
+
+    def admin_update_user(
+        self,
+        tenant_id: str,
+        user_id: str,
+        role: Optional[str] = None,
+        is_active: Optional[bool] = None,
+    ) -> Optional[User]:
+        user = self.user_repo.get_by_id(user_id)
+        if not user or user.tenant_id != tenant_id:
+            return None
+        if role is not None:
+            user.role = role
+        if is_active is not None:
+            user.is_active = is_active
+        user.updated_at = datetime.now(timezone.utc)
+        return self.user_repo.update(user)

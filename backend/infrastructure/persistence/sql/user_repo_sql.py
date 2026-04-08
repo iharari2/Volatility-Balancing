@@ -77,6 +77,16 @@ class SQLUserRepo:
         with self._sf() as s:
             return s.query(UserModel).filter(UserModel.tenant_id == tenant_id).count()
 
+    def list_by_tenant(self, tenant_id: str) -> list:
+        with self._sf() as s:
+            models = (
+                s.query(UserModel)
+                .filter(UserModel.tenant_id == tenant_id)
+                .order_by(UserModel.created_at)
+                .all()
+            )
+            return [self._to_entity(m) for m in models]
+
     def clear(self) -> None:
         with self._sf() as s:
             s.query(UserModel).delete()

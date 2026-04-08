@@ -36,6 +36,7 @@ from app.routes.explainability import simulation_router as explainability_sim_ro
 from app.routes.monitoring import router as monitoring_router
 from app.routes.broker_status import router as broker_status_router
 from app.routes.auth import router as auth_router
+from app.routes.admin import router as admin_router
 from application.services.trading_worker import start_trading_worker, stop_trading_worker
 
 API_PREFIX = "/v1"
@@ -140,6 +141,7 @@ def create_app(enable_trading_worker: bool | None = None) -> FastAPI:
             allow_headers=["*"],
         )
     app.include_router(auth_router)
+    app.include_router(admin_router)
     app.include_router(health_router, prefix=API_PREFIX)
     app.include_router(version_router)
     app.include_router(positions_router)  # positions_router already has /v1 prefix

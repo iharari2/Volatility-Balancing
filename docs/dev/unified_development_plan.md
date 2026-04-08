@@ -1,7 +1,7 @@
 ---
 owner: Development Team
 status: active
-last_updated: 2026-04-08
+last_updated: 2026-04-09
 ---
 
 # Volatility Balancing — Development Plan
@@ -57,6 +57,7 @@ last_updated: 2026-04-08
 | 25 | Audit Traceability Tool | CLI script + 28 integration tests verifying cross-table consistency (timeline ↔ orders ↔ trades) |
 | 26 | Real-time Data UI Indicators | `MarketDataBadge` component; freshness dot + source chip + elapsed timer wired into OverviewTab, TradingTab, WorkspaceTopBar |
 | 27 | Fly.io Migration | Replaced EC2+SSM with Fly.io (backend) + Cloudflare Pages (frontend) + Neon (PostgreSQL); CI deploys via `flyctl deploy`; ~$3/month |
+| 28 | User Management Console | Admin UI at `/admin/users` (owner-only); list/edit-role/enable-disable users; `set-role` CLI subcommand; `GET|PATCH /v1/admin/users` endpoints |
 
 ---
 

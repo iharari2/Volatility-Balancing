@@ -25,6 +25,7 @@ import AnalyticsPage from './features/analytics/AnalyticsPage';
 import MonitoringPage from './features/monitoring/MonitoringPage';
 import OptimizationPage from './features/optimization/OptimizationPage';
 import SettingsPage from './features/settings/SettingsPage';
+import AdminUsersPage from './features/admin/AdminUsersPage';
 import NotFound from './pages/NotFound';
 
 function App() {
@@ -65,6 +66,14 @@ function App() {
                             element={
                               <PageLayout mode={mode}>
                                 <SettingsPage />
+                              </PageLayout>
+                            }
+                          />
+                          <Route
+                            path="/admin/users"
+                            element={
+                              <PageLayout mode={mode}>
+                                <AdminUsersPage />
                               </PageLayout>
                             }
                           />
