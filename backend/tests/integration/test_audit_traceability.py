@@ -13,7 +13,6 @@ from __future__ import annotations
 import sys
 import os
 from datetime import datetime, timezone, timedelta
-from typing import Any
 
 import pytest
 from sqlalchemy import create_engine
@@ -24,14 +23,13 @@ _BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 if _BACKEND_DIR not in sys.path:
     sys.path.insert(0, _BACKEND_DIR)
 
-from infrastructure.persistence.sql.models import (
-    Base,
+from infrastructure.persistence.sql.models import (  # noqa: E402
     PositionEvaluationTimelineModel,
     OrderModel,
     TradeModel,
     create_all,
 )
-from scripts.audit_traceability import run_audit, format_report, AuditResult
+from scripts.audit_traceability import run_audit, format_report  # noqa: E402
 
 
 # ---------------------------------------------------------------------------

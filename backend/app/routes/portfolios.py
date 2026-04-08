@@ -789,7 +789,6 @@ def get_portfolio_analytics(
     - Else if days > 0, compute start_date = today - days.
     - Else (days == 0 and no start_date) → full history.
     """
-    from datetime import date as date_cls
     try:
         # Parse explicit dates if supplied
         parsed_start: Optional[datetime] = None

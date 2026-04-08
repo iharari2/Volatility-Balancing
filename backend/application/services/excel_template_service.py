@@ -1467,7 +1467,7 @@ class ExcelTemplateService:
         self._define_styles()
 
         ticker = summary.get("ticker", "UNKNOWN")
-        position_id = summary.get("position_id", "")
+        _position_id = summary.get("position_id", "")
 
         # --- Sheet 1: Receivables ---
         ws = self.workbook.create_sheet("Receivables", 0)

@@ -79,7 +79,7 @@ def _rows(conn, sql: str, params: dict | None = None) -> list[dict]:
 def _check_table_exists(conn, table_name: str) -> bool:
     """Check if a table exists in the database."""
     try:
-        rows = _rows(conn, f"SELECT 1 FROM {table_name} LIMIT 1")
+        _rows(conn, f"SELECT 1 FROM {table_name} LIMIT 1")
         return True
     except Exception:
         return False

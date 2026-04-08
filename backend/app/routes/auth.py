@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
 from app.auth import CurrentUser, get_current_user, get_auth_service
 from application.services.auth_service import AuthService
