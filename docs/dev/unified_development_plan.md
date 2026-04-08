@@ -1,14 +1,14 @@
 ---
 owner: Development Team
 status: active
-last_updated: 2026-02-26
+last_updated: 2026-04-08
 ---
 
 # Volatility Balancing — Development Plan
 
 ## Current State
 
-**Phase 1 complete.** Test suite: 603 passed (13 skipped) | Ruff clean | TypeScript clean | CI: all 4 jobs green.
+**Phase 1 complete. Fly.io migration complete.** Test suite: 603 passed (13 skipped) | Ruff clean | TypeScript clean | CI: all 4 jobs green → deploys to Fly.io.
 
 | Area | Completion |
 |---|---|
@@ -56,6 +56,7 @@ last_updated: 2026-02-26
 | 24 | Remove Dual Evaluation Paths | Single evaluation path via `evaluate_with_market_data()`; −486 lines; eliminates duplicate orders |
 | 25 | Audit Traceability Tool | CLI script + 28 integration tests verifying cross-table consistency (timeline ↔ orders ↔ trades) |
 | 26 | Real-time Data UI Indicators | `MarketDataBadge` component; freshness dot + source chip + elapsed timer wired into OverviewTab, TradingTab, WorkspaceTopBar |
+| 27 | Fly.io Migration | Replaced EC2+SSM with Fly.io (backend) + Cloudflare Pages (frontend) + Neon (PostgreSQL); CI deploys via `flyctl deploy`; ~$3/month |
 
 ---
 
