@@ -94,9 +94,6 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PY_VERSION }}
 
       - name: Install dependencies
         run: pip install requests pytz
@@ -113,23 +110,12 @@ jobs:
         if: steps.safety.outcome == 'failure'
         run: echo "::warning::Deploying during market hours or with active trading. Proceed with caution."
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Deploy to Fly.io
+        uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - name: Deploy via SSM
-        run: |
-          aws ssm send-command \
-            --instance-ids "${{ secrets.EC2_INSTANCE_ID }}" \
-            --document-name "AWS-RunShellScript" \
-            --parameters 'commands=["cd /home/ec2-user/apps/Volatility-Balancing && ./deploy.sh origin/main"]' \
-            --output text
-
-      - name: Wait for deployment
-        run: sleep 30
+      - run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Post-deploy smoke test
         run: |
