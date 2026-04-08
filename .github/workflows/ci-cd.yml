@@ -92,6 +92,8 @@ jobs:
     needs: [backend-lint, backend-unit-tests, frontend-build, integration-tests]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
