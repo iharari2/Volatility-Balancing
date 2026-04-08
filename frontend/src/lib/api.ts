@@ -10,8 +10,10 @@ import {
 import { ExplainabilityTimeline, ExplainabilityParams } from '../types/explainability';
 import { OrderRow, TradeRow } from '../types/orders';
 
-const API_BASE = '/api'; // This will use the Vite proxy
-// const API_BASE = 'http://localhost:8001/v1'; // Direct connection
+// In dev, VITE_API_BASE_URL is unset so we use /api which the Vite proxy rewrites to http://127.0.0.1:8000
+// In production, VITE_API_BASE_URL=https://volatility-balancing.fly.dev so requests go directly to Fly
+const _VITE_BASE = import.meta.env.VITE_API_BASE_URL as string | undefined;
+const API_BASE = _VITE_BASE ? _VITE_BASE : '/api';
 
 class ApiError extends Error {
   constructor(public status: number, message: string) {
