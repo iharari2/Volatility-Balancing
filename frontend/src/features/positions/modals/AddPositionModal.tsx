@@ -37,6 +37,8 @@ export default function AddPositionModal({ onClose, onSave }: AddPositionModalPr
   const [cashCurrency, setCashCurrency] = useState('USD');
   const [loading, setLoading] = useState(false);
   const [priceFetchFailed, setPriceFetchFailed] = useState(false);
+
+  const currencySymbol = cashCurrency === 'EUR' ? '€' : cashCurrency === 'GBP' ? '£' : '$';
   // Store ticker in ref to avoid React re-renders during typing
   const tickerRef = useRef('');
   const tickerInputRef = useRef<HTMLInputElement>(null);
@@ -306,12 +308,12 @@ export default function AddPositionModal({ onClose, onSave }: AddPositionModalPr
                             setQty(val / currentPrice);
                           }
                         }}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm pl-8 px-3 py-2"
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm pl-7 pr-3 py-2"
                         placeholder="0.00"
                         required
                       />
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 mt-1">
-                        {cashCurrency}
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 mt-0.5 text-sm">
+                        {currencySymbol}
                       </span>
                     </div>
                     {currentPrice > 0 && dollarValue > 0 && (
@@ -368,13 +370,13 @@ export default function AddPositionModal({ onClose, onSave }: AddPositionModalPr
                         step="0.01"
                         value={cash || ''}
                         onChange={(e) => setCash(e.target.value ? Number(e.target.value) : 0)}
-                        className="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm pl-8 px-3 py-2"
+                        className="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm pl-7 pr-3 py-2"
                         placeholder="0.00"
                         min={0}
                         required
                       />
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 mt-1">
-                        {cashCurrency}
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 mt-0.5 text-sm">
+                        {currencySymbol}
                       </span>
                     </div>
                   </div>
