@@ -12,6 +12,7 @@ from typing import Optional, Dict, Any, List
 
 import pandas as pd
 import pytz
+import requests
 import yfinance as yf
 from yfinance.exceptions import YFRateLimitError
 
@@ -34,7 +35,22 @@ class YFinanceAdapter(MarketDataRepo):
         self.last_error_kind: Optional[str] = None
         self.last_error: Optional[Exception] = None
         self._logger = logging.getLogger(__name__)
+        # Browser-spoofed session to avoid Yahoo Finance blocking cloud IPs
+        self._session = requests.Session()
+        self._session.headers.update({
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+        })
         self._patch_print_once()
+
+    def _ticker(self, symbol: str) -> yf.Ticker:
+        """Return a Ticker using the browser-spoofed session (avoids cloud IP blocks)."""
+        return yf.Ticker(symbol, session=self._session)
 
     def _deterministic_guard(self, ticker: str) -> bool:
         if os.getenv("TICK_DETERMINISTIC", "").lower() in {"1", "true", "yes", "on"}:
@@ -200,7 +216,7 @@ class YFinanceAdapter(MarketDataRepo):
 
             # Fetch fresh data using multiple methods for better accuracy
             # Create a NEW Ticker instance each time to avoid yfinance caching
-            stock = yf.Ticker(ticker)
+            stock = self._ticker(ticker)
             # Force refresh by accessing info with a fresh request
             current_time = datetime.now(self.tz_utc)
 
@@ -238,7 +254,7 @@ class YFinanceAdapter(MarketDataRepo):
                     try:
                         # Get fresh info object - this has the most current intraday OHLC values
                         # Create a NEW ticker instance to ensure fresh data (yfinance may cache)
-                        fresh_stock = yf.Ticker(ticker)
+                        fresh_stock = self._ticker(ticker)
                         with self._suppress_yfinance_output():
                             info = fresh_stock.info
 
@@ -365,7 +381,7 @@ class YFinanceAdapter(MarketDataRepo):
                     info = stock.info
             except Exception:
                 # If info access fails, create fresh ticker
-                stock = yf.Ticker(ticker)
+                stock = self._ticker(ticker)
                 with self._suppress_yfinance_output():
                     info = stock.info
             current_price = (
@@ -537,7 +553,7 @@ class YFinanceAdapter(MarketDataRepo):
                 # real-time endpoints are blocked — returns last close, marked stale)
                 try:
                     print(f"⚠️ Trying 5-day daily history fallback for {ticker}")
-                    daily = yf.Ticker(ticker).history(period="5d", interval="1d")
+                    daily = self._ticker(ticker).history(period="5d", interval="1d")
                     if not daily.empty:
                         close_price = float(daily["Close"].iloc[-1])
                         if close_price > 0:
@@ -796,7 +812,7 @@ class YFinanceAdapter(MarketDataRepo):
         if self._deterministic_guard(ticker):
             return None
         try:
-            stock = yf.Ticker(ticker)
+            stock = self._ticker(ticker)
             current_time = datetime.now(self.tz_utc)
 
             # Try fast_info first (most current)
@@ -943,7 +959,7 @@ class YFinanceAdapter(MarketDataRepo):
             max_retries = 3
             for attempt in range(max_retries):
                 try:
-                    stock = yf.Ticker(ticker)
+                    stock = self._ticker(ticker)
                     with self._suppress_yfinance_output():
                         hist = stock.history(start=start_str, end=end_str, interval=interval)
                     break
@@ -1157,7 +1173,7 @@ class YFinanceAdapter(MarketDataRepo):
         start_str = start_date.strftime("%Y-%m-%d")
         end_str = end_date.strftime("%Y-%m-%d")
 
-        stock = yf.Ticker(ticker)
+        stock = self._ticker(ticker)
 
         # Try minute data first (only available for last ~7 days)
         hist = stock.history(start=start_str, end=end_str, interval="1m")
@@ -1225,7 +1241,7 @@ class YFinanceAdapter(MarketDataRepo):
 
         print(f"Fetching daily data for {ticker} from {start_str} to {end_str}")
 
-        stock = yf.Ticker(ticker)
+        stock = self._ticker(ticker)
         hist = stock.history(start=start_str, end=end_str, interval="1d")
 
         if hist.empty:
