@@ -126,12 +126,14 @@ jobs:
 
       - name: Create version tag
         run: |
-          VERSION="v$(date +%Y.%m.%d)"
+          BASE="v$(date +%Y.%m.%d)"
 
-          EXISTING=$(git tag -l "${VERSION}*" | wc -l)
+          # Count matching tags on the remote (fresh checkout has no local tags)
+          EXISTING=$(git ls-remote --tags origin "${BASE}*" | wc -l)
           if [ "$EXISTING" -gt 0 ]; then
-            SUFFIX=$((EXISTING + 1))
-            VERSION="${VERSION}.${SUFFIX}"
+            VERSION="${BASE}.$(( EXISTING + 1 ))"
+          else
+            VERSION="${BASE}"
           fi
 
           git config user.name "GitHub Actions"
