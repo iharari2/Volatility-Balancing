@@ -52,6 +52,66 @@ class YFinanceAdapter(MarketDataRepo):
         """Return a Ticker using the browser-spoofed session (avoids cloud IP blocks)."""
         return yf.Ticker(symbol, session=self._session)
 
+    def _fetch_via_chart_api(self, ticker: str) -> Optional[PriceData]:
+        """
+        Direct HTTP call to Yahoo Finance chart API — bypasses yfinance entirely.
+        Uses the v8/finance/chart endpoint which is less aggressively blocked on
+        cloud IPs than the quote/quoteSummary endpoints.
+        Returns PriceData on success, None on failure.
+        """
+        current_time = datetime.now(self.tz_utc)
+        for host in ("query1.finance.yahoo.com", "query2.finance.yahoo.com"):
+            url = f"https://{host}/v8/finance/chart/{ticker}"
+            params = {"interval": "1d", "range": "5d", "includePrePost": "false"}
+            try:
+                resp = self._session.get(url, params=params, timeout=10)
+                resp.raise_for_status()
+                data = resp.json()
+                result = data.get("chart", {}).get("result")
+                if not result:
+                    continue
+                quotes = result[0]["indicators"]["quote"][0]
+                closes = quotes.get("close", [])
+                price = next((c for c in reversed(closes) if c is not None), None)
+                if not price or price <= 0:
+                    continue
+                timestamps = result[0].get("timestamp", [])
+                last_ts = current_time
+                if timestamps:
+                    last_ts = datetime.fromtimestamp(timestamps[-1], tz=self.tz_utc)
+                opens = quotes.get("open", [])
+                highs = quotes.get("high", [])
+                lows = quotes.get("low", [])
+                volumes = quotes.get("volume", [])
+                last_open = next((v for v in reversed(opens) if v is not None), None)
+                last_high = next((v for v in reversed(highs) if v is not None), None)
+                last_low = next((v for v in reversed(lows) if v is not None), None)
+                last_vol = next((v for v in reversed(volumes) if v is not None), None)
+                price_data = PriceData(
+                    ticker=ticker,
+                    price=price,
+                    source=PriceSource.PREVIOUS_CLOSE,
+                    timestamp=current_time,
+                    bid=price * 0.999,
+                    ask=price * 1.001,
+                    volume=int(last_vol) if last_vol else None,
+                    last_trade_price=price,
+                    last_trade_time=last_ts,
+                    is_market_hours=False,
+                    is_fresh=False,
+                    is_inline=False,
+                    open=last_open,
+                    high=last_high,
+                    low=last_low,
+                    close=price,
+                )
+                self.storage.store_price_data(ticker, price_data)
+                print(f"✅ Chart API fallback succeeded for {ticker}: ${price:.2f} via {host}")
+                return price_data
+            except Exception as e:
+                print(f"⚠️ Chart API fallback failed for {ticker} via {host}: {e}")
+        return None
+
     def _deterministic_guard(self, ticker: str) -> bool:
         if os.getenv("TICK_DETERMINISTIC", "").lower() in {"1", "true", "yes", "on"}:
             self._logger.warning(
@@ -586,6 +646,12 @@ class YFinanceAdapter(MarketDataRepo):
                             return price_data
                 except Exception as e3:
                     print(f"⚠️ 5-day daily fallback also failed for {ticker}: {e3}")
+
+                # Ultimate fallback: direct HTTP to Yahoo Finance chart API
+                # (different endpoint, less blocked on cloud IPs)
+                chart_result = self._fetch_via_chart_api(ticker)
+                if chart_result:
+                    return chart_result
 
                 return None
 
