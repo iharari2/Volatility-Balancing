@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Plus,
@@ -12,12 +12,23 @@ import {
   ChevronDown,
   ChevronUp,
   ArrowRight,
+  Briefcase,
 } from 'lucide-react';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import { portfolioApi } from '../../lib/api';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import CreatePortfolioWizard from './CreatePortfolioWizard';
 import PortfolioDetailModal from './PortfolioDetailModal';
+import QuickStartChecklist from '../onboarding/QuickStartChecklist';
+
+const QUICKSTART_DISMISSED_KEY = 'vb.quickstart.dismissed';
+
+const getStoredChecklistPreference = () => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return localStorage.getItem(QUICKSTART_DISMISSED_KEY) === 'true';
+};
 
 export default function PortfolioListPage() {
   const {
@@ -28,6 +39,7 @@ export default function PortfolioListPage() {
     refreshPortfolios,
     loading,
   } = useTenantPortfolio();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedPortfolioForDetail, setSelectedPortfolioForDetail] = useState<string | null>(null);
@@ -35,6 +47,77 @@ export default function PortfolioListPage() {
   const [portfolioPositions, setPortfolioPositions] = useState<Record<string, any[]>>({});
   const [loadingPositions, setLoadingPositions] = useState<Record<string, boolean>>({});
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [checklistDismissed, setChecklistDismissed] = useState<boolean>(getStoredChecklistPreference);
+  const [hasAnchorConfigured, setHasAnchorConfigured] = useState(false);
+  const [checkingAnchors, setCheckingAnchors] = useState(false);
+  const [checklistRefreshToken, setChecklistRefreshToken] = useState(0);
+
+  useEffect(() => {
+    if (searchParams.get('create') === '1') {
+      setShowCreateModal(true);
+      const params = new URLSearchParams(searchParams);
+      params.delete('create');
+      setSearchParams(params, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const checkAnchorProgress = async () => {
+      if (!selectedTenantId) {
+        if (isMounted) {
+          setHasAnchorConfigured(false);
+          setCheckingAnchors(false);
+        }
+        return;
+      }
+
+      const portfoliosWithPositions = portfolios.filter((p) => (p.positionCount || 0) > 0);
+
+      if (portfoliosWithPositions.length === 0) {
+        if (isMounted) {
+          setHasAnchorConfigured(false);
+          setCheckingAnchors(false);
+        }
+        return;
+      }
+
+      if (isMounted) {
+        setCheckingAnchors(true);
+      }
+
+      for (const portfolio of portfoliosWithPositions) {
+        try {
+          const positions = await portfolioApi.getPositions(selectedTenantId, portfolio.id);
+          if (!isMounted) {
+            return;
+          }
+          const anyAnchor = positions.some(
+            (position) => position.anchor_price !== null && position.anchor_price !== undefined,
+          );
+          if (anyAnchor) {
+            setHasAnchorConfigured(true);
+            setCheckingAnchors(false);
+            return;
+          }
+        } catch (error) {
+          console.warn('Unable to check anchor status for portfolio ' + portfolio.id + ':', error);
+        }
+      }
+
+      if (isMounted) {
+        setHasAnchorConfigured(false);
+        setCheckingAnchors(false);
+      }
+    };
+
+    checkAnchorProgress();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [portfolios, selectedTenantId, checklistRefreshToken]);
 
   const handleCreate = () => {
     setShowCreateModal(true);
@@ -99,6 +182,17 @@ export default function PortfolioListPage() {
     setShowDetailModal(true);
   };
 
+  const handleDismissChecklist = () => {
+    setChecklistDismissed(true);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(QUICKSTART_DISMISSED_KEY, 'true');
+    }
+  };
+
+  const handleRefreshChecklist = () => {
+    setChecklistRefreshToken((prev) => prev + 1);
+  };
+
   const togglePortfolioExpansion = async (portfolioId: string) => {
     const isExpanded = expandedPortfolios.has(portfolioId);
     if (isExpanded) {
@@ -136,6 +230,41 @@ export default function PortfolioListPage() {
     return <div className="text-center py-12">Loading...</div>;
   }
 
+  const hasAnyPortfolio = portfolios.length > 0;
+  const hasAnyPosition = portfolios.some((p) => (p.positionCount || 0) > 0);
+  const hasTradingEnabled = portfolios.some((p) => p.autoTradingEnabled);
+
+  const quickStartSteps = [
+    {
+      id: 'portfolio',
+      label: 'Create a portfolio',
+      description: 'Group cash and assets under a guardrail policy.',
+      completed: hasAnyPortfolio,
+    },
+    {
+      id: 'position',
+      label: 'Add a position',
+      description: 'Allocate ticker, shares, and companion cash.',
+      completed: hasAnyPosition,
+    },
+    {
+      id: 'anchor',
+      label: 'Set anchor price',
+      description: 'Pin a baseline before allowing automation.',
+      completed: hasAnchorConfigured,
+    },
+    {
+      id: 'trading',
+      label: 'Start trading',
+      description: 'Enable auto-trading on any ready portfolio.',
+      completed: hasTradingEnabled,
+    },
+  ];
+
+  const allStepsComplete = quickStartSteps.every((step) => step.completed);
+  const showQuickStart = !allStepsComplete && !checklistDismissed;
+  const isEmptyState = portfolios.length === 0;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between mb-8">
@@ -154,7 +283,64 @@ export default function PortfolioListPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      {showQuickStart && (
+        <QuickStartChecklist
+          steps={quickStartSteps}
+          onDismiss={handleDismissChecklist}
+          onRefresh={hasAnyPosition ? handleRefreshChecklist : undefined}
+          isRefreshing={checkingAnchors}
+        />
+      )}
+
+      {isEmptyState ? (
+        <div className="rounded-3xl border border-dashed border-gray-200 bg-white px-8 py-12 text-center shadow-sm">
+          <Briefcase className="mx-auto mb-4 h-14 w-14 text-gray-300" />
+          <h2 className="text-2xl font-bold text-gray-900">You don't have any portfolios yet</h2>
+          <p className="mx-auto mt-2 max-w-2xl text-sm text-gray-600">
+            Portfolios bundle your guardrail rules, available cash, and the positions you want to automate.
+            Start with one, then add more as you grow confidence in the workflow.
+          </p>
+          <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+            <button
+              onClick={handleCreate}
+              className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-primary-700"
+            >
+              <Plus className="h-4 w-4" />
+              Create your first portfolio
+            </button>
+            <Link to="/" className="text-sm font-semibold text-primary-700 hover:text-primary-800">
+              Preview the workspace
+            </Link>
+          </div>
+
+          <div className="mt-10 grid gap-4 text-left sm:grid-cols-2">
+            {[
+              {
+                title: '1. Create a portfolio',
+                description: 'Name it and choose templates for guardrails and market hours.',
+              },
+              {
+                title: '2. Add positions',
+                description: 'Select each ticker with its shares and matching cash allocation.',
+              },
+              {
+                title: '3. Set anchor price',
+                description: 'Lock the reference price to define your rebalance guardrails.',
+              },
+              {
+                title: '4. Start trading',
+                description: 'Enable auto trading to let the robot execute the guardrails.',
+              },
+            ].map((step) => (
+              <div key={step.title} className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4">
+                <p className="text-sm font-semibold text-gray-900">{step.title}</p>
+                <p className="text-sm text-gray-600">{step.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {portfolios.map((portfolio) => {
           const isExpanded = expandedPortfolios.has(portfolio.id);
           const positions = portfolioPositions[portfolio.id] || [];
@@ -294,7 +480,8 @@ export default function PortfolioListPage() {
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
 
       <ConfirmDialog
         isOpen={!!deleteConfirmId}
