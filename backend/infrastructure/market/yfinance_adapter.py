@@ -533,6 +533,44 @@ class YFinanceAdapter(MarketDataRepo):
                 except Exception as e2:
                     print(f"Could not get price from info: {e2}")
 
+                # Final fallback: 5-day daily history (works from cloud IPs when
+                # real-time endpoints are blocked — returns last close, marked stale)
+                try:
+                    print(f"⚠️ Trying 5-day daily history fallback for {ticker}")
+                    daily = yf.Ticker(ticker).history(period="5d", interval="1d")
+                    if not daily.empty:
+                        close_price = float(daily["Close"].iloc[-1])
+                        if close_price > 0:
+                            last_day = daily.index[-1].to_pydatetime()
+                            if last_day.tzinfo is None:
+                                last_day = last_day.replace(tzinfo=self.tz_utc)
+                            else:
+                                last_day = last_day.astimezone(self.tz_utc)
+                            row = daily.iloc[-1]
+                            price_data = PriceData(
+                                ticker=ticker,
+                                price=close_price,
+                                source=PriceSource.PREVIOUS_CLOSE,
+                                timestamp=last_day,
+                                bid=close_price * 0.999,
+                                ask=close_price * 1.001,
+                                volume=int(row.get("Volume", 0)) if row.get("Volume") else None,
+                                last_trade_price=close_price,
+                                last_trade_time=last_day,
+                                is_market_hours=False,
+                                is_fresh=False,
+                                is_inline=False,
+                                open=float(row["Open"]) if not pd.isna(row["Open"]) else None,
+                                high=float(row["High"]) if not pd.isna(row["High"]) else None,
+                                low=float(row["Low"]) if not pd.isna(row["Low"]) else None,
+                                close=close_price,
+                            )
+                            self.storage.store_price_data(ticker, price_data)
+                            print(f"✅ 5-day daily fallback succeeded for {ticker}: ${close_price:.2f} (last close, stale)")
+                            return price_data
+                except Exception as e3:
+                    print(f"⚠️ 5-day daily fallback also failed for {ticker}: {e3}")
+
                 return None
 
             # Get latest data from history
