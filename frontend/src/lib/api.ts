@@ -313,7 +313,7 @@ export const simulationApi = {
         is_market_hours: boolean;
       }>;
     }>(
-      `/market/historical/${ticker}?start_date=${startDate}&end_date=${endDate}&market_hours_only=${marketHoursOnly}`,
+      `/v1/market/historical/${ticker}?start_date=${startDate}&end_date=${endDate}&market_hours_only=${marketHoursOnly}`,
     ),
 };
 
@@ -338,7 +338,7 @@ export const marketApi = {
         warnings: string[];
         rejections: string[];
       };
-    }>(`/market/price/${ticker}`),
+    }>(`/v1/market/price/${ticker}`),
 
   getStatus: () =>
     request<{
@@ -346,7 +346,7 @@ export const marketApi = {
       is_after_hours: boolean;
       next_open: string;
       next_close: string;
-    }>('/market/status'),
+    }>('/v1/market/status'),
 
   getHistoricalData: (
     ticker: string,
@@ -367,7 +367,7 @@ export const marketApi = {
         is_market_hours: boolean;
       }>;
     }>(
-      `/market/historical/${ticker}?start_date=${startDate}&end_date=${endDate}&market_hours_only=${marketHoursOnly}`,
+      `/v1/market/historical/${ticker}?start_date=${startDate}&end_date=${endDate}&market_hours_only=${marketHoursOnly}`,
     ),
 };
 
@@ -429,7 +429,7 @@ export const dividendApi = {
         pay_date: string;
         dps: number;
       };
-    }>(`/dividends/market/${ticker}/info`),
+    }>(`/v1/dividends/market/${ticker}/info`),
 
   getUpcoming: (ticker: string) =>
     request<{
@@ -440,7 +440,7 @@ export const dividendApi = {
         dps: number;
         currency: string;
       }>;
-    }>(`/dividends/market/${ticker}/upcoming`),
+    }>(`/v1/dividends/market/${ticker}/upcoming`),
 
   processExDividend: (tenantId: string, portfolioId: string, positionId: string) =>
     request<{
