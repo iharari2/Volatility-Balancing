@@ -803,14 +803,21 @@ class YFinanceAdapter(MarketDataRepo):
         except YFRateLimitError:
             self.last_error_kind = "provider_unavailable"
             print(f"⚠️ Yahoo Finance rate limit hit for {ticker}")
-            return None
         except Exception as e:
+            print(f"⚠️ yfinance exception for {ticker}: {type(e).__name__}: {e}")
             err_str = str(e).lower()
             if "rate" in err_str or "too many" in err_str or "429" in err_str:
                 self.last_error_kind = "provider_unavailable"
-                print(f"⚠️ Rate-limit-like error for {ticker}: {e}")
-                return None
-            raise
+
+        # All yfinance paths failed — try alternative sources
+        print(f"⚠️ All yfinance paths failed for {ticker}, trying alternatives")
+        stooq_result = self._fetch_via_stooq(ticker)
+        if stooq_result:
+            return stooq_result
+        chart_result = self._fetch_via_chart_api(ticker)
+        if chart_result:
+            return chart_result
+        return None
 
     def get_market_status(self) -> MarketStatus:
         """Get current market status."""
