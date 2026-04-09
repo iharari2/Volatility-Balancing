@@ -112,6 +112,70 @@ class YFinanceAdapter(MarketDataRepo):
                 print(f"⚠️ Chart API fallback failed for {ticker} via {host}: {e}")
         return None
 
+    def _fetch_via_stooq(self, ticker: str) -> Optional[PriceData]:
+        """
+        Fetch last close price from Stooq (stooq.com) — a free financial data site
+        that does NOT block cloud/datacenter IPs, unlike Yahoo Finance.
+        Returns PriceData with is_fresh=False (previous close), or None on failure.
+        Stooq uses a different ticker format: US stocks append '.US' (e.g. ZIM.US).
+        """
+        import csv
+        import io as _io
+
+        current_time = datetime.now(self.tz_utc)
+        # Stooq ticker format: append .US for US-listed equities
+        stooq_symbol = ticker if "." in ticker else f"{ticker}.US"
+        url = f"https://stooq.com/q/d/l/?s={stooq_symbol}&i=d"
+        try:
+            resp = self._session.get(url, timeout=10)
+            resp.raise_for_status()
+            text = resp.text.strip()
+            if not text or "No data" in text:
+                print(f"⚠️ Stooq returned no data for {stooq_symbol}")
+                return None
+            reader = csv.DictReader(_io.StringIO(text))
+            rows = list(reader)
+            if not rows:
+                return None
+            last = rows[-1]
+            price = float(last.get("Close") or last.get("close") or 0)
+            if price <= 0:
+                return None
+            open_ = float(last.get("Open") or last.get("open") or price)
+            high = float(last.get("High") or last.get("high") or price)
+            low = float(last.get("Low") or last.get("low") or price)
+            vol = last.get("Volume") or last.get("volume")
+            volume = int(float(vol)) if vol else None
+            date_str = last.get("Date") or last.get("date") or ""
+            try:
+                last_ts = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=self.tz_utc)
+            except Exception:
+                last_ts = current_time
+            price_data = PriceData(
+                ticker=ticker,
+                price=price,
+                source=PriceSource.PREVIOUS_CLOSE,
+                timestamp=current_time,
+                bid=price * 0.999,
+                ask=price * 1.001,
+                volume=volume,
+                last_trade_price=price,
+                last_trade_time=last_ts,
+                is_market_hours=False,
+                is_fresh=False,
+                is_inline=False,
+                open=open_,
+                high=high,
+                low=low,
+                close=price,
+            )
+            self.storage.store_price_data(ticker, price_data)
+            print(f"✅ Stooq fallback succeeded for {ticker}: ${price:.2f} (last close {date_str})")
+            return price_data
+        except Exception as e:
+            print(f"⚠️ Stooq fallback failed for {ticker}: {e}")
+            return None
+
     def _deterministic_guard(self, ticker: str) -> bool:
         if os.getenv("TICK_DETERMINISTIC", "").lower() in {"1", "true", "yes", "on"}:
             self._logger.warning(
@@ -647,8 +711,12 @@ class YFinanceAdapter(MarketDataRepo):
                 except Exception as e3:
                     print(f"⚠️ 5-day daily fallback also failed for {ticker}: {e3}")
 
-                # Ultimate fallback: direct HTTP to Yahoo Finance chart API
-                # (different endpoint, less blocked on cloud IPs)
+                # Stooq fallback: free data provider that doesn't block cloud IPs
+                stooq_result = self._fetch_via_stooq(ticker)
+                if stooq_result:
+                    return stooq_result
+
+                # Last resort: direct HTTP to Yahoo Finance chart API
                 chart_result = self._fetch_via_chart_api(ticker)
                 if chart_result:
                     return chart_result
