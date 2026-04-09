@@ -1,7 +1,12 @@
+import { useState } from 'react';
 import { X } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useWorkspace } from '../../WorkspaceContext';
+import { useTenantPortfolio } from '../../../../contexts/TenantPortfolioContext';
+import { portfolioApi } from '../../../../lib/api';
 import DetailTabBar from './DetailTabBar';
 import EmptyDetailState from './EmptyDetailState';
+import AddPositionModal from '../../../positions/modals/AddPositionModal';
 import OverviewTab from '../tabs/OverviewTab';
 import TradingTab from '../tabs/TradingTab';
 import EventsTab from '../tabs/EventsTab';
@@ -11,11 +16,48 @@ import OrdersTab from '../tabs/OrdersTab';
 import DividendsTab from '../tabs/DividendsTab';
 
 export default function RightPanel() {
-  const { selectedPosition, positions, activeTab, setSelectedPositionId } = useWorkspace();
+  const { selectedPosition, positions, activeTab, setSelectedPositionId, portfolioId, refreshPositions } = useWorkspace();
+  const { selectedTenantId } = useTenantPortfolio();
+  const [showAddModal, setShowAddModal] = useState(false);
+
+  const handleAddPosition = async (data: {
+    ticker: string;
+    qty: number;
+    dollarValue: number;
+    inputMode: 'qty' | 'dollar';
+    currentPrice: number;
+    startingCash: { currency: string; amount: number };
+  }) => {
+    if (!selectedTenantId || !portfolioId) {
+      toast.error('No portfolio selected');
+      return;
+    }
+    const finalQty = data.inputMode === 'qty' ? data.qty : data.dollarValue / data.currentPrice;
+    const result = await portfolioApi.createPosition(selectedTenantId, portfolioId, {
+      asset: data.ticker,
+      qty: finalQty,
+      anchor_price: data.currentPrice,
+      avg_cost: data.currentPrice,
+      starting_cash: data.startingCash,
+    });
+    setShowAddModal(false);
+    await refreshPositions();
+    if ((result as any).position_id) {
+      setSelectedPositionId((result as any).position_id);
+    }
+    toast.success(`${data.ticker} position added`);
+  };
 
   // No position selected
   if (!selectedPosition) {
-    return <EmptyDetailState hasPositions={positions.length > 0} />;
+    return (
+      <>
+        <EmptyDetailState hasPositions={positions.length > 0} onAddPosition={() => setShowAddModal(true)} />
+        {showAddModal && (
+          <AddPositionModal onClose={() => setShowAddModal(false)} onSave={handleAddPosition} />
+        )}
+      </>
+    );
   }
 
   return (

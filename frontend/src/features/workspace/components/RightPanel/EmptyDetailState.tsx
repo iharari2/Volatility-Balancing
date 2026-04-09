@@ -2,9 +2,10 @@ import { MousePointerClick, TrendingUp } from 'lucide-react';
 
 interface EmptyDetailStateProps {
   hasPositions?: boolean;
+  onAddPosition?: () => void;
 }
 
-export default function EmptyDetailState({ hasPositions = false }: EmptyDetailStateProps) {
+export default function EmptyDetailState({ hasPositions = false, onAddPosition }: EmptyDetailStateProps) {
   return (
     <div className="flex-1 flex items-center justify-center p-8">
       <div className="text-center max-w-md">
@@ -27,6 +28,7 @@ export default function EmptyDetailState({ hasPositions = false }: EmptyDetailSt
             </p>
             <button
               type="button"
+              onClick={onAddPosition}
               className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors"
             >
               Add Position
