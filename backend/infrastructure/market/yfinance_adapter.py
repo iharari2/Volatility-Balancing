@@ -12,7 +12,6 @@ from typing import Optional, Dict, Any, List
 
 import pandas as pd
 import pytz
-import requests
 import yfinance as yf
 from yfinance.exceptions import YFRateLimitError
 
@@ -35,22 +34,11 @@ class YFinanceAdapter(MarketDataRepo):
         self.last_error_kind: Optional[str] = None
         self.last_error: Optional[Exception] = None
         self._logger = logging.getLogger(__name__)
-        # Browser-spoofed session to avoid Yahoo Finance blocking cloud IPs
-        self._session = requests.Session()
-        self._session.headers.update({
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/124.0.0.0 Safari/537.36"
-            ),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-        })
         self._patch_print_once()
 
     def _ticker(self, symbol: str) -> yf.Ticker:
-        """Return a Ticker using the browser-spoofed session (avoids cloud IP blocks)."""
-        return yf.Ticker(symbol, session=self._session)
+        """Return a yfinance Ticker. Let yfinance manage its own session (curl_cffi)."""
+        return yf.Ticker(symbol)
 
     def _fetch_via_chart_api(self, ticker: str) -> Optional[PriceData]:
         """
@@ -64,7 +52,7 @@ class YFinanceAdapter(MarketDataRepo):
             url = f"https://{host}/v8/finance/chart/{ticker}"
             params = {"interval": "1d", "range": "5d", "includePrePost": "false"}
             try:
-                resp = self._session.get(url, params=params, timeout=10)
+                resp = __import__('requests').get(url, params=params, timeout=10)
                 resp.raise_for_status()
                 data = resp.json()
                 result = data.get("chart", {}).get("result")
@@ -90,7 +78,7 @@ class YFinanceAdapter(MarketDataRepo):
                 price_data = PriceData(
                     ticker=ticker,
                     price=price,
-                    source=PriceSource.PREVIOUS_CLOSE,
+                    source=PriceSource.LAST_TRADE,
                     timestamp=current_time,
                     bid=price * 0.999,
                     ask=price * 1.001,
@@ -127,7 +115,7 @@ class YFinanceAdapter(MarketDataRepo):
         stooq_symbol = ticker if "." in ticker else f"{ticker}.US"
         url = f"https://stooq.com/q/d/l/?s={stooq_symbol}&i=d"
         try:
-            resp = self._session.get(url, timeout=10)
+            resp = __import__('requests').get(url, timeout=10)
             resp.raise_for_status()
             text = resp.text.strip()
             if not text or "No data" in text:
@@ -154,7 +142,7 @@ class YFinanceAdapter(MarketDataRepo):
             price_data = PriceData(
                 ticker=ticker,
                 price=price,
-                source=PriceSource.PREVIOUS_CLOSE,
+                source=PriceSource.LAST_TRADE,
                 timestamp=current_time,
                 bid=price * 0.999,
                 ask=price * 1.001,
@@ -690,7 +678,7 @@ class YFinanceAdapter(MarketDataRepo):
                             price_data = PriceData(
                                 ticker=ticker,
                                 price=close_price,
-                                source=PriceSource.PREVIOUS_CLOSE,
+                                source=PriceSource.LAST_TRADE,
                                 timestamp=last_day,
                                 bid=close_price * 0.999,
                                 ask=close_price * 1.001,
