@@ -1,8 +1,12 @@
 import { useState } from 'react';
 import { Search, Plus, RefreshCw } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useWorkspace } from '../../WorkspaceContext';
+import { useTenantPortfolio } from '../../../../contexts/TenantPortfolioContext';
+import { portfolioApi } from '../../../../lib/api';
 import PositionCellItem from './PositionCellItem';
 import LoadingSpinner from '../../../../components/shared/LoadingSpinner';
+import AddPositionModal from '../../../positions/modals/AddPositionModal';
 
 export default function PositionCellList() {
   const {
@@ -13,9 +17,42 @@ export default function PositionCellList() {
     searchQuery,
     setSearchQuery,
     refreshPositions,
+    portfolioId,
   } = useWorkspace();
+  const { selectedTenantId } = useTenantPortfolio();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+
+  const handleAddPosition = async (data: {
+    ticker: string;
+    qty: number;
+    dollarValue: number;
+    inputMode: 'qty' | 'dollar';
+    currentPrice: number;
+    startingCash: { currency: string; amount: number };
+  }) => {
+    if (!selectedTenantId || !portfolioId) {
+      toast.error('No portfolio selected');
+      return;
+    }
+    const finalQty =
+      data.inputMode === 'qty' ? data.qty : data.dollarValue / data.currentPrice;
+    const result = await portfolioApi.createPosition(selectedTenantId, portfolioId, {
+      asset: data.ticker,
+      qty: finalQty,
+      anchor_price: data.currentPrice,
+      avg_cost: data.currentPrice,
+      starting_cash: data.startingCash,
+    });
+    setShowAddModal(false);
+    await refreshPositions();
+    // Auto-select the new position
+    if ((result as any).position_id) {
+      setSelectedPositionId((result as any).position_id);
+    }
+    toast.success(`${data.ticker} position added`);
+  };
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -78,12 +115,21 @@ export default function PositionCellList() {
       <div className="p-4 border-t border-gray-200">
         <button
           type="button"
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-primary-600 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors"
+          onClick={() => setShowAddModal(true)}
+          disabled={!portfolioId}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-primary-600 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Plus className="h-4 w-4" />
           Add Position
         </button>
       </div>
+
+      {showAddModal && (
+        <AddPositionModal
+          onClose={() => setShowAddModal(false)}
+          onSave={handleAddPosition}
+        />
+      )}
     </div>
   );
 }
