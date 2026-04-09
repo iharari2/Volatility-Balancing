@@ -612,9 +612,16 @@ class YFinanceAdapter(MarketDataRepo):
 
             return price_data
 
+        except YFRateLimitError:
+            self.last_error_kind = "provider_unavailable"
+            print(f"⚠️ Yahoo Finance rate limit hit for {ticker}")
+            return None
         except Exception as e:
-            if isinstance(e, YFRateLimitError):
-                raise
+            err_str = str(e).lower()
+            if "rate" in err_str or "too many" in err_str or "429" in err_str:
+                self.last_error_kind = "provider_unavailable"
+                print(f"⚠️ Rate-limit-like error for {ticker}: {e}")
+                return None
             raise
 
     def get_market_status(self) -> MarketStatus:

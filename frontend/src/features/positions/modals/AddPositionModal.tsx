@@ -36,6 +36,7 @@ export default function AddPositionModal({ onClose, onSave }: AddPositionModalPr
   const [cash, setCash] = useState(0);
   const [cashCurrency, setCashCurrency] = useState('USD');
   const [loading, setLoading] = useState(false);
+  const [priceFetchFailed, setPriceFetchFailed] = useState(false);
   // Store ticker in ref to avoid React re-renders during typing
   const tickerRef = useRef('');
   const tickerInputRef = useRef<HTMLInputElement>(null);
@@ -104,20 +105,24 @@ export default function AddPositionModal({ onClose, onSave }: AddPositionModalPr
         const data = await marketApi.getPrice(sanitizedTicker);
         console.log(`${callId} Price fetched successfully:`, data.price);
         setCurrentPrice(data.price);
+        setPriceFetchFailed(false);
       } catch (err: any) {
         const errorMessage = err?.message || 'Failed to fetch price';
         const status = err?.status;
         console.error(`${callId} Price fetch failed:`, err);
         if (status === 404) {
-          toast.error(`No market data found for ${sanitizedTicker}`);
+          toast.error(`No market data found for ${sanitizedTicker} — enter price manually below`);
+          setPriceFetchFailed(true);
         } else if (status === 503) {
-          toast.error('Market data provider unavailable. Try again.');
+          toast.error('Market data provider unavailable — enter price manually below');
+          setPriceFetchFailed(true);
         } else if (err instanceof TypeError || errorMessage.includes('Failed to fetch')) {
           toast.error('Backend not reachable (check server/proxy).');
         } else {
           toast.error(errorMessage);
+          setPriceFetchFailed(true);
         }
-      setCurrentPrice(0);
+        setCurrentPrice(0);
       } finally {
         setLoading(false);
       }
@@ -234,10 +239,27 @@ export default function AddPositionModal({ onClose, onSave }: AddPositionModalPr
                       {loading ? 'Loading...' : 'Get Price'}
                     </button>
                   </div>
-                  {currentPrice > 0 && (
+                  {currentPrice > 0 && !priceFetchFailed && (
                     <p className="mt-1 text-sm text-gray-500">
                       Current price: ${currentPrice.toFixed(2)}
                     </p>
+                  )}
+                  {priceFetchFailed && (
+                    <div className="mt-2">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Enter price manually
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={currentPrice || ''}
+                        onChange={(e) => {
+                          setCurrentPrice(Number(e.target.value));
+                        }}
+                        className="block w-full rounded-md border border-amber-300 bg-amber-50 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-3 py-2"
+                        placeholder="e.g. 25.50"
+                      />
+                    </div>
                   )}
                 </div>
 
