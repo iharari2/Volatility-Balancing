@@ -1,7 +1,7 @@
 ---
 owner: Development Team
 status: active
-last_updated: 2026-04-09
+last_updated: 2026-04-10
 ---
 
 # Volatility Balancing — Development Plan

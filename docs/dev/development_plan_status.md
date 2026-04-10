@@ -1,6 +1,6 @@
 # Development Plan Status
 
-**Last Updated**: 2026-04-09 (post-Iteration 28)
+**Last Updated**: 2026-04-10 (post-Iteration 29)
 
 > Iteration details are summarized in [`unified_development_plan.md`](unified_development_plan.md).
 > This file tracks per-commit specifics for reference.
@@ -44,3 +44,4 @@
 | 26 | Real-time Data UI Indicators | — | `MarketDataBadge` component; freshness dot + source chip + elapsed timer; wired into OverviewTab, TradingTab, WorkspaceTopBar |
 | 27 | Fly.io Migration | `0074885`–`5f6afb9` | Dockerfile, fly.toml, Neon DB, Cloudflare Pages frontend, CI/CD via flyctl; CORS + lint fixes |
 | 28 | User Management Console | — | `GET|PATCH /v1/admin/users`; owner-only guard; AdminUsersPage; Admin nav section in sidebar; `set-role` CLI |
+| 29 | Dashboard + Position Detail UX Redesign | `1cd548e` | New DashboardPage (KPI cards, positions table, allocation needle bar); PositionDetailPageV2 (combo chart dual-axis, trade markers, anchor/trigger lines); AllocationNeedleBar component; performance API endpoint; extended PositionSummaryItem; commission default 0.01%; guardrail defaults 25%/75%; cockpit.ts URL fix |
