@@ -268,7 +268,7 @@ class PortfolioConfigModel(Base):
     min_stock_pct: Mapped[float] = mapped_column(Float, nullable=False, default=25.0)
     max_stock_pct: Mapped[float] = mapped_column(Float, nullable=False, default=75.0)
     max_trade_pct_of_position: Mapped[float | None] = mapped_column(Float, nullable=True)
-    commission_rate_pct: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    commission_rate_pct: Mapped[float] = mapped_column(Float, nullable=False, default=0.01)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)

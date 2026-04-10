@@ -23,10 +23,10 @@ class PortfolioConfigRepo(Protocol):
         portfolio_id: str,
         trigger_up_pct: float = 3.0,
         trigger_down_pct: float = -3.0,
-        min_stock_pct: float = 20.0,
-        max_stock_pct: float = 80.0,
+        min_stock_pct: float = 25.0,
+        max_stock_pct: float = 75.0,
         max_trade_pct_of_position: Optional[float] = None,
-        commission_rate_pct: float = 0.0,
+        commission_rate_pct: float = 0.01,
     ) -> PortfolioConfig:
         """Create a new configuration record."""
         ...

@@ -19,7 +19,7 @@ export default function PositionCellList() {
     refreshPositions,
     portfolioId,
   } = useWorkspace();
-  const { selectedTenantId } = useTenantPortfolio();
+  const { selectedTenantId, refreshPortfolios } = useTenantPortfolio();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -47,6 +47,7 @@ export default function PositionCellList() {
     });
     setShowAddModal(false);
     await refreshPositions();
+    await refreshPortfolios();
     // Auto-select the new position
     if ((result as any).position_id) {
       setSelectedPositionId((result as any).position_id);

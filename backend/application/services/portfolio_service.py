@@ -1191,10 +1191,10 @@ class PortfolioService:
             "config_effective": {
                 "trigger_up_pct": config.trigger_up_pct if config else 3.0,
                 "trigger_down_pct": config.trigger_down_pct if config else -3.0,
-                "min_stock_pct": config.min_stock_pct if config else 20.0,
-                "max_stock_pct": config.max_stock_pct if config else 80.0,
+                "min_stock_pct": config.min_stock_pct if config else 25.0,
+                "max_stock_pct": config.max_stock_pct if config else 75.0,
                 "max_trade_pct_of_position": config.max_trade_pct_of_position if config else None,
-                "commission_rate_pct": config.commission_rate_pct if config else 0.0,
+                "commission_rate_pct": config.commission_rate_pct if config else 0.01,
             },
             "kpis": {
                 "total_value": total_value,
