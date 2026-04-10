@@ -14,6 +14,10 @@ import LoginPage from './pages/LoginPage';
 // New Workspace (Master-Detail Layout)
 import PositionWorkspacePage from './features/workspace/PositionWorkspacePage';
 
+// New Dashboard + Position Detail
+import DashboardPage from './features/dashboard/DashboardPage';
+import PositionDetailPageV2 from './features/positions/PositionDetailPageV2';
+
 // Feature pages
 import PortfolioListPage from './features/portfolios/PortfolioListPage';
 import PortfolioOverviewPage from './features/portfolios/PortfolioOverviewPage';
@@ -48,8 +52,11 @@ function App() {
                     <OptimizationProvider>
                       <ErrorBoundary>
                         <Routes>
-                          {/* Position Workspace (Master-Detail Layout) - Default route */}
-                          <Route path="/" element={<PositionWorkspacePage />} />
+                          {/* Dashboard - Default route */}
+                          <Route path="/" element={<DashboardPage />} />
+                          {/* Position Detail */}
+                          <Route path="/positions/:positionId" element={<PositionDetailPageV2 />} />
+                          {/* Legacy Workspace */}
                           <Route path="/workspace" element={<PositionWorkspacePage />} />
 
                           {/* Standalone pages with PageLayout */}

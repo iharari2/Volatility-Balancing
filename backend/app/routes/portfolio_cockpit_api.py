@@ -68,18 +68,35 @@ class PortfolioListItem(BaseModel):
     updated_at: str
 
 
+class LastAction(BaseModel):
+    action: Optional[str]
+    timestamp: Optional[str]
+    reason: Optional[str]
+
+
 class PositionSummaryItem(BaseModel):
     position_id: str
     asset_symbol: str
     qty: float
     cash: float
     last_price: Optional[float]
+    anchor_price: Optional[float]
+    avg_cost: Optional[float]
     stock_value: float
     total_value: float
     stock_pct: Optional[float]
     position_vs_baseline_pct: Optional[float]
     stock_vs_baseline_pct: Optional[float]
     status: Optional[str]
+    # Guardrails
+    guardrail_min_pct: Optional[float]
+    guardrail_max_pct: Optional[float]
+    # Trigger distance from anchor (positive = above anchor, negative = below)
+    pct_from_anchor: Optional[float]
+    trigger_up_pct: Optional[float]
+    trigger_down_pct: Optional[float]
+    # Last robot action
+    last_action: Optional[LastAction]
 
 
 class PositionSummaryDetail(BaseModel):
@@ -186,6 +203,59 @@ def list_positions_for_portfolio(
             total_value = position.cash + stock_value
             stock_pct = (stock_value / total_value * 100) if total_value > 0 else None
 
+            # Guardrail config
+            guardrail_min_pct: Optional[float] = None
+            guardrail_max_pct: Optional[float] = None
+            trigger_up_pct: Optional[float] = None
+            trigger_down_pct: Optional[float] = None
+            try:
+                from app.di import container as _c
+                pos_gc = _c.config.get_guardrail_config(position.id)
+                if pos_gc:
+                    guardrail_min_pct = float(pos_gc.min_stock_pct) * 100
+                    guardrail_max_pct = float(pos_gc.max_stock_pct) * 100
+                else:
+                    cfg = portfolio_service._portfolio_config_repo.get(
+                        tenant_id=tenant_id, portfolio_id=portfolio_id
+                    )
+                    if cfg:
+                        guardrail_min_pct = cfg.min_stock_pct
+                        guardrail_max_pct = cfg.max_stock_pct
+                        trigger_up_pct = cfg.trigger_up_pct
+                        trigger_down_pct = cfg.trigger_down_pct
+            except Exception:
+                pass
+
+            # Trigger distance from anchor
+            anchor = position.anchor_price or position.avg_cost
+            pct_from_anchor: Optional[float] = None
+            if anchor and anchor > 0 and price:
+                pct_from_anchor = (price / anchor - 1) * 100
+
+            # Last robot action from evaluation timeline
+            last_action_obj: Optional[LastAction] = None
+            try:
+                from app.di import container as _c2
+                if hasattr(_c2, "evaluation_timeline"):
+                    rows = _c2.evaluation_timeline.list_by_position(
+                        tenant_id=tenant_id,
+                        portfolio_id=portfolio_id,
+                        position_id=position.id,
+                        mode="LIVE",
+                        start_date=None,
+                        end_date=None,
+                        limit=1,
+                    )
+                    if rows:
+                        r = rows[0]
+                        last_action_obj = LastAction(
+                            action=r.get("action"),
+                            timestamp=_to_iso(r.get("timestamp")),
+                            reason=r.get("reason") or r.get("action_reason"),
+                        )
+            except Exception:
+                pass
+
             results.append(
                 PositionSummaryItem(
                     position_id=position.id,
@@ -193,12 +263,20 @@ def list_positions_for_portfolio(
                     qty=position.qty,
                     cash=position.cash,
                     last_price=price,
+                    anchor_price=position.anchor_price,
+                    avg_cost=position.avg_cost,
                     stock_value=stock_value,
                     total_value=total_value,
                     stock_pct=stock_pct,
                     position_vs_baseline_pct=cockpit.get("position_vs_baseline", {}).get("pct"),
                     stock_vs_baseline_pct=cockpit.get("stock_vs_baseline", {}).get("pct"),
                     status=cockpit.get("trading_status"),
+                    guardrail_min_pct=guardrail_min_pct,
+                    guardrail_max_pct=guardrail_max_pct,
+                    pct_from_anchor=pct_from_anchor,
+                    trigger_up_pct=trigger_up_pct,
+                    trigger_down_pct=trigger_down_pct,
+                    last_action=last_action_obj,
                 )
             )
 

@@ -8,18 +8,32 @@ export interface PortfolioListItem {
   updated_at: string;
 }
 
+export interface LastAction {
+  action: string | null;
+  timestamp: string | null;
+  reason: string | null;
+}
+
 export interface PositionSummaryItem {
   position_id: string;
   asset_symbol: string;
   qty: number;
   cash: number;
   last_price: number | null;
+  anchor_price: number | null;
+  avg_cost: number | null;
   stock_value: number;
   total_value: number;
   stock_pct: number | null;
   position_vs_baseline_pct: number | null;
   stock_vs_baseline_pct: number | null;
   status?: string | null;
+  guardrail_min_pct: number | null;
+  guardrail_max_pct: number | null;
+  pct_from_anchor: number | null;
+  trigger_up_pct: number | null;
+  trigger_down_pct: number | null;
+  last_action: LastAction | null;
 }
 
 export interface CockpitResponse {

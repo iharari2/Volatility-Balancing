@@ -37,6 +37,7 @@ from app.routes.monitoring import router as monitoring_router
 from app.routes.broker_status import router as broker_status_router
 from app.routes.auth import router as auth_router
 from app.routes.admin import router as admin_router
+from app.routes.position_performance import router as position_performance_router
 from application.services.trading_worker import start_trading_worker, stop_trading_worker
 
 API_PREFIX = "/v1"
@@ -162,6 +163,7 @@ def create_app(enable_trading_worker: bool | None = None) -> FastAPI:
     app.include_router(explainability_sim_router)
     app.include_router(monitoring_router)
     app.include_router(broker_status_router)
+    app.include_router(position_performance_router)
 
     def __sync_ping() -> dict[str, bool]:
         return {"ok": True}
