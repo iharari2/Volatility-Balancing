@@ -27,8 +27,8 @@ const ExcelExportPage: React.FC = () => {
   const [selectedSimulation, setSelectedSimulation] = useState<string>('');
   const [isLoadingSimulations, setIsLoadingSimulations] = useState(false);
 
-  const API_BASE = '/api/excel'; // Use proxy
-  const SIMULATIONS_API = '/api/simulations'; // Use proxy
+  const API_BASE = (import.meta.env.VITE_API_BASE_URL || '') + '/api/excel';
+  const SIMULATIONS_API = (import.meta.env.VITE_API_BASE_URL || '') + '/api/simulations';
 
   // Load available simulations
   const loadSimulations = async () => {
