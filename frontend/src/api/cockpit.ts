@@ -1,4 +1,4 @@
-const API_BASE = '/api/portfolios';
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '') + '/api/portfolios';
 
 export interface PortfolioListItem {
   id: string;
