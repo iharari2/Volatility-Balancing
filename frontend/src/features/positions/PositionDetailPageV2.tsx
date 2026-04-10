@@ -4,11 +4,13 @@ import {
   ComposedChart, Line, Scatter, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, ReferenceLine, Brush,
 } from 'recharts';
-import { ArrowLeft, RefreshCw } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Moon, Sun } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { WorkspaceProvider, useWorkspace } from '../workspace/WorkspaceContext';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import { getPositionPerformance, type PerformanceData } from '../../api/performance';
+import { getPositionCockpit, type CockpitResponse } from '../../api/cockpit';
+import { portfolioScopedApi, type PortfolioConfig } from '../../services/portfolioScopedApi';
 import AllocationNeedleBar from '../../components/shared/AllocationNeedleBar';
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
 import StrategyTab from '../workspace/components/tabs/StrategyTab';
@@ -36,6 +38,113 @@ function fmtTs(ts: string) {
 function fmtTsShort(ts: string) {
   const d = new Date(ts);
   return d.toLocaleString('en-US', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+// ── Market snapshot bar ───────────────────────────────────────────────────────
+
+type SessionLabel = 'OPEN' | 'PRE' | 'AH' | 'CLOSED' | 'UNKNOWN';
+
+function sessionFromPolicy(policy: string | null | undefined): SessionLabel {
+  if (!policy) return 'UNKNOWN';
+  const p = policy.toUpperCase();
+  if (p.includes('AFTER') || p.includes('AH')) return 'AH';
+  if (p.includes('PRE')) return 'PRE';
+  if (p.includes('OPEN') || p.includes('REG') || p.includes('REGULAR')) return 'OPEN';
+  if (p.includes('CLOSE')) return 'CLOSED';
+  return 'UNKNOWN';
+}
+
+const SESSION_STYLES: Record<SessionLabel, string> = {
+  OPEN:    'bg-green-100 text-green-700',
+  PRE:     'bg-blue-100 text-blue-700',
+  AH:      'bg-violet-100 text-violet-700',
+  CLOSED:  'bg-gray-100 text-gray-500',
+  UNKNOWN: 'bg-gray-100 text-gray-400',
+};
+
+function MarketSnapshotBar({ cockpit, afterHoursEnabled, onToggleAfterHours, toggling }: {
+  cockpit: CockpitResponse | null;
+  afterHoursEnabled: boolean;
+  onToggleAfterHours: () => void;
+  toggling: boolean;
+}) {
+  const q = cockpit?.recent_quotes?.[0] ?? null;
+  const session: SessionLabel = sessionFromPolicy(q?.price_policy);
+  const effectivePrice = q?.effective_price ?? null;
+  const closePrice = q?.close ?? null;
+  const extendedMove = (effectivePrice != null && closePrice != null && session !== 'OPEN')
+    ? effectivePrice - closePrice : null;
+  const extendedMovePct = (extendedMove != null && closePrice && closePrice !== 0)
+    ? (extendedMove / closePrice) * 100 : null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 px-4 py-2.5 bg-slate-50 border-t border-gray-100 text-xs">
+
+      {/* Session badge */}
+      <div className="flex items-center gap-1.5">
+        <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${SESSION_STYLES[session]}`}>
+          {session === 'AH' ? 'After-Hours' : session === 'PRE' ? 'Pre-Market' : session === 'OPEN' ? 'Market Open' : session === 'CLOSED' ? 'Closed' : '—'}
+        </span>
+      </div>
+
+      {/* Effective price (AH/PRE only) */}
+      {effectivePrice != null && session !== 'OPEN' && (
+        <div className="flex items-center gap-1.5">
+          <span className="text-gray-400 text-[10px] uppercase font-semibold">Effective</span>
+          <span className="font-bold text-slate-800">${effectivePrice.toFixed(2)}</span>
+          {extendedMovePct != null && (
+            <span className={`text-[10px] font-semibold ${extendedMovePct >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+              ({extendedMovePct >= 0 ? '+' : ''}{extendedMovePct.toFixed(2)}% ext)
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* OHLC */}
+      {q && (
+        <div className="flex items-center gap-3 text-gray-500">
+          {[
+            { l: 'O', v: q.open },
+            { l: 'H', v: q.high },
+            { l: 'L', v: q.low },
+            { l: 'C', v: q.close },
+          ].map(({ l, v }) => v != null && (
+            <span key={l}>
+              <span className="text-gray-400 font-semibold">{l} </span>
+              <span className="font-semibold text-slate-700">${v.toFixed(2)}</span>
+            </span>
+          ))}
+          {q.volume != null && (
+            <span className="text-gray-400">
+              Vol {(q.volume / 1_000_000).toFixed(1)}M
+            </span>
+          )}
+        </div>
+      )}
+
+      {!q && <span className="text-gray-400 italic">No market data available</span>}
+
+      {/* After-hours toggle */}
+      <div className="ml-auto flex items-center gap-2">
+        <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">After-hours trading</span>
+        <button
+          onClick={onToggleAfterHours}
+          disabled={toggling}
+          title={afterHoursEnabled ? 'Disable after-hours trading' : 'Enable after-hours trading'}
+          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${
+            afterHoursEnabled ? 'bg-violet-500' : 'bg-gray-300'
+          }`}
+        >
+          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+            afterHoursEnabled ? 'translate-x-4' : 'translate-x-0.5'
+          }`} />
+        </button>
+        {afterHoursEnabled
+          ? <Moon className="h-3.5 w-3.5 text-violet-500" />
+          : <Sun className="h-3.5 w-3.5 text-amber-400" />}
+      </div>
+    </div>
+  );
 }
 
 // ── Chart ─────────────────────────────────────────────────────────────────────
@@ -221,11 +330,17 @@ function PerformanceChart({ data, window, onWindowChange }:
 
 // ── Position header ───────────────────────────────────────────────────────────
 
-function PositionHeader({ position }: { position: ReturnType<typeof useWorkspace>['selectedPosition'] }) {
+function PositionHeader({ position, cockpit, afterHoursEnabled, onToggleAfterHours, toggling }: {
+  position: ReturnType<typeof useWorkspace>['selectedPosition'];
+  cockpit: CockpitResponse | null;
+  afterHoursEnabled: boolean;
+  onToggleAfterHours: () => void;
+  toggling: boolean;
+}) {
   if (!position) return null;
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4">
-      <div className="flex items-start justify-between">
+    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div className="flex items-start justify-between p-4">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-black text-slate-900">{position.asset_symbol}</h1>
@@ -252,7 +367,7 @@ function PositionHeader({ position }: { position: ReturnType<typeof useWorkspace
       </div>
 
       {/* Stat chips */}
-      <div className="flex flex-wrap gap-4 mt-4 pt-4 border-t border-gray-100">
+      <div className="flex flex-wrap gap-4 px-4 pb-4 pt-0 border-b border-gray-100">
         {[
           { label: 'Total Value', value: fmt$(position.total_value), sub: 'stock + cash' },
           { label: 'Stock Value', value: fmt$(position.stock_value), sub: `${position.qty.toFixed(4)} shares` },
@@ -267,6 +382,14 @@ function PositionHeader({ position }: { position: ReturnType<typeof useWorkspace
           </div>
         ))}
       </div>
+
+      {/* Market snapshot + after-hours toggle */}
+      <MarketSnapshotBar
+        cockpit={cockpit}
+        afterHoursEnabled={afterHoursEnabled}
+        onToggleAfterHours={onToggleAfterHours}
+        toggling={toggling}
+      />
     </div>
   );
 }
@@ -341,6 +464,10 @@ function PositionDetailInner() {
   const [perfWindow, setPerfWindow] = useState('7d');
   const [perfData, setPerfData] = useState<PerformanceData | null>(null);
   const [perfLoading, setPerfLoading] = useState(false);
+  const [cockpit, setCockpit] = useState<CockpitResponse | null>(null);
+  const [afterHoursEnabled, setAfterHoursEnabled] = useState(false);
+  const [currentConfig, setCurrentConfig] = useState<PortfolioConfig | null>(null);
+  const [toggling, setToggling] = useState(false);
 
   // Sync selected position from URL
   useEffect(() => {
@@ -361,7 +488,43 @@ function PositionDetailInner() {
     }
   };
 
+  // Load cockpit (market snapshot) + portfolio config (after-hours setting)
+  const loadMeta = async () => {
+    if (!ctxPortfolioId || !positionId || !selectedTenantId) return;
+    try {
+      const [ck, cfg] = await Promise.all([
+        getPositionCockpit(ctxPortfolioId, positionId, '1d'),
+        portfolioScopedApi.getConfig(selectedTenantId, ctxPortfolioId),
+      ]);
+      setCockpit(ck);
+      setCurrentConfig(cfg);
+      setAfterHoursEnabled(cfg.market_hours_policy === 'market-plus-after-hours');
+    } catch (e) {
+      console.error('Failed to load cockpit/config', e);
+    }
+  };
+
   useEffect(() => { loadPerf(); }, [positionId, ctxPortfolioId, selectedTenantId, perfWindow]);
+  useEffect(() => { loadMeta(); }, [positionId, ctxPortfolioId, selectedTenantId]);
+
+  const handleToggleAfterHours = async () => {
+    if (!selectedTenantId || !ctxPortfolioId || !currentConfig) return;
+    setToggling(true);
+    const newPolicy = afterHoursEnabled ? 'market-open-only' : 'market-plus-after-hours';
+    try {
+      await portfolioScopedApi.updateConfig(selectedTenantId, ctxPortfolioId, {
+        ...currentConfig,
+        market_hours_policy: newPolicy,
+      });
+      setAfterHoursEnabled(!afterHoursEnabled);
+      setCurrentConfig({ ...currentConfig, market_hours_policy: newPolicy });
+      toast.success(`After-hours trading ${newPolicy === 'market-plus-after-hours' ? 'enabled' : 'disabled'}`);
+    } catch (e) {
+      toast.error('Failed to update after-hours setting');
+    } finally {
+      setToggling(false);
+    }
+  };
 
   const tabs: { id: DetailTab; label: string }[] = [
     { id: 'chart', label: 'Performance' },
@@ -442,7 +605,13 @@ function PositionDetailInner() {
             <div className="text-center text-gray-400 py-12">Position not found</div>
           ) : (
             <>
-              <PositionHeader position={selectedPosition} />
+              <PositionHeader
+                position={selectedPosition}
+                cockpit={cockpit}
+                afterHoursEnabled={afterHoursEnabled}
+                onToggleAfterHours={handleToggleAfterHours}
+                toggling={toggling}
+              />
 
               {/* Two-column: chart+tabs | right column */}
               <div className="grid grid-cols-[1fr_280px] gap-3">

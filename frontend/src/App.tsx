@@ -23,7 +23,6 @@ import PortfolioListPage from './features/portfolios/PortfolioListPage';
 import PortfolioOverviewPage from './features/portfolios/PortfolioOverviewPage';
 import PositionsAndConfigPage from './features/positions/PositionsAndConfigPage';
 import PositionDetailPage from './features/positions/PositionDetailPage';
-import TradeCockpitPage from './features/trading/TradeCockpitPage';
 import SimulationLabPage from './features/simulation/SimulationLabPage';
 import AnalyticsPage from './features/analytics/AnalyticsPage';
 import MonitoringPage from './features/monitoring/MonitoringPage';
@@ -124,13 +123,10 @@ function App() {
                               </PageLayout>
                             }
                           />
+                          {/* Trade cockpit folded into Position Detail */}
                           <Route
                             path="/trade/:portfolioId/position/:positionId"
-                            element={
-                              <PageLayout mode={mode}>
-                                <TradeCockpitPage />
-                              </PageLayout>
-                            }
+                            element={<Navigate to="/" replace />}
                           />
                           <Route
                             path="/analytics"
