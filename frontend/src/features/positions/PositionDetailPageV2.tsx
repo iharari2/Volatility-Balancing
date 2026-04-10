@@ -11,7 +11,6 @@ import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import { getPositionPerformance, type PerformanceData } from '../../api/performance';
 import AllocationNeedleBar from '../../components/shared/AllocationNeedleBar';
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
-import PositionCellList from '../workspace/components/LeftPanel/PositionCellList';
 import StrategyTab from '../workspace/components/tabs/StrategyTab';
 import EventsTab from '../workspace/components/tabs/EventsTab';
 import OrdersTab from '../workspace/components/tabs/OrdersTab';
@@ -389,12 +388,49 @@ function PositionDetailInner() {
 
       <div className="flex-1 flex overflow-hidden">
 
-        {/* Left: compact position list */}
-        <div className="w-52 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col">
-          <div className="px-3 py-2 border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-wide">
+        {/* Left: compact position nav */}
+        <div className="w-52 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col overflow-y-auto">
+          <div className="px-3 py-2 border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-wide flex-shrink-0">
             Positions
           </div>
-          <PositionCellList />
+          {positions.map((p) => {
+            const isActive = p.position_id === positionId;
+            const pnlColor = p.position_vs_baseline_pct == null ? 'text-gray-400'
+              : p.position_vs_baseline_pct >= 0 ? 'text-green-600' : 'text-red-500';
+            return (
+              <button
+                key={p.position_id}
+                onClick={() => navigate(`/positions/${p.position_id}?portfolio=${ctxPortfolioId}`)}
+                className={`w-full text-left px-3 py-2.5 border-b border-gray-100 transition-colors ${
+                  isActive ? 'bg-indigo-50 border-l-[3px] border-l-indigo-500' : 'hover:bg-slate-50 border-l-[3px] border-l-transparent'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-sm text-slate-900">{p.asset_symbol}</span>
+                  <span className={`text-xs font-semibold ${pnlColor}`}>
+                    {p.position_vs_baseline_pct != null ? fmtPct(p.position_vs_baseline_pct) : '—'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-gray-500 mb-1.5">
+                  <span>${p.total_value.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                  <span className={`px-1 rounded text-[9px] font-bold ${p.status === 'RUNNING' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                    {p.status ?? 'UNKNOWN'}
+                  </span>
+                </div>
+                {/* mini allocation bar */}
+                <div className="h-1 bg-red-100 rounded-full relative overflow-hidden">
+                  {p.guardrail_min_pct != null && p.guardrail_max_pct != null && (
+                    <div className="absolute top-0 bottom-0 bg-violet-200 rounded-full"
+                      style={{ left: `${p.guardrail_min_pct}%`, width: `${p.guardrail_max_pct - p.guardrail_min_pct}%` }} />
+                  )}
+                  {p.stock_pct != null && (
+                    <div className="absolute top-[-1px] bottom-[-1px] w-[3px] bg-slate-700 rounded"
+                      style={{ left: `${Math.min(Math.max(p.stock_pct, 0), 100)}%`, transform: 'translateX(-50%)' }} />
+                  )}
+                </div>
+              </button>
+            );
+          })}
         </div>
 
         {/* Right: detail */}
