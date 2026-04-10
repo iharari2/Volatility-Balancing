@@ -445,7 +445,7 @@ function PositionDetailInner() {
                   )}
                   {activeTab === 'events' && <EventsTab />}
                   {activeTab === 'orders' && <OrdersTab />}
-                  {activeTab === 'strategy' && <StrategyTab onSave={async () => {}} />}
+                  {activeTab === 'strategy' && <StrategyTab />}
                 </div>
 
                 {/* Right column: allocation + triggers */}
