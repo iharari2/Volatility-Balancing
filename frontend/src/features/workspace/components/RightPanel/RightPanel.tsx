@@ -17,7 +17,7 @@ import DividendsTab from '../tabs/DividendsTab';
 
 export default function RightPanel() {
   const { selectedPosition, positions, activeTab, setSelectedPositionId, portfolioId, refreshPositions } = useWorkspace();
-  const { selectedTenantId } = useTenantPortfolio();
+  const { selectedTenantId, refreshPortfolios } = useTenantPortfolio();
   const [showAddModal, setShowAddModal] = useState(false);
 
   const handleAddPosition = async (data: {
@@ -42,6 +42,7 @@ export default function RightPanel() {
     });
     setShowAddModal(false);
     await refreshPositions();
+    await refreshPortfolios();
     if ((result as any).position_id) {
       setSelectedPositionId((result as any).position_id);
     }
