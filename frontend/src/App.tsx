@@ -128,14 +128,7 @@ function App() {
                             path="/trade/:portfolioId/position/:positionId"
                             element={<Navigate to="/" replace />}
                           />
-                          <Route
-                            path="/analytics"
-                            element={
-                              <PageLayout mode={mode}>
-                                <AnalyticsPage />
-                              </PageLayout>
-                            }
-                          />
+                          <Route path="/analytics" element={<AnalyticsPage />} />
                           <Route
                             path="/monitoring"
                             element={
