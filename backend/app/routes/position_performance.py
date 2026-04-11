@@ -112,7 +112,7 @@ def get_position_performance(
         now = datetime.now(timezone.utc)
         start_ts = now - delta if delta else None
 
-        # ── Pull evaluation timeline rows ────────────────────────────────────
+        # ── Pull evaluation timeline rows (for position value series) ────────
         price_series: List[PricePoint] = []
         value_series: List[ValuePoint] = []
 
@@ -138,18 +138,40 @@ def get_position_performance(
                 ts = _to_iso(r.get("timestamp"))
                 if not ts:
                     continue
-                ep = r.get("effective_price") or r.get("price")
                 tv = r.get("position_total_value_after") or r.get("position_total_value")
-                if ep is not None:
-                    try:
-                        price_series.append(PricePoint(timestamp=ts, price=float(ep)))
-                    except (TypeError, ValueError):
-                        pass
                 if tv is not None:
                     try:
                         value_series.append(ValuePoint(timestamp=ts, value=float(tv)))
                     except (TypeError, ValueError):
                         pass
+
+        # ── Market price series from yfinance (always real market data) ──────
+        try:
+            import yfinance as yf
+            ticker_sym = position.asset_symbol
+            # Map window to yfinance period + interval
+            _yf_params = {
+                "1d":  ("1d",   "5m"),
+                "7d":  ("7d",   "1h"),
+                "30d": ("1mo",  "1d"),
+                "90d": ("3mo",  "1d"),
+                "all": ("max",  "1wk"),
+            }
+            yf_period, yf_interval = _yf_params.get(window, ("1mo", "1d"))
+            hist = yf.Ticker(ticker_sym).history(period=yf_period, interval=yf_interval)
+            if not hist.empty:
+                for idx, row in hist.iterrows():
+                    ts_val = idx
+                    if hasattr(ts_val, 'to_pydatetime'):
+                        ts_val = ts_val.to_pydatetime()
+                    if hasattr(ts_val, 'isoformat'):
+                        ts_iso = ts_val.isoformat()
+                    else:
+                        ts_iso = str(ts_val)
+                    close_price = float(row["Close"])
+                    price_series.append(PricePoint(timestamp=ts_iso, price=close_price))
+        except Exception:
+            pass
 
         # ── Trade markers from orders ────────────────────────────────────────
         trade_markers: List[TradeMarker] = []
