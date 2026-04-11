@@ -11,7 +11,6 @@ import {
   Menu,
   X,
   ChevronDown,
-  TrendingUp,
   LogOut,
   User,
   Users,
@@ -21,8 +20,7 @@ import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import { useAuth } from '../../contexts/AuthContext';
 
 const navigation = [
-  { name: 'Workspace', href: '/', icon: LayoutDashboard },
-  { name: 'Portfolios', href: '/portfolios', icon: Briefcase },
+  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Simulation Lab', href: '/simulation', icon: PlaySquare },
   { name: 'Analytics & Reports', href: '/analytics', icon: BarChart3 },
   { name: 'Optimization', href: '/optimization', icon: FileSearch },
@@ -53,10 +51,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
   const sidebarContent = (
     <div className="flex flex-col flex-grow bg-white border-r border-gray-200 h-full overflow-y-auto">
       <div className="flex h-16 items-center px-6 border-b border-gray-100 flex-shrink-0">
-        <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          <TrendingUp className="h-6 w-6 text-primary-600" />
-          Volatility Balancing
-        </h1>
+        <img src="/logo-horizontal.svg" alt="Volatility Balancing" className="h-9" />
       </div>
 
       {/* Portfolio Selector Section */}

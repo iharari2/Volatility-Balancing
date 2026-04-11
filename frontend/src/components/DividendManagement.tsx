@@ -70,8 +70,9 @@ export default function DividendManagement({ tenantId, portfolioId, positionId, 
     { id: 'upcoming', label: 'Upcoming', icon: Calendar },
   ];
 
-  // Show error state if there are critical errors
-  if (statusError || marketError || upcomingError) {
+  // Only block rendering for non-network errors (data issues are shown inline)
+  const hasFatalError = statusError && !(statusError.message?.includes('404'));
+  if (hasFatalError) {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -82,9 +83,7 @@ export default function DividendManagement({ tenantId, portfolioId, positionId, 
             <AlertCircle className="w-12 h-12 mx-auto text-red-500 mb-4" />
             <h4 className="text-lg font-medium text-gray-900 mb-2">Error Loading Dividend Data</h4>
             <div className="text-sm text-gray-600 space-y-1">
-              {statusError && <p>Position Status Error: {statusError.message}</p>}
-              {marketError && <p>Market Info Error: {marketError.message}</p>}
-              {upcomingError && <p>Upcoming Dividends Error: {upcomingError.message}</p>}
+              {statusError && <p>Status Error: {statusError.message}</p>}
             </div>
             <button
               onClick={() => window.location.reload()}

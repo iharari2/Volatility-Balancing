@@ -38,50 +38,19 @@ export default function StrategyTab() {
         const marketState = await marketHoursService.getMarketState();
         setMarketStatus(marketState.status);
 
-        // Load position-specific config (includes fallback to portfolio config)
-        try {
-          const posConfig = await portfolioScopedApi.getPositionConfig(
-            tenantId,
-            portfolioId,
-            selectedPosition.position_id
-          );
-
-          // The position config endpoint returns the effective config for this position
-          // (position-specific if set, otherwise portfolio defaults)
-          const configValues: PortfolioConfig = {
-            trigger_threshold_up_pct: posConfig.trigger_threshold_up_pct,
-            trigger_threshold_down_pct: posConfig.trigger_threshold_down_pct,
-            min_stock_pct: posConfig.min_stock_pct,
-            max_stock_pct: posConfig.max_stock_pct,
-            max_trade_pct_of_position: posConfig.max_trade_pct_of_position,
-            commission_rate: posConfig.commission_rate,
-            market_hours_policy: posConfig.allow_after_hours ? 'market-plus-after-hours' : 'market-open-only',
-          };
-
-          setConfig(configValues);
-          setIsPositionSpecific(posConfig.is_position_specific);
-
-          // Use position config as effective config (this is what the engine actually uses)
-          setEffectiveConfig({
-            ...configValues,
-            last_updated: new Date().toISOString(),
-            version: 1,
-          });
-        } catch (error) {
-          // Fall back to portfolio-level effective config
-          const effective = await portfolioScopedApi.getEffectiveConfig(tenantId, portfolioId);
-          setEffectiveConfig(effective);
-          setConfig({
-            trigger_threshold_up_pct: effective.trigger_threshold_up_pct,
-            trigger_threshold_down_pct: effective.trigger_threshold_down_pct,
-            min_stock_pct: effective.min_stock_pct,
-            max_stock_pct: effective.max_stock_pct,
-            max_trade_pct_of_position: effective.max_trade_pct_of_position,
-            commission_rate: effective.commission_rate,
-            market_hours_policy: effective.market_hours_policy,
-          });
-          setIsPositionSpecific(false);
-        }
+        // Load portfolio-level config (portfolio is the config scope the backend supports)
+        const effective = await portfolioScopedApi.getEffectiveConfig(tenantId, portfolioId);
+        setEffectiveConfig(effective);
+        setConfig({
+          trigger_threshold_up_pct: effective.trigger_threshold_up_pct,
+          trigger_threshold_down_pct: effective.trigger_threshold_down_pct,
+          min_stock_pct: effective.min_stock_pct,
+          max_stock_pct: effective.max_stock_pct,
+          max_trade_pct_of_position: effective.max_trade_pct_of_position,
+          commission_rate: effective.commission_rate,
+          market_hours_policy: effective.market_hours_policy,
+        });
+        setIsPositionSpecific(false);
       } catch (error) {
         console.error('Error loading config:', error);
         // Set default values
@@ -149,20 +118,8 @@ export default function StrategyTab() {
 
     setSaving(true);
     try {
-      await portfolioScopedApi.updatePositionConfig(
-        tenantId,
-        portfolioId,
-        selectedPosition.position_id,
-        {
-          trigger_threshold_up_pct: config.trigger_threshold_up_pct,
-          trigger_threshold_down_pct: config.trigger_threshold_down_pct,
-          min_stock_pct: config.min_stock_pct,
-          max_stock_pct: config.max_stock_pct,
-          max_trade_pct_of_position: config.max_trade_pct_of_position,
-          commission_rate: config.commission_rate,
-        }
-      );
-      setIsPositionSpecific(true);
+      await portfolioScopedApi.updateConfig(tenantId, portfolioId, config);
+      setIsPositionSpecific(false);
 
       // Update effective config to show the saved values
       // Use the saved config values directly since they are now the effective settings for this position
@@ -228,15 +185,9 @@ export default function StrategyTab() {
       </div>
 
       {/* Position-specific indicator */}
-      <div
-        className={`border rounded-lg p-4 ${
-          isPositionSpecific ? 'bg-success-50 border-success-200' : 'bg-warning-50 border-warning-200'
-        }`}
-      >
-        <p className={`text-sm ${isPositionSpecific ? 'text-success-700' : 'text-warning-700'}`}>
-          {isPositionSpecific
-            ? 'This position has its own strategy settings (independent from portfolio defaults).'
-            : 'Using portfolio-level strategy settings. Save to create position-specific settings.'}
+      <div className="border rounded-lg p-4 bg-blue-50 border-blue-200">
+        <p className="text-sm text-blue-700">
+          These settings apply to all positions in this portfolio. Changes saved here affect the whole portfolio.
         </p>
       </div>
 
