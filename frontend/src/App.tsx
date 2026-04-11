@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useState } from 'react';
 import { Toaster } from 'react-hot-toast';
 import PageLayout from './components/layout/PageLayout';
+import AppShell from './components/layout/AppShell';
 import ErrorBoundary from './components/shared/ErrorBoundary';
 import { ConfigurationProvider } from './contexts/ConfigurationContext';
 import { OptimizationProvider } from './contexts/OptimizationContext';
@@ -58,29 +59,29 @@ function App() {
                           {/* Legacy Workspace */}
                           <Route path="/workspace" element={<PositionWorkspacePage />} />
 
-                          {/* Standalone pages with PageLayout */}
+                          {/* Standalone pages with AppShell (new design) */}
                           <Route
                             path="/simulation"
                             element={
-                              <PageLayout mode={mode}>
+                              <AppShell>
                                 <SimulationLabPage />
-                              </PageLayout>
+                              </AppShell>
                             }
                           />
                           <Route
                             path="/settings"
                             element={
-                              <PageLayout mode={mode}>
+                              <AppShell>
                                 <SettingsPage />
-                              </PageLayout>
+                              </AppShell>
                             }
                           />
                           <Route
                             path="/admin/users"
                             element={
-                              <PageLayout mode={mode}>
+                              <AppShell>
                                 <AdminUsersPage />
-                              </PageLayout>
+                              </AppShell>
                             }
                           />
 
@@ -132,17 +133,17 @@ function App() {
                           <Route
                             path="/monitoring"
                             element={
-                              <PageLayout mode={mode}>
+                              <AppShell>
                                 <MonitoringPage />
-                              </PageLayout>
+                              </AppShell>
                             }
                           />
                           <Route
                             path="/optimization"
                             element={
-                              <PageLayout mode={mode}>
+                              <AppShell>
                                 <OptimizationPage />
-                              </PageLayout>
+                              </AppShell>
                             }
                           />
 

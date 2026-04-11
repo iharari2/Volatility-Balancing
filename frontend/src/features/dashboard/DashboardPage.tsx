@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, RefreshCw, TrendingUp, TrendingDown, Minus, X } from 'lucide-react';
+import { Plus, RefreshCw, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useWorkspace, WorkspaceProvider } from '../workspace/WorkspaceContext';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import { portfolioApi } from '../../lib/api';
-import { marketHoursService, MarketStatus } from '../../services/marketHoursService';
+import AppShell from '../../components/layout/AppShell';
 import AllocationNeedleBar from '../../components/shared/AllocationNeedleBar';
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
 import AddPositionModal from '../positions/modals/AddPositionModal';
@@ -223,8 +223,7 @@ function LastActionCell({ action }: { action: PositionSummaryItem['last_action']
 function DashboardInner() {
   const navigate = useNavigate();
   const { positions, positionsLoading, portfolioId, refreshPositions } = useWorkspace();
-  const { selectedTenantId, selectedPortfolio, portfolios, setSelectedPortfolioId, refreshPortfolios } = useTenantPortfolio();
-  const [marketStatus, setMarketStatus] = useState<MarketStatus>('CLOSED');
+  const { selectedTenantId, refreshPortfolios } = useTenantPortfolio();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
 
@@ -233,14 +232,6 @@ function DashboardInner() {
     const id = setInterval(() => refreshPositions(), 60_000);
     return () => clearInterval(id);
   }, [refreshPositions]);
-
-  // Market status
-  useEffect(() => {
-    const update = async () => setMarketStatus((await marketHoursService.getMarketState()).status);
-    update();
-    const id = setInterval(update, 60_000);
-    return () => clearInterval(id);
-  }, []);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -275,82 +266,19 @@ function DashboardInner() {
   const running = positions.filter((p) => p.status === 'RUNNING').length;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-
-      {/* ── Top bar ── */}
-      <div className="bg-slate-900 text-slate-200 flex items-center justify-between px-5 h-11 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <span className="font-bold text-white text-sm">⚡ Volatility Balancer</span>
-          {/* Portfolio switcher */}
-          {portfolios.length > 1 && (
-            <select
-              value={portfolioId ?? ''}
-              onChange={(e) => setSelectedPortfolioId(e.target.value)}
-              className="bg-slate-800 text-slate-200 text-xs border border-slate-700 rounded px-2 py-1"
-            >
-              {portfolios.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          )}
-          {portfolios.length === 1 && (
-            <span className="text-slate-400 text-xs">{selectedPortfolio?.name}</span>
-          )}
-        </div>
-        <div className="flex items-center gap-3 text-xs">
-          <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1 rounded-full">
-            <span className={`w-2 h-2 rounded-full ${marketStatus === 'OPEN' ? 'bg-green-400 shadow-[0_0_6px_#4ade80]' : 'bg-slate-500'}`} />
-            {marketStatus === 'OPEN' ? 'Market Open' : 'Market Closed'}
-          </div>
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="text-slate-400 hover:text-white disabled:opacity-40"
-            title="Refresh"
-          >
-            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 flex overflow-hidden">
-
-        {/* ── Left sidebar: portfolio summary ── */}
-        <div className="w-52 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col py-3 px-3 gap-3">
-          {/* Portfolio card */}
-          {selectedPortfolio && (
-            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
-              <div className="text-xs font-semibold text-indigo-700 mb-1">{selectedPortfolio.name}</div>
-              <div className="text-xl font-black text-slate-900">{fmt$(totalValue)}</div>
-              <div className="text-xs text-slate-500 mt-1">
-                {positions.length} position{positions.length !== 1 ? 's' : ''} ·{' '}
-                <span className={totalPnlPct == null ? '' : clr(totalPnlPct)}>
-                  {totalPnlPct == null ? '—' : fmtPct(totalPnlPct)}
-                </span>
-              </div>
-            </div>
-          )}
-          {/* Nav links */}
-          <nav className="flex flex-col gap-0.5 text-xs font-medium">
-            {[
-              { label: '🏠 Dashboard', path: '/', active: true },
-              { label: '📊 Analytics', path: '/analytics' },
-              { label: '🧪 Simulation', path: '/simulation' },
-              { label: '🎯 Optimization', path: '/optimization' },
-              { label: '📋 Orders', path: '/?tab=orders' },
-              { label: '💰 Dividends', path: '/?tab=dividends' },
-              { label: '⚙️ Strategy', path: '/?tab=strategy' },
-            ].map(({ label, path, active }) => (
-              <a key={path} href={path}
-                className={`px-3 py-1.5 rounded-md transition-colors ${active ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}>
-                {label}
-              </a>
-            ))}
-          </nav>
-        </div>
-
-        {/* ── Main content ── */}
-        <div className="flex-1 overflow-y-auto p-4">
+    <AppShell
+      topBarActions={
+        <button
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          className="text-slate-400 hover:text-white disabled:opacity-40"
+          title="Refresh"
+        >
+          <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+        </button>
+      }
+    >
+      <div>
 
           {/* Alert strip */}
           {!positionsLoading && <AlertStrip positions={positions} />}
@@ -534,13 +462,11 @@ function DashboardInner() {
               </table>
             </div>
           )}
-        </div>
-      </div>
-
       {showAddModal && (
         <AddPositionModal onClose={() => setShowAddModal(false)} onSave={handleAddPosition} />
       )}
-    </div>
+      </div>
+    </AppShell>
   );
 }
 
