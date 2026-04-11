@@ -27,8 +27,9 @@ const ExcelExportPage: React.FC = () => {
   const [selectedSimulation, setSelectedSimulation] = useState<string>('');
   const [isLoadingSimulations, setIsLoadingSimulations] = useState(false);
 
-  const API_BASE = (import.meta.env.VITE_API_BASE_URL || '') + '/api/excel';
-  const SIMULATIONS_API = (import.meta.env.VITE_API_BASE_URL || '') + '/api/simulations';
+  const _viteBase = import.meta.env.VITE_API_BASE_URL as string | undefined;
+  const API_BASE = _viteBase ? `${_viteBase}/v1/excel` : '/api/excel';
+  const SIMULATIONS_API = _viteBase ? `${_viteBase}/v1/simulations` : '/api/simulations';
 
   // Load available simulations
   const loadSimulations = async () => {

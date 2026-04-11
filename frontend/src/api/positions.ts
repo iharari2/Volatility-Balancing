@@ -5,7 +5,8 @@
  * Decoupled from UI components for reusability.
  */
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || '') + '/api/v1';
+const _VITE_BASE = import.meta.env.VITE_API_BASE_URL as string | undefined;
+const API_BASE = _VITE_BASE ? `${_VITE_BASE}/v1` : '/api/v1';
 
 export interface CycleResult {
   position_snapshot: {

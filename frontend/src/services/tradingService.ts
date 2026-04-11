@@ -1,5 +1,6 @@
 // Trading Service API client for continuous trading
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || '') + '/api';
+const _VITE_BASE = import.meta.env.VITE_API_BASE_URL as string | undefined;
+const API_BASE = _VITE_BASE ? `${_VITE_BASE}/v1` : '/api';
 
 export interface TradingStatus {
   position_id: string;
