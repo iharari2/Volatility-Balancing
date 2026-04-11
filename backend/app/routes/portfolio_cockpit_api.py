@@ -211,18 +211,19 @@ def list_positions_for_portfolio(
             try:
                 from app.di import container as _c
                 pos_gc = _c.config.get_guardrail_config(position.id)
+                cfg = portfolio_service._portfolio_config_repo.get(
+                    tenant_id=tenant_id, portfolio_id=portfolio_id
+                )
                 if pos_gc:
                     guardrail_min_pct = float(pos_gc.min_stock_pct) * 100
                     guardrail_max_pct = float(pos_gc.max_stock_pct) * 100
                 else:
-                    cfg = portfolio_service._portfolio_config_repo.get(
-                        tenant_id=tenant_id, portfolio_id=portfolio_id
-                    )
                     if cfg:
                         guardrail_min_pct = cfg.min_stock_pct
                         guardrail_max_pct = cfg.max_stock_pct
-                        trigger_up_pct = cfg.trigger_up_pct
-                        trigger_down_pct = cfg.trigger_down_pct
+                if cfg:
+                    trigger_up_pct = cfg.trigger_up_pct
+                    trigger_down_pct = cfg.trigger_down_pct
             except Exception:
                 pass
 

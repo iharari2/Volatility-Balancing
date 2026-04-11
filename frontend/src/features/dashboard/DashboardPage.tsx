@@ -335,10 +335,11 @@ function DashboardInner() {
             {[
               { label: '🏠 Dashboard', path: '/', active: true },
               { label: '📊 Analytics', path: '/analytics' },
+              { label: '🧪 Simulation', path: '/simulation' },
+              { label: '🎯 Optimization', path: '/optimization' },
               { label: '📋 Orders', path: '/?tab=orders' },
               { label: '💰 Dividends', path: '/?tab=dividends' },
               { label: '⚙️ Strategy', path: '/?tab=strategy' },
-              { label: '📁 Portfolios', path: '/portfolios' },
             ].map(({ label, path, active }) => (
               <a key={path} href={path}
                 className={`px-3 py-1.5 rounded-md transition-colors ${active ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}>
