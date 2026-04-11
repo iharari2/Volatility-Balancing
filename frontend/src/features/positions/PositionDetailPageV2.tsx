@@ -44,13 +44,13 @@ function fmtTsShort(ts: string) {
 
 type SessionLabel = 'OPEN' | 'PRE' | 'AH' | 'CLOSED' | 'UNKNOWN';
 
-function sessionFromPolicy(policy: string | null | undefined): SessionLabel {
-  if (!policy) return 'UNKNOWN';
-  const p = policy.toUpperCase();
-  if (p.includes('AFTER') || p.includes('AH')) return 'AH';
-  if (p.includes('PRE')) return 'PRE';
-  if (p.includes('OPEN') || p.includes('REG') || p.includes('REGULAR')) return 'OPEN';
-  if (p.includes('CLOSE')) return 'CLOSED';
+function sessionFromField(session: string | null | undefined): SessionLabel {
+  if (!session) return 'UNKNOWN';
+  const s = session.toUpperCase();
+  if (s === 'REGULAR' || s === 'OPEN') return 'OPEN';
+  if (s.includes('AFTER') || s.includes('AH') || s === 'EXTENDED') return 'AH';
+  if (s.includes('PRE')) return 'PRE';
+  if (s === 'CLOSED' || s === 'CLOSE') return 'CLOSED';
   return 'UNKNOWN';
 }
 
@@ -69,7 +69,7 @@ function MarketSnapshotBar({ cockpit, afterHoursEnabled, onToggleAfterHours, tog
   toggling: boolean;
 }) {
   const q = cockpit?.recent_quotes?.[0] ?? null;
-  const session: SessionLabel = sessionFromPolicy(q?.price_policy);
+  const session: SessionLabel = sessionFromField(q?.session);
   const effectivePrice = q?.effective_price ?? null;
   const closePrice = q?.close ?? null;
   const extendedMove = (effectivePrice != null && closePrice != null && session !== 'OPEN')
@@ -489,18 +489,21 @@ function PositionDetailInner() {
   };
 
   // Load cockpit (market snapshot) + portfolio config (after-hours setting)
+  // Loads are independent so cockpit failure never blocks the toggle
   const loadMeta = async () => {
     if (!ctxPortfolioId || !positionId || !selectedTenantId) return;
     try {
-      const [ck, cfg] = await Promise.all([
-        getPositionCockpit(ctxPortfolioId, positionId, '1d'),
-        portfolioScopedApi.getConfig(selectedTenantId, ctxPortfolioId),
-      ]);
+      const ck = await getPositionCockpit(ctxPortfolioId, positionId, '1d');
       setCockpit(ck);
+    } catch (e) {
+      console.error('Failed to load cockpit data', e);
+    }
+    try {
+      const cfg = await portfolioScopedApi.getConfig(selectedTenantId, ctxPortfolioId);
       setCurrentConfig(cfg);
       setAfterHoursEnabled(cfg.market_hours_policy === 'market-plus-after-hours');
     } catch (e) {
-      console.error('Failed to load cockpit/config', e);
+      console.error('Failed to load portfolio config', e);
     }
   };
 
