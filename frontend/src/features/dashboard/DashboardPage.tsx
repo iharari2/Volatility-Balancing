@@ -10,6 +10,7 @@ import AllocationNeedleBar from '../../components/shared/AllocationNeedleBar';
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
 import AddPositionModal from '../positions/modals/AddPositionModal';
 import type { PositionSummaryItem } from '../../api/cockpit';
+import { getPositionPerformance, type PerformanceData } from '../../api/performance';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -24,6 +25,73 @@ function fmtPct(n: number | null | undefined, dec = 1) {
 function clr(n: number | null | undefined) {
   if (n == null) return 'text-gray-400';
   return n >= 0 ? 'text-green-600' : 'text-red-500';
+}
+
+// ── Sparkline ─────────────────────────────────────────────────────────────────
+
+function PriceSparkline({ prices, trades, width = 96, height = 36 }: {
+  prices: PerformanceData['price_series'];
+  trades: PerformanceData['trade_markers'];
+  width?: number;
+  height?: number;
+}) {
+  if (prices.length < 2) return <span className="text-gray-300 text-[10px]">—</span>;
+
+  const vals = prices.map(p => p.price);
+  const min = Math.min(...vals);
+  const max = Math.max(...vals);
+  const range = max - min || 1;
+  const pad = 3;
+
+  const toX = (i: number) => pad + (i / (prices.length - 1)) * (width - pad * 2);
+  const toY = (v: number) => pad + (1 - (v - min) / range) * (height - pad * 2);
+
+  const points = prices.map((p, i) => `${toX(i)},${toY(p.price)}`).join(' ');
+  const isUp = vals[vals.length - 1] >= vals[0];
+  const stroke = isUp ? '#16a34a' : '#dc2626';
+  const fill = isUp ? '#dcfce7' : '#fee2e2';
+
+  // Build a closed fill path: line + back along bottom
+  const fillPath = `M${toX(0)},${toY(prices[0].price)} ` +
+    prices.slice(1).map((p, i) => `L${toX(i + 1)},${toY(p.price)}`).join(' ') +
+    ` L${toX(prices.length - 1)},${height} L${toX(0)},${height} Z`;
+
+  const tradeTs = new Map(trades.map(t => [t.timestamp, t.side]));
+
+  return (
+    <svg width={width} height={height} style={{ overflow: 'visible', display: 'block' }}>
+      <path d={fillPath} fill={fill} opacity={0.4} />
+      <polyline points={points} fill="none" stroke={stroke} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+      {prices.map((p, i) => {
+        const side = tradeTs.get(p.timestamp);
+        if (!side) return null;
+        return (
+          <circle key={i} cx={toX(i)} cy={toY(p.price)} r={3}
+            fill={side === 'BUY' ? '#2563eb' : '#dc2626'}
+            stroke="white" strokeWidth={1}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+function PositionSparkline({ tenantId, portfolioId, positionId }: {
+  tenantId: string; portfolioId: string; positionId: string;
+}) {
+  const [data, setData] = useState<PerformanceData | null>(null);
+
+  useEffect(() => {
+    if (!tenantId || !portfolioId || !positionId) return;
+    let cancelled = false;
+    getPositionPerformance(tenantId, portfolioId, positionId, '7d')
+      .then(d => { if (!cancelled) setData(d); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [tenantId, portfolioId, positionId]);
+
+  if (!data) return <span className="inline-block w-[96px] h-9 bg-gray-50 rounded animate-pulse" />;
+  return <PriceSparkline prices={data.price_series} trades={data.trade_markers} />;
 }
 
 // ── Alert strip ───────────────────────────────────────────────────────────────
@@ -330,7 +398,7 @@ function DashboardInner() {
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-gray-200">
-                    {['Asset', 'Status', 'Price', 'Qty', 'Stock Value', 'Cash', 'Total', 'P&L vs Baseline',
+                    {['Asset', 'Status', 'Trend (7d)', 'Price', 'Qty', 'Stock Value', 'Cash', 'Total', 'P&L vs Baseline',
                       'Allocation (min / now / max)', 'Trigger Distance', 'Last Action'].map((h) => (
                       <th key={h} className="px-3 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wide whitespace-nowrap">
                         {h}
@@ -358,6 +426,17 @@ function DashboardInner() {
                           <span className={`w-1.5 h-1.5 rounded-full ${p.status === 'RUNNING' ? 'bg-green-500' : 'bg-amber-500'}`} />
                           {p.status ?? 'UNKNOWN'}
                         </span>
+                      </td>
+
+                      {/* Trend sparkline */}
+                      <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
+                        {selectedTenantId && portfolioId ? (
+                          <PositionSparkline
+                            tenantId={selectedTenantId}
+                            portfolioId={portfolioId}
+                            positionId={p.position_id}
+                          />
+                        ) : <span className="text-gray-300 text-[10px]">—</span>}
                       </td>
 
                       {/* Price */}
