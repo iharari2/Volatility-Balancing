@@ -972,6 +972,7 @@ export const authApi = {
 // Admin API (owner-only)
 export interface AdminUser {
   id: string;
+  tenant_id: string;
   email: string;
   display_name: string;
   role: string;
@@ -986,6 +987,11 @@ export const adminApi = {
     request<AdminUser>(`/v1/admin/users/${userId}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
+    }),
+
+  impersonateUser: (userId: string) =>
+    request<{ token: string; user: AdminUser }>(`/v1/admin/users/${userId}/impersonate`, {
+      method: 'POST',
     }),
 };
 

@@ -6,9 +6,12 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  impersonating: AuthUser | null;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, displayName?: string) => Promise<void>;
   logout: () => void;
+  startImpersonation: (token: string, user: AuthUser) => void;
+  exitImpersonation: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -29,6 +32,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('auth_token'));
   const [isLoading, setIsLoading] = useState(true);
+  const [impersonating, setImpersonating] = useState<AuthUser | null>(() => {
+    const saved = localStorage.getItem('impersonating_user');
+    return saved ? JSON.parse(saved) : null;
+  });
 
   // Validate existing token on mount
   useEffect(() => {
@@ -63,8 +70,34 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = useCallback(() => {
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('impersonating_user');
     setToken(null);
     setUser(null);
+    setImpersonating(null);
+  }, []);
+
+  const startImpersonation = useCallback((impToken: string, impUser: AuthUser) => {
+    // Stash current admin token
+    const adminToken = localStorage.getItem('auth_token');
+    if (adminToken) localStorage.setItem('admin_token', adminToken);
+    localStorage.setItem('auth_token', impToken);
+    localStorage.setItem('impersonating_user', JSON.stringify(impUser));
+    setToken(impToken);
+    setUser(impUser);
+    setImpersonating(impUser);
+  }, []);
+
+  const exitImpersonation = useCallback(() => {
+    const adminToken = localStorage.getItem('admin_token');
+    if (!adminToken) return;
+    localStorage.setItem('auth_token', adminToken);
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('impersonating_user');
+    setToken(adminToken);
+    setImpersonating(null);
+    // Re-fetch admin user info
+    authApi.me().then(setUser).catch(() => {});
   }, []);
 
   return (
@@ -74,9 +107,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         token,
         isAuthenticated: !!user,
         isLoading,
+        impersonating,
         login,
         register,
         logout,
+        startImpersonation,
+        exitImpersonation,
       }}
     >
       {children}

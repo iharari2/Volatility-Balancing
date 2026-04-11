@@ -17,6 +17,7 @@ def _require_owner(user: CurrentUser = Depends(get_current_user)) -> CurrentUser
 
 class UserListItem(BaseModel):
     id: str
+    tenant_id: str = ""
     email: str
     display_name: str
     role: str
@@ -38,6 +39,7 @@ def list_users(
     return [
         UserListItem(
             id=u.id,
+            tenant_id=u.tenant_id,
             email=u.email,
             display_name=u.display_name or u.email.split("@")[0],
             role=u.role,
@@ -46,6 +48,39 @@ def list_users(
         )
         for u in users
     ]
+
+
+class ImpersonateResponse(BaseModel):
+    token: str
+    user: UserListItem
+
+
+@router.post("/users/{user_id}/impersonate", response_model=ImpersonateResponse)
+def impersonate_user(
+    user_id: str,
+    current_user: CurrentUser = Depends(_require_owner),
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    """Return a short-lived JWT scoped to the target user so an owner can preview their view."""
+    if user_id == current_user.user_id:
+        raise HTTPException(status_code=400, detail="Cannot impersonate yourself")
+    users = auth_service.list_users(current_user.tenant_id)
+    target = next((u for u in users if u.id == user_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    token = auth_service.create_access_token(target)
+    return ImpersonateResponse(
+        token=token,
+        user=UserListItem(
+            id=target.id,
+            tenant_id=target.tenant_id,
+            email=target.email,
+            display_name=target.display_name or target.email.split("@")[0],
+            role=target.role,
+            is_active=target.is_active,
+            created_at=target.created_at.isoformat() if target.created_at else "",
+        ),
+    )
 
 
 @router.patch("/users/{user_id}", response_model=UserListItem)

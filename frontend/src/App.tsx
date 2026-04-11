@@ -10,6 +10,7 @@ import { PortfolioProvider } from './contexts/PortfolioContext';
 import { TenantPortfolioProvider } from './contexts/TenantPortfolioContext';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import ImpersonationBanner from './components/ImpersonationBanner';
 import LoginPage from './pages/LoginPage';
 
 // New Workspace (Master-Detail Layout)
@@ -46,6 +47,7 @@ function App() {
           path="/*"
           element={
             <ProtectedRoute>
+              <ImpersonationBanner />
               <TenantPortfolioProvider>
                 <PortfolioProvider>
                   <ConfigurationProvider>

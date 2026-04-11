@@ -2,16 +2,32 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi, AdminUser } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 
 const ROLES = ['owner', 'trader'];
 
 export default function AdminUsersPage() {
-  const { user } = useAuth();
+  const { user, startImpersonation } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingRole, setPendingRole] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [impersonatingId, setImpersonatingId] = useState<string | null>(null);
+
+  const handleViewAs = async (u: AdminUser) => {
+    setImpersonatingId(u.id);
+    try {
+      const res = await adminApi.impersonateUser(u.id);
+      startImpersonation(res.token, { ...res.user, tenant_id: res.user.tenant_id });
+      navigate('/');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to switch user');
+    } finally {
+      setImpersonatingId(null);
+    }
+  };
 
   // Guard: only owners can access
   if (user?.role !== 'owner') {
@@ -150,6 +166,14 @@ export default function AdminUsersPage() {
                   <td className="px-4 py-3">
                     {!isSelf && !isEditing && (
                       <div className="flex items-center gap-2 justify-end">
+                        <button
+                          onClick={() => handleViewAs(u)}
+                          disabled={impersonatingId === u.id}
+                          className="text-xs text-amber-600 hover:text-amber-800 font-medium disabled:opacity-50"
+                          title="Switch to this user's view"
+                        >
+                          {impersonatingId === u.id ? '…' : '👁️ View as'}
+                        </button>
                         <button
                           onClick={() => handleRoleEdit(u)}
                           className="text-xs text-primary-600 hover:text-primary-800 font-medium"
