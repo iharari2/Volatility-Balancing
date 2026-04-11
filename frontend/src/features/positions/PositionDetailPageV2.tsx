@@ -16,6 +16,7 @@ import LoadingSpinner from '../../components/shared/LoadingSpinner';
 import StrategyTab from '../workspace/components/tabs/StrategyTab';
 import EventsTab from '../workspace/components/tabs/EventsTab';
 import OrdersTab from '../workspace/components/tabs/OrdersTab';
+import DividendsTab from '../workspace/components/tabs/DividendsTab';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -449,7 +450,7 @@ function TriggerCards({ position, perfData }: {
 
 // ── Main inner component ──────────────────────────────────────────────────────
 
-type DetailTab = 'chart' | 'events' | 'orders' | 'strategy';
+type DetailTab = 'chart' | 'events' | 'orders' | 'strategy' | 'dividends';
 
 function PositionDetailInner() {
   const { positionId } = useParams<{ positionId: string }>();
@@ -534,6 +535,7 @@ function PositionDetailInner() {
     { id: 'events', label: 'Events' },
     { id: 'orders', label: 'Orders' },
     { id: 'strategy', label: 'Strategy' },
+    { id: 'dividends', label: 'Dividends' },
   ];
 
   return (
@@ -654,6 +656,7 @@ function PositionDetailInner() {
                   {activeTab === 'events' && <EventsTab />}
                   {activeTab === 'orders' && <OrdersTab />}
                   {activeTab === 'strategy' && <StrategyTab />}
+                  {activeTab === 'dividends' && <DividendsTab />}
                 </div>
 
                 {/* Right column: allocation + triggers */}

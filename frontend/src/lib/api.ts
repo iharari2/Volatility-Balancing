@@ -390,7 +390,7 @@ export const dividendApi = {
       currency: string;
       withholding_tax_rate: number;
       message: string;
-    }>('/dividends/announce', {
+    }>('/v1/dividends/announce', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -415,7 +415,7 @@ export const dividendApi = {
         dps: number;
         status: string;
       }>;
-    }>(`/dividends/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/status`),
+    }>(`/v1/dividends/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/status`),
 
   getMarketInfo: (ticker: string) =>
     request<{
@@ -458,7 +458,7 @@ export const dividendApi = {
         receivable_id: string;
       };
       message: string;
-    }>(`/dividends/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/process-ex-dividend`, {
+    }>(`/v1/dividends/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/process-ex-dividend`, {
       method: 'POST',
     }),
 
@@ -469,7 +469,7 @@ export const dividendApi = {
       amount_received: number;
       cash_updated: number;
       message: string;
-    }>(`/dividends/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/process-payment`, {
+    }>(`/v1/dividends/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/process-payment`, {
       method: 'POST',
       body: JSON.stringify({ receivable_id: receivableId }),
     }),
