@@ -14,6 +14,7 @@ export default function SimulationLabPage() {
   const { selectedPortfolio } = useTenantPortfolio();
   const [simulationResult, setSimulationResult] = useState<any>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [runningMsg, setRunningMsg] = useState('Running simulation…');
   const [error, setError] = useState<string | null>(null);
   const [rerunConfig, setRerunConfig] = useState<Partial<SimulationConfig> | undefined>(undefined);
 
@@ -245,9 +246,35 @@ export default function SimulationLabPage() {
         comparison_ticker: config.comparisonTicker?.toUpperCase().trim() || null,
       };
 
-      console.log('Running simulation with config:', request);
-      const result = await simulationApi.runSimulation(request);
-      console.log('Simulation completed:', result);
+      // Submit job — returns immediately with {job_id, status: "running"}
+      setRunningMsg('Submitting simulation…');
+      const { job_id } = await simulationApi.runSimulation(request);
+      const startedAt = Date.now();
+
+      // Poll until completed or failed
+      const result = await new Promise<any>((resolve, reject) => {
+        const poll = async () => {
+          const elapsed = Math.round((Date.now() - startedAt) / 1000);
+          setRunningMsg(`Running simulation… ${elapsed}s`);
+          try {
+            const status = await fetch(
+              `${API_BASE}/v1/simulation/status/${job_id}`,
+              { headers: { ...getAuthHeaders() } }
+            ).then(r => r.ok ? r.json() : Promise.reject(new Error(`Poll failed: ${r.status}`)));
+
+            if (status.status === 'completed') {
+              resolve(status.result);
+            } else if (status.status === 'failed') {
+              reject(new Error(status.error || 'Simulation failed on server'));
+            } else {
+              setTimeout(poll, 2000); // check every 2 seconds
+            }
+          } catch (e) {
+            reject(e);
+          }
+        };
+        poll();
+      });
 
       // If comparison ticker is specified but not returned by backend, fetch it separately
       if (config.comparisonTicker && !result.comparison_data) {
@@ -371,7 +398,7 @@ export default function SimulationLabPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Panel - Simulation Setup */}
         <div className="lg:col-span-1">
-          <SimulationSetup onRun={handleRunSimulation} isRunning={isRunning} initialConfig={rerunConfig} />
+          <SimulationSetup onRun={handleRunSimulation} isRunning={isRunning} runningMsg={runningMsg} initialConfig={rerunConfig} />
         </div>
 
         {/* Right Panel - Results */}

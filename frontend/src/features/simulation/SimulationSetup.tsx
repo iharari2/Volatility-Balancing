@@ -5,6 +5,7 @@ import { usePortfolio } from '../../contexts/PortfolioContext';
 interface SimulationSetupProps {
   onRun: (config: SimulationConfig) => void;
   isRunning: boolean;
+  runningMsg?: string;
   initialConfig?: Partial<SimulationConfig>;
 }
 
@@ -26,7 +27,7 @@ interface SimulationConfig {
 
 export { type SimulationConfig };
 
-export default function SimulationSetup({ onRun, isRunning, initialConfig }: SimulationSetupProps) {
+export default function SimulationSetup({ onRun, isRunning, runningMsg, initialConfig }: SimulationSetupProps) {
   const { positions } = usePortfolio();
   const defaults: SimulationConfig = {
     asset: positions[0]?.ticker || 'AAPL',
@@ -280,7 +281,7 @@ export default function SimulationSetup({ onRun, isRunning, initialConfig }: Sim
             {isRunning ? (
               <div className="flex items-center gap-2">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Running...
+                {runningMsg || 'Running…'}
               </div>
             ) : (
               <>

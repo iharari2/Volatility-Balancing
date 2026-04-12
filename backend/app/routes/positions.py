@@ -8,6 +8,7 @@ from typing import Any, Dict, List
 import logging
 import os
 import time
+import threading
 from fastapi import APIRouter, HTTPException, Query, Header, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -15,6 +16,10 @@ from app.di import container
 from app.auth import get_current_user, CurrentUser
 from datetime import datetime, timezone
 from uuid import uuid4
+
+# ── In-process simulation job store ──────────────────────────────────────────
+# Keyed by job_id. Each entry: {status, result, error, started_at}
+_sim_jobs: Dict[str, Dict[str, Any]] = {}
 
 router = APIRouter(prefix="/v1")
 logger = logging.getLogger(__name__)
@@ -699,16 +704,92 @@ class StandaloneSimulationRequest(BaseModel):
     position_config: Optional[Dict[str, Any]] = None
 
 
+def _build_sim_result(result: Any, ticker: str, simulation_id: str) -> Dict[str, Any]:
+    """Convert a SimulationResult object to the JSON response dict."""
+    return {
+        "simulation_id": simulation_id,
+        "ticker": ticker.upper(),
+        "start_date": (
+            result.start_date.isoformat()
+            if hasattr(result.start_date, "isoformat")
+            else str(result.start_date)
+        ),
+        "end_date": (
+            result.end_date.isoformat()
+            if hasattr(result.end_date, "isoformat")
+            else str(result.end_date)
+        ),
+        "initial_cash": result.initial_cash,
+        "algorithm_return_pct": result.algorithm_return_pct,
+        "buy_hold_return_pct": result.buy_hold_return_pct,
+        "excess_return": result.excess_return,
+        "algorithm_trades": result.algorithm_trades,
+        "algorithm_pnl": result.algorithm_pnl,
+        "buy_hold_pnl": result.buy_hold_pnl,
+        "sharpe_ratio": result.algorithm_sharpe_ratio,
+        "max_drawdown": result.algorithm_max_drawdown,
+        "volatility": result.algorithm_volatility,
+        "total_trading_days": result.total_trading_days,
+        "algorithm": {
+            "return_pct": result.algorithm_return_pct,
+            "pnl": result.algorithm_pnl,
+            "trades": result.algorithm_trades,
+            "volatility": result.algorithm_volatility,
+            "sharpe_ratio": result.algorithm_sharpe_ratio,
+            "max_drawdown": result.algorithm_max_drawdown,
+        },
+        "buy_hold": {
+            "return_pct": result.buy_hold_return_pct,
+            "pnl": result.buy_hold_pnl,
+            "volatility": result.buy_hold_volatility,
+            "sharpe_ratio": result.buy_hold_sharpe_ratio,
+            "max_drawdown": result.buy_hold_max_drawdown,
+        },
+        "comparison": {
+            "excess_return": result.excess_return,
+            "alpha": result.alpha,
+            "beta": result.beta,
+            "information_ratio": result.information_ratio,
+        },
+        "time_series_data": result.time_series_data,
+        "trade_log": result.trade_log,
+        "trigger_analysis": result.trigger_analysis,
+    }
+
+
+def _run_sim_job(job_id: str, ticker: str, start_date: datetime, end_date: datetime,
+                 initial_cash: float, position_config: dict,
+                 include_after_hours: bool, intraday_interval_minutes: int) -> None:
+    """Run simulation in background thread and store result in _sim_jobs."""
+    try:
+        simulation_uc = container.simulation_uc
+        result = simulation_uc.run_simulation(
+            ticker=ticker.upper(),
+            start_date=start_date,
+            end_date=end_date,
+            initial_cash=initial_cash,
+            position_config=position_config,
+            include_after_hours=include_after_hours,
+            intraday_interval_minutes=intraday_interval_minutes,
+            simulation_id=job_id,
+        )
+        _sim_jobs[job_id]["status"] = "completed"
+        _sim_jobs[job_id]["result"] = _build_sim_result(result, ticker, job_id)
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        _sim_jobs[job_id]["status"] = "failed"
+        _sim_jobs[job_id]["error"] = str(exc)
+
+
 @router.post("/simulation/run")
 def run_standalone_simulation(
     request: StandaloneSimulationRequest,
     user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
-    Execute a standalone simulation for any ticker (no position required).
-
-    This endpoint allows running simulations directly without needing to create a position first.
-    Perfect for testing and analysis.
+    Submit a simulation job. Returns immediately with a job_id.
+    Poll GET /v1/simulation/status/{job_id} for progress and result.
     """
     try:
         # Parse dates
@@ -730,80 +811,51 @@ def run_standalone_simulation(
                 },
             }
 
-        # Run simulation using the unified simulation use case
-        simulation_uc = container.simulation_uc
-        simulation_id = str(uuid4())
+        job_id = str(uuid4())
+        _sim_jobs[job_id] = {"status": "running", "result": None, "error": None,
+                              "started_at": datetime.now(timezone.utc).isoformat()}
 
-        result = simulation_uc.run_simulation(
-            ticker=request.ticker.upper(),
-            start_date=start_date,
-            end_date=end_date,
-            initial_cash=request.initial_cash,
-            position_config=position_config,
-            include_after_hours=request.include_after_hours,
-            intraday_interval_minutes=request.intraday_interval_minutes,
-            simulation_id=simulation_id,
+        t = threading.Thread(
+            target=_run_sim_job,
+            args=(job_id, request.ticker, start_date, end_date,
+                  request.initial_cash, position_config,
+                  request.include_after_hours, request.intraday_interval_minutes),
+            daemon=True,
         )
+        t.start()
 
-        # Convert result to dict for JSON response
-        return {
-            "simulation_id": simulation_id,
-            "ticker": request.ticker.upper(),
-            "start_date": (
-                result.start_date.isoformat()
-                if hasattr(result.start_date, "isoformat")
-                else str(result.start_date)
-            ),
-            "end_date": (
-                result.end_date.isoformat()
-                if hasattr(result.end_date, "isoformat")
-                else str(result.end_date)
-            ),
-            "initial_cash": result.initial_cash,
-            "algorithm_return_pct": result.algorithm_return_pct,
-            "buy_hold_return_pct": result.buy_hold_return_pct,
-            "excess_return": result.excess_return,
-            "algorithm_trades": result.algorithm_trades,
-            "algorithm_pnl": result.algorithm_pnl,
-            "buy_hold_pnl": result.buy_hold_pnl,
-            "sharpe_ratio": result.algorithm_sharpe_ratio,
-            "max_drawdown": result.algorithm_max_drawdown,
-            "volatility": result.algorithm_volatility,
-            "total_trading_days": result.total_trading_days,
-            "algorithm": {
-                "return_pct": result.algorithm_return_pct,
-                "pnl": result.algorithm_pnl,
-                "trades": result.algorithm_trades,
-                "volatility": result.algorithm_volatility,
-                "sharpe_ratio": result.algorithm_sharpe_ratio,
-                "max_drawdown": result.algorithm_max_drawdown,
-            },
-            "buy_hold": {
-                "return_pct": result.buy_hold_return_pct,
-                "pnl": result.buy_hold_pnl,
-                "volatility": result.buy_hold_volatility,
-                "sharpe_ratio": result.buy_hold_sharpe_ratio,
-                "max_drawdown": result.buy_hold_max_drawdown,
-            },
-            "comparison": {
-                "excess_return": result.excess_return,
-                "alpha": result.alpha,
-                "beta": result.beta,
-                "information_ratio": result.information_ratio,
-            },
-            # Include timeline/events data for GUI
-            "time_series_data": result.time_series_data,
-            "trade_log": result.trade_log,
-            "trigger_analysis": result.trigger_analysis,
-        }
+        return {"job_id": job_id, "status": "running"}
 
-    except HTTPException:
-        raise
     except Exception as e:
-        import traceback
+        raise HTTPException(status_code=500, detail=f"Error starting simulation: {str(e)}")
 
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Error running simulation: {str(e)}")
+
+@router.get("/simulation/status/{job_id}")
+def get_simulation_status(
+    job_id: str,
+    user: CurrentUser = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Poll for simulation job status. Returns result when status == 'completed'."""
+    job = _sim_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Simulation job not found")
+
+    response: Dict[str, Any] = {
+        "job_id": job_id,
+        "status": job["status"],
+        "started_at": job.get("started_at"),
+    }
+    if job["status"] == "completed":
+        response["result"] = job["result"]
+        # Clean up to free memory
+        del _sim_jobs[job_id]
+    elif job["status"] == "failed":
+        response["error"] = job.get("error", "Unknown error")
+        del _sim_jobs[job_id]
+
+    return response
+
+
 
 
 @router.post("/positions/{position_id}/anchor")
