@@ -229,15 +229,8 @@ export function OptimizationProvider({ children }: OptimizationProviderProps) {
   );
 
   const getMetrics = useCallback(async (): Promise<OptimizationMetric[]> => {
-    try {
-      return await optimizationApi.getMetrics();
-    } catch (error) {
-      dispatch({
-        type: 'SET_ERROR',
-        payload: error instanceof Error ? error.message : 'Failed to get metrics',
-      });
-      return [];
-    }
+    // Return enum values directly — no backend endpoint needed
+    return Object.values(OptimizationMetric);
   }, []);
 
   const getParameterTypes = useCallback(async (): Promise<ParameterTypeInfo[]> => {
