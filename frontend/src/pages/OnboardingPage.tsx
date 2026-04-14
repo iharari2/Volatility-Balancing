@@ -84,17 +84,23 @@ export default function OnboardingPage() {
     setError('');
     setBusy(true);
     try {
-      await fetch(`${API_BASE}/v1/tenants/${tenantId}/portfolios/${createdPortfolioId}/positions`, {
+      const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/portfolios/${createdPortfolioId}/positions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
-          ticker: ticker.toUpperCase().trim(),
-          quantity: parseFloat(shares) || 0,
-          cash: parseFloat(cash) || 10000,
+          asset: ticker.toUpperCase().trim(),
+          qty: parseFloat(shares) || 0,
+          starting_cash: { currency: 'USD', amount: parseFloat(cash) || 10000 },
         }),
-      }).then(r => {
-        if (!r.ok) return r.json().then(d => Promise.reject(new Error(d.detail || 'Failed')));
       });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        const detail = d.detail;
+        const msg = Array.isArray(detail)
+          ? detail.map((e: any) => e.msg).join('; ')
+          : (detail || 'Failed to add position');
+        throw new Error(msg);
+      }
       setStep('done');
     } catch (err: any) {
       setError(err.message || 'Failed to add position');
