@@ -161,12 +161,42 @@ def reset_password(
     return {"message": "Password reset successfully"}
 
 
+class UpdateProfileRequest(BaseModel):
+    display_name: str
+
+
 @router.get("/me", response_model=UserResponse)
-def me(user: CurrentUser = Depends(get_current_user)):
+def me(
+    user: CurrentUser = Depends(get_current_user),
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    db_user = auth_service.user_repo.get_by_id(user.user_id)
     return UserResponse(
         id=user.user_id,
         tenant_id=user.tenant_id,
         email=user.email,
-        display_name=user.email.split("@")[0],
+        display_name=(db_user.display_name if db_user and db_user.display_name else user.email.split("@")[0]),
+        role=user.role,
+    )
+
+
+@router.put("/me", response_model=UserResponse)
+def update_me(
+    body: UpdateProfileRequest,
+    user: CurrentUser = Depends(get_current_user),
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    from datetime import datetime, timezone
+    db_user = auth_service.user_repo.get_by_id(user.user_id)
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    db_user.display_name = body.display_name.strip()
+    db_user.updated_at = datetime.now(timezone.utc)
+    auth_service.user_repo.update(db_user)
+    return UserResponse(
+        id=user.user_id,
+        tenant_id=user.tenant_id,
+        email=user.email,
+        display_name=db_user.display_name,
         role=user.role,
     )

@@ -9,15 +9,22 @@ type Step = 'welcome' | 'portfolio' | 'position' | 'done';
 
 const TEMPLATES = [
   { id: 'default',      label: 'Standard',     description: '±3% trigger, 20–60% stock allocation' },
-  { id: 'conservative', label: 'Conservative',  description: '±5% trigger, 20–40% stock allocation' },
-  { id: 'aggressive',   label: 'Aggressive',    description: '±2% trigger, 40–80% stock allocation' },
+  { id: 'conservative', label: 'Conservative',  description: '±4% trigger, 15–50% stock allocation' },
+  { id: 'aggressive',   label: 'Aggressive',    description: '±2% trigger, 25–75% stock allocation' },
 ];
 
 export default function OnboardingPage() {
-  const { user } = useAuth();
+  const { user, impersonating, exitImpersonation } = useAuth();
   const navigate = useNavigate();
 
+  const isImpersonating = !!impersonating;
+
+  // If display_name looks like an email prefix or is empty, prompt for real name
+  const emailPrefix = user?.email?.split('@')[0] || '';
+  const hasRealName = user?.display_name && user.display_name !== emailPrefix && user.display_name.trim() !== '';
+
   const [step, setStep] = useState<Step>('welcome');
+  const [fullName, setFullName] = useState(hasRealName ? (user?.display_name || '') : '');
   const [portfolioName, setPortfolioName] = useState('');
   const [template, setTemplate] = useState('default');
   const [ticker, setTicker] = useState('');
@@ -27,10 +34,30 @@ export default function OnboardingPage() {
   const [error, setError] = useState('');
   const [createdPortfolioId, setCreatedPortfolioId] = useState('');
 
-  const displayName = user?.display_name || user?.email?.split('@')[0] || 'there';
+  const displayName = fullName.trim() || user?.display_name || emailPrefix || 'there';
   const tenantId = user?.tenant_id || 'default';
 
   // ── Step handlers ────────────────────────────────────────────────────────
+
+  const handleWelcomeNext = async () => {
+    setError('');
+    // Save display_name if changed
+    if (fullName.trim() && fullName.trim() !== user?.display_name) {
+      setBusy(true);
+      try {
+        await fetch(`${API_BASE}/v1/auth/me`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+          body: JSON.stringify({ display_name: fullName.trim() }),
+        });
+      } catch {
+        // non-fatal — continue onboarding even if name update fails
+      } finally {
+        setBusy(false);
+      }
+    }
+    setStep('portfolio');
+  };
 
   const handleCreatePortfolio = async () => {
     if (!portfolioName.trim()) { setError('Please enter a portfolio name'); return; }
@@ -80,6 +107,11 @@ export default function OnboardingPage() {
 
   const handleFinish = () => navigate('/');
 
+  const handleExitImpersonation = () => {
+    exitImpersonation();
+    navigate('/admin/users');
+  };
+
   // ── Styles ────────────────────────────────────────────────────────────────
 
   const wrap: React.CSSProperties = {
@@ -113,6 +145,11 @@ export default function OnboardingPage() {
     color: '#f87171', fontSize: 13, marginBottom: 16,
     padding: '8px 12px', background: 'rgba(248,113,113,0.1)', borderRadius: 6,
   };
+  const impersonationBar: React.CSSProperties = {
+    background: '#92400e', color: '#fef3c7', fontSize: 13,
+    padding: '10px 16px', borderRadius: 8, marginBottom: 24,
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+  };
   const stepDots = (current: number) => (
     <div style={{ display: 'flex', gap: 6, marginBottom: 32 }}>
       {[0, 1, 2].map(i => (
@@ -129,21 +166,56 @@ export default function OnboardingPage() {
 
   if (step === 'welcome') return (
     <div style={wrap}><div style={card}>
+      {isImpersonating && (
+        <div style={impersonationBar}>
+          <span>Viewing as {user?.email}</span>
+          <button
+            onClick={handleExitImpersonation}
+            style={{ background: 'none', border: '1px solid #fef3c7', color: '#fef3c7', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}
+          >
+            Exit &amp; Back to Admin
+          </button>
+        </div>
+      )}
       {stepDots(0)}
-      <h1 style={h1}>Welcome, {displayName}! 👋</h1>
-      <p style={sub}>
+      <h1 style={h1}>Welcome{displayName !== 'there' ? `, ${displayName}` : ''}!</h1>
+      <p style={{ ...sub, marginBottom: 20 }}>
         Volatility Balancing is an automated trading robot that buys when prices dip
         and sells when they rise — keeping your portfolio balanced within your chosen guardrails.
-        Let's get you set up in two quick steps.
       </p>
-      <button style={btnPrimary} onClick={() => setStep('portfolio')}>
-        Get Started →
+
+      {!hasRealName && (
+        <>
+          <label style={label}>Your Name</label>
+          <input
+            style={input} type="text"
+            value={fullName}
+            onChange={e => setFullName(e.target.value)}
+            placeholder="e.g. Jane Smith"
+            autoFocus
+          />
+        </>
+      )}
+
+      <button style={btnPrimary} disabled={busy} onClick={handleWelcomeNext}>
+        {busy ? 'Saving…' : 'Get Started →'}
       </button>
     </div></div>
   );
 
   if (step === 'portfolio') return (
     <div style={wrap}><div style={card}>
+      {isImpersonating && (
+        <div style={impersonationBar}>
+          <span>Viewing as {user?.email}</span>
+          <button
+            onClick={handleExitImpersonation}
+            style={{ background: 'none', border: '1px solid #fef3c7', color: '#fef3c7', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}
+          >
+            Exit &amp; Back to Admin
+          </button>
+        </div>
+      )}
       {stepDots(1)}
       <h1 style={h1}>Create your portfolio</h1>
       <p style={sub}>Give it a name and choose a strategy template. You can adjust all parameters later.</p>

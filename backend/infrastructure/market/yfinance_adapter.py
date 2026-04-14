@@ -1402,15 +1402,37 @@ class YFinanceAdapter(MarketDataRepo):
         """
         price_data_list = []
 
-        # Generate intraday times (9:30 AM to 4:00 PM ET)
+        # For daily (or larger) resolution, use a single price point per day at close.
+        # The minute-increment loop below would produce invalid times (minute > 59) for
+        # intervals >= a full trading session (390 minutes = 9:30→16:00).
+        if intraday_interval_minutes >= 390:
+            for timestamp, row in daily_hist.iterrows():
+                close_price = row["Close"]
+                volume = int(row["Volume"]) if not pd.isna(row["Volume"]) else 0
+                if timestamp.tzinfo is None:
+                    day_date = timestamp.replace(tzinfo=self.tz_utc)
+                else:
+                    day_date = timestamp.astimezone(self.tz_utc)
+                if day_date.weekday() >= 5:
+                    continue
+                et_close = day_date.astimezone(self.tz_eastern).replace(
+                    hour=16, minute=0, second=0, microsecond=0
+                )
+                price_data_list.append(PriceData(
+                    timestamp=et_close.astimezone(self.tz_utc),
+                    price=close_price,
+                    volume=volume,
+                    is_after_hours=False,
+                ))
+            return price_data_list
+
+        # Generate intraday times (9:30 AM to 4:00 PM ET) for sub-daily intervals
         intraday_times = []
-        current_hour, current_minute = 9, 30
-        while current_hour < 16 or (current_hour == 16 and current_minute == 0):
-            intraday_times.append((current_hour, current_minute))
-            current_minute += intraday_interval_minutes
-            if current_minute >= 60:
-                current_hour += 1
-                current_minute -= 60
+        total_minutes = 9 * 60 + 30  # start at 9:30
+        end_minutes = 16 * 60         # end at 16:00
+        while total_minutes <= end_minutes:
+            intraday_times.append((total_minutes // 60, total_minutes % 60))
+            total_minutes += intraday_interval_minutes
 
         for timestamp, row in daily_hist.iterrows():
             # Get OHLC for the day
