@@ -1,6 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Play } from 'lucide-react';
 import { usePortfolio } from '../../contexts/PortfolioContext';
+
+// Max history yfinance supports per resolution
+const RESOLUTION_MAX_DAYS: Record<string, number> = {
+  '1min':  7,
+  '5min':  60,
+  '15min': 60,
+  '30min': 60,
+  '1hour': 730,
+  'daily': 99999,
+};
 
 interface SimulationSetupProps {
   onRun: (config: SimulationConfig) => void;
@@ -35,7 +45,7 @@ export default function SimulationSetup({ onRun, isRunning, runningMsg, initialC
     endDate: new Date().toISOString().split('T')[0],
     strategy: 'portfolio',
     mode: 'single',
-    resolution: '30min',
+    resolution: 'daily',
     allowAfterHours: true,
     triggerThresholdPct: 3,
     initialCash: 10000,
@@ -49,6 +59,16 @@ export default function SimulationSetup({ onRun, isRunning, runningMsg, initialC
       setConfig(prev => ({ ...prev, ...initialConfig }));
     }
   }, [initialConfig]);
+
+  const resolutionWarning = useMemo(() => {
+    if (!config.startDate || !config.endDate) return null;
+    const days = (new Date(config.endDate).getTime() - new Date(config.startDate).getTime()) / 86400000;
+    const maxDays = RESOLUTION_MAX_DAYS[config.resolution] ?? 99999;
+    if (days > maxDays) {
+      return `${config.resolution} data is only available for the last ${maxDays} days. Use Daily or 1 Hour for longer periods.`;
+    }
+    return null;
+  }, [config.startDate, config.endDate, config.resolution]);
 
   const handleRun = () => {
     onRun(config);
@@ -154,13 +174,16 @@ export default function SimulationSetup({ onRun, isRunning, runningMsg, initialC
               }
               className="input"
             >
-              <option value="1min">1 Minute</option>
-              <option value="5min">5 Minutes</option>
-              <option value="15min">15 Minutes</option>
-              <option value="30min">30 Minutes</option>
-              <option value="1hour">1 Hour</option>
-              <option value="daily">Daily</option>
+              <option value="1min">1 Minute (last 7 days only)</option>
+              <option value="5min">5 Minutes (last 60 days only)</option>
+              <option value="15min">15 Minutes (last 60 days only)</option>
+              <option value="30min">30 Minutes (last 60 days only)</option>
+              <option value="1hour">1 Hour (last 2 years)</option>
+              <option value="daily">Daily (full history)</option>
             </select>
+            {resolutionWarning && (
+              <p className="mt-1 text-xs text-amber-600 font-medium">⚠ {resolutionWarning}</p>
+            )}
           </div>
           <div className="flex items-end">
             <label className="flex items-center cursor-pointer mb-2">
