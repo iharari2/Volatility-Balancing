@@ -201,10 +201,18 @@ class TradingWorker:
                     is_market_hours=is_market_hours,
                 )
 
+                notif_svc = container.notification_service
                 for alert in new_alerts:
                     logger.warning(f"Alert fired: [{alert.severity.value}] {alert.title}")
                     if webhook_svc.is_configured:
                         webhook_svc.send_alert(alert)
+                    # Email users who have opted in
+                    if notif_svc.is_configured:
+                        for user_id, prefs in list(container._notif_prefs.items()):
+                            if prefs.get("email_alerts"):
+                                user = container.user_repo.get_by_id(user_id)
+                                if user and user.email:
+                                    notif_svc.send_alert_email(user.email, alert)
             except Exception as e:
                 logger.error(f"Error running alert checks: {e}", exc_info=True)
 

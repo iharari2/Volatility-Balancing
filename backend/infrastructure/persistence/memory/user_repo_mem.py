@@ -38,5 +38,8 @@ class InMemoryUserRepo:
     def list_by_tenant(self, tenant_id: str) -> list[User]:
         return [u for u in self._users.values() if u.tenant_id == tenant_id]
 
+    def list_all(self) -> list[User]:
+        return list(self._users.values())
+
     def clear(self) -> None:
         self._users.clear()

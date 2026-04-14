@@ -12,6 +12,8 @@ import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import LoginPage from './pages/LoginPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 // New Workspace (Master-Detail Layout)
 import PositionWorkspacePage from './features/workspace/PositionWorkspacePage';
@@ -39,8 +41,10 @@ function App() {
   return (
     <AuthProvider>
       <Routes>
-        {/* Login route - unprotected */}
+        {/* Auth routes - unprotected */}
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
 
         {/* All other routes are protected */}
         <Route

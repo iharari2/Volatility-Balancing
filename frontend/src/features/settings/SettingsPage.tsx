@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check, AlertCircle } from 'lucide-react';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { authApi } from '../../lib/api';
+import { authApi, notificationApi, type NotificationPrefs } from '../../lib/api';
 
 // Storage keys
 const TENANT_DEFAULTS_KEY = 'vb_tenant_defaults';
@@ -49,6 +49,12 @@ export default function SettingsPage() {
   const [passwordStatus, setPasswordStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [passwordError, setPasswordError] = useState('');
 
+  // Notification prefs state
+  const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs | null>(null);
+  const [emailAlerts, setEmailAlerts] = useState(false);
+  const [phone, setPhone] = useState('');
+  const [notifSaveStatus, setNotifSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
   // Feedback state
   const [tenantSaveStatus, setTenantSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [systemSaveStatus, setSystemSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -78,6 +84,13 @@ export default function SettingsPage() {
     } catch (error) {
       console.error('Error loading settings from localStorage:', error);
     }
+
+    // Load notification prefs from backend
+    notificationApi.getPrefs().then((prefs) => {
+      setNotifPrefs(prefs);
+      setEmailAlerts(prefs.email_alerts);
+      setPhone(prefs.phone || '');
+    }).catch(() => {/* not critical */});
   }, []);
 
   // Save tenant defaults
@@ -146,6 +159,18 @@ export default function SettingsPage() {
       setPasswordError(err.message || 'Failed to change password');
       setPasswordStatus('error');
       setTimeout(() => setPasswordStatus('idle'), 3000);
+    }
+  };
+
+  const handleSaveNotifPrefs = async () => {
+    try {
+      const updated = await notificationApi.setPrefs({ email_alerts: emailAlerts, phone: phone || null });
+      setNotifPrefs(updated);
+      setNotifSaveStatus('success');
+      setTimeout(() => setNotifSaveStatus('idle'), 3000);
+    } catch {
+      setNotifSaveStatus('error');
+      setTimeout(() => setNotifSaveStatus('idle'), 3000);
     }
   };
 
@@ -341,6 +366,60 @@ export default function SettingsPage() {
               <span className="inline-flex items-center gap-1 text-sm text-red-600">
                 <AlertCircle className="h-4 w-4" />
                 Failed to save
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Notifications */}
+      <div className="bg-white shadow rounded-lg p-6">
+        <h2 className="text-lg font-medium text-gray-900 mb-1">Notifications</h2>
+        {notifPrefs && !notifPrefs.email_configured && (
+          <p className="text-xs text-amber-600 mb-4">
+            Email is not configured on this server. Set SMTP_HOST, SMTP_USER, and SMTP_PASS environment variables to enable email delivery.
+          </p>
+        )}
+        <div className="space-y-4">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={emailAlerts}
+              onChange={(e) => setEmailAlerts(e.target.checked)}
+              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+            />
+            <div>
+              <span className="text-sm font-medium text-gray-900">Email alerts</span>
+              <p className="text-xs text-gray-500">Receive an email when a system alert fires (worker stopped, price stale, order rejected)</p>
+            </div>
+          </label>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Phone number <span className="text-gray-400 font-normal">(optional — for future SMS)</span></label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+1 555 000 0000"
+              className="w-full max-w-xs rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+            />
+          </div>
+
+          <div className="pt-2 flex items-center gap-3">
+            <button
+              onClick={handleSaveNotifPrefs}
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            >
+              Save Notification Preferences
+            </button>
+            {notifSaveStatus === 'success' && (
+              <span className="inline-flex items-center gap-1 text-sm text-green-600">
+                <Check className="h-4 w-4" /> Saved
+              </span>
+            )}
+            {notifSaveStatus === 'error' && (
+              <span className="inline-flex items-center gap-1 text-sm text-red-600">
+                <AlertCircle className="h-4 w-4" /> Failed to save
               </span>
             )}
           </div>

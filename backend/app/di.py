@@ -93,6 +93,8 @@ from application.services.alert_checker import AlertChecker
 from application.services.webhook_service import WebhookService
 from application.services.system_status_service import SystemStatusService
 from application.services.auth_service import AuthService
+from application.services.notification_service import NotificationService
+from application.services.password_reset_service import PasswordResetService
 
 # New clean architecture: Orchestrators
 from application.orchestrators.live_trading import LiveTradingOrchestrator
@@ -162,7 +164,12 @@ class _Container:
     alert_repo: AlertRepo
     alert_checker: AlertChecker
     webhook_service: WebhookService
+    notification_service: NotificationService
+    password_reset_service: PasswordResetService
     system_status_service: SystemStatusService
+
+    # Notification preferences per user: {user_id: {email_alerts: bool, phone: str}}
+    _notif_prefs: dict
 
     # Config providers (for backward compatibility with Position entities)
     trigger_config_provider: Callable[[str], TriggerConfig]
@@ -447,6 +454,15 @@ class _Container:
         # --- Monitoring & Alerting ---
         self.alert_repo = InMemoryAlertRepo()
         self.webhook_service = WebhookService(os.getenv("ALERT_WEBHOOK_URL"))
+        self.notification_service = NotificationService(
+            smtp_host=os.getenv("SMTP_HOST"),
+            smtp_port=int(os.getenv("SMTP_PORT", "587")),
+            smtp_user=os.getenv("SMTP_USER"),
+            smtp_pass=os.getenv("SMTP_PASS"),
+            smtp_from=os.getenv("SMTP_FROM"),
+        )
+        self.password_reset_service = PasswordResetService()
+        self._notif_prefs: dict = {}
         self.alert_checker = AlertChecker(
             alert_repo=self.alert_repo,
             clock=self.clock,

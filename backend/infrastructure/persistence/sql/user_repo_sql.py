@@ -87,6 +87,11 @@ class SQLUserRepo:
             )
             return [self._to_entity(m) for m in models]
 
+    def list_all(self) -> list:
+        with self._sf() as s:
+            models = s.query(UserModel).order_by(UserModel.created_at).all()
+            return [self._to_entity(m) for m in models]
+
     def clear(self) -> None:
         with self._sf() as s:
             s.query(UserModel).delete()

@@ -35,7 +35,7 @@ def list_users(
     current_user: CurrentUser = Depends(_require_owner),
     auth_service: AuthService = Depends(get_auth_service),
 ):
-    users = auth_service.list_users(current_user.tenant_id)
+    users = auth_service.user_repo.list_all()
     return [
         UserListItem(
             id=u.id,
@@ -64,7 +64,7 @@ def impersonate_user(
     """Return a short-lived JWT scoped to the target user so an owner can preview their view."""
     if user_id == current_user.user_id:
         raise HTTPException(status_code=400, detail="Cannot impersonate yourself")
-    users = auth_service.list_users(current_user.tenant_id)
+    users = auth_service.user_repo.list_all()
     target = next((u for u in users if u.id == user_id), None)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
@@ -93,8 +93,11 @@ def update_user(
     if user_id == current_user.user_id:
         raise HTTPException(status_code=400, detail="Cannot modify your own account here")
 
+    target = auth_service.user_repo.get_by_id(user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
     updated = auth_service.admin_update_user(
-        tenant_id=current_user.tenant_id,
+        tenant_id=target.tenant_id,
         user_id=user_id,
         role=body.role,
         is_active=body.is_active,

@@ -379,14 +379,12 @@ class TestPositionsAPI:
 
         response = client.post("/v1/simulation/run", json=request_data)
 
-        # This might fail if market data is not available, or endpoint disabled
+        # Endpoint now returns immediately with a job_id (async background job)
         assert response.status_code in [200, 400, 404, 500]
         if response.status_code == 200:
             data = response.json()
-            assert data["ticker"] == "AAPL"
-            assert "algorithm" in data
-            assert "buy_hold" in data
-            assert "comparison" in data
+            assert "job_id" in data
+            assert data["status"] == "running"
 
     def test_get_volatility_data(self, client):
         """Test getting volatility data."""

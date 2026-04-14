@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function LoginPage() {
@@ -194,6 +194,14 @@ export default function LoginPage() {
             {isRegister ? 'Already have an account? Sign in' : "Don't have an account? Register"}
           </button>
         </div>
+
+        {!isRegister && (
+          <div style={{ textAlign: 'center', marginTop: 10 }}>
+            <Link to="/forgot-password" style={{ color: '#94a3b8', fontSize: 12 }}>
+              Forgot password?
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );

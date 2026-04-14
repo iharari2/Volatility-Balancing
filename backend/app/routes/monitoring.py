@@ -137,3 +137,42 @@ async def set_webhook_config(req: WebhookUpdateRequest, user: CurrentUser = Depe
         "configured": svc.is_configured,
         "url": svc.masked_url,
     }
+
+
+# ── Notification preferences ──────────────────────────────────────────────────
+
+class NotificationPrefsRequest(BaseModel):
+    email_alerts: bool = True
+    phone: Optional[str] = None  # stored for future SMS support
+
+
+class NotificationPrefsResponse(BaseModel):
+    email_alerts: bool
+    phone: Optional[str]
+    email_configured: bool  # whether backend SMTP is set up
+
+
+@router.get("/settings/notifications")
+async def get_notification_prefs(user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
+    prefs = container._notif_prefs.get(user.user_id, {})
+    return {
+        "email_alerts": prefs.get("email_alerts", False),
+        "phone": prefs.get("phone"),
+        "email_configured": container.notification_service.is_configured,
+    }
+
+
+@router.put("/settings/notifications")
+async def set_notification_prefs(
+    req: NotificationPrefsRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> Dict[str, Any]:
+    container._notif_prefs[user.user_id] = {
+        "email_alerts": req.email_alerts,
+        "phone": req.phone,
+    }
+    return {
+        "email_alerts": req.email_alerts,
+        "phone": req.phone,
+        "email_configured": container.notification_service.is_configured,
+    }
