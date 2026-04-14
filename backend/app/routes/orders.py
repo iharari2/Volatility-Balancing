@@ -22,12 +22,12 @@ router = APIRouter(tags=["orders"])
 
 
 # REMOVED: Legacy order endpoints - Use portfolio-scoped endpoints instead:
-# POST /api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders
-# GET /api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders
+# POST /v1/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders
+# GET /v1/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders
 
 
 @router.post(
-    "/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders",
+    "/v1/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders",
     response_model=CreateOrderResponse,
 )
 def submit_order(
@@ -99,7 +99,7 @@ def fill_order(order_id: str, payload: FillOrderRequest, user: CurrentUser = Dep
 
 
 @router.post(
-    "/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders/auto-size"
+    "/v1/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders/auto-size"
 )
 def submit_auto_sized_order(
     tenant_id: str,
@@ -201,7 +201,7 @@ def submit_auto_sized_order(
 
 
 @router.post(
-    "/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders/auto-size/market"
+    "/v1/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders/auto-size/market"
 )
 def submit_auto_sized_order_with_market_data(
     tenant_id: str,
@@ -299,7 +299,7 @@ def submit_auto_sized_order_with_market_data(
         }
 
 
-@router.get("/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders")
+@router.get("/v1/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/orders")
 def list_orders(
     tenant_id: str, portfolio_id: str, position_id: str, limit: int = 100, user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
@@ -311,7 +311,7 @@ def list_orders(
     return {"position_id": position_id, "orders": [asdict(o) for o in orders]}
 
 
-@router.get("/api/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/trades")
+@router.get("/v1/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/trades")
 def list_trades(
     tenant_id: str, portfolio_id: str, position_id: str, limit: int = 100, user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:

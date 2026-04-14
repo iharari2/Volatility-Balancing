@@ -1068,7 +1068,6 @@ class YFinanceAdapter(MarketDataRepo):
             #   daily (1440 min)    : full history
             # Route to daily synthetic data whenever the span exceeds what yfinance supports
             # for the requested interval, or when daily resolution is explicitly requested.
-            now = datetime.now(timezone.utc)
             days_diff = (end_date - start_date).days
 
             intraday_limit_days = {

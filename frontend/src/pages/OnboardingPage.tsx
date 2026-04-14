@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useTenantPortfolio } from '../contexts/TenantPortfolioContext';
 import { portfolioApi, getAuthHeaders } from '../lib/api';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
@@ -16,7 +15,6 @@ const TEMPLATES = [
 
 export default function OnboardingPage() {
   const { user } = useAuth();
-  const { refreshPortfolios } = useTenantPortfolio();
   const navigate = useNavigate();
 
   const [step, setStep] = useState<Step>('welcome');
@@ -46,7 +44,6 @@ export default function OnboardingPage() {
         hours_policy: 'OPEN_ONLY',
       });
       setCreatedPortfolioId(p.portfolio_id);
-      await refreshPortfolios();
       setStep('position');
     } catch (err: any) {
       setError(err.message || 'Failed to create portfolio');

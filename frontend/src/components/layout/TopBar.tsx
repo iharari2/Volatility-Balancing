@@ -26,6 +26,14 @@ export default function TopBar({ mode = 'Live' }: TopBarProps) {
   return (
     <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
       <div className="flex flex-1 items-center gap-x-6 self-stretch">
+        {/* Brand logo — desktop only (mobile uses sidebar header) */}
+        <img
+          src="/logo-compact.svg"
+          alt="Volatility Balancing"
+          className="h-8 flex-shrink-0 hidden lg:block"
+        />
+        <div className="h-6 w-px bg-gray-200 hidden lg:block" />
+
         {/* Breadcrumb / Current Location */}
         <div className="flex items-center gap-2 text-sm">
           <span className="text-gray-400 font-medium">

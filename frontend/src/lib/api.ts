@@ -175,12 +175,12 @@ export const ordersApi = {
 
   listOrders: (tenantId: string, portfolioId: string, positionId: string, limit = 5000) =>
     request<{ position_id: string; orders: OrderRow[] }>(
-      `/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/orders?limit=${limit}`,
+      `/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/orders?limit=${limit}`,
     ),
 
   listTrades: (tenantId: string, portfolioId: string, positionId: string, limit = 5000) =>
     request<{ position_id: string; trades: TradeRow[] }>(
-      `/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/trades?limit=${limit}`,
+      `/v1/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/trades?limit=${limit}`,
     ),
 };
 
