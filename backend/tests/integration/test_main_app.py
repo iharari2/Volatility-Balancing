@@ -85,7 +85,7 @@ class TestMainApp:
         # Test orders router (should return 404 for non-existent position)
         # Use new portfolio-scoped endpoint
         response = client.get(
-            "/api/tenants/default/portfolios/test_portfolio/positions/non_existent/orders"
+            "/v1/tenants/default/portfolios/test_portfolio/positions/non_existent/orders"
         )
         assert response.status_code in [404, 410]  # May be 404 or 410
 
