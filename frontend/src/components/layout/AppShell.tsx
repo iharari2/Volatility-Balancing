@@ -4,6 +4,7 @@ import { RefreshCw } from 'lucide-react';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { marketHoursService, type MarketStatus } from '../../services/marketHoursService';
+import CreatePortfolioWizard from '../../features/portfolios/CreatePortfolioWizard';
 
 const NAV_LINKS = [
   { label: '🏠 Dashboard',    path: '/' },
@@ -27,6 +28,7 @@ export default function AppShell({ children, topBarActions }: AppShellProps) {
   const { selectedPortfolio, portfolios, setSelectedPortfolioId } = useTenantPortfolio();
   const { user } = useAuth();
   const [marketStatus, setMarketStatus] = useState<MarketStatus>('CLOSED');
+  const [showCreatePortfolio, setShowCreatePortfolio] = useState(false);
 
   useEffect(() => {
     const update = async () => setMarketStatus((await marketHoursService.getMarketState()).status);
@@ -79,7 +81,7 @@ export default function AppShell({ children, topBarActions }: AppShellProps) {
         {/* ── Left sidebar ── */}
         <div className="w-52 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col py-3 px-3 gap-3">
           {/* Portfolio card */}
-          {selectedPortfolio && (
+          {selectedPortfolio ? (
             <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
               <div className="text-xs font-semibold text-indigo-700 mb-1">{selectedPortfolio.name}</div>
               <div className="text-xl font-black text-slate-900">
@@ -88,6 +90,16 @@ export default function AppShell({ children, topBarActions }: AppShellProps) {
               <div className="text-xs text-slate-500 mt-1">
                 {selectedPortfolio.positionCount ?? 0} position{(selectedPortfolio.positionCount ?? 0) !== 1 ? 's' : ''}
               </div>
+            </div>
+          ) : (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
+              <p className="text-xs text-amber-700 mb-2">No portfolio yet</p>
+              <button
+                onClick={() => setShowCreatePortfolio(true)}
+                className="w-full text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded px-2 py-1.5 transition-colors"
+              >
+                + Create Portfolio
+              </button>
             </div>
           )}
 
@@ -115,6 +127,12 @@ export default function AppShell({ children, topBarActions }: AppShellProps) {
         </div>
 
       </div>
+
+      <CreatePortfolioWizard
+        isOpen={showCreatePortfolio}
+        onClose={() => setShowCreatePortfolio(false)}
+        onComplete={() => setShowCreatePortfolio(false)}
+      />
     </div>
   );
 }
