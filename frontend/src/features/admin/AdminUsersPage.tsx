@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Navigate, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
-const ROLES = ['owner', 'trader'];
+const ROLES = ['owner', 'member'];
 
 export default function AdminUsersPage() {
   const { user, startImpersonation } = useAuth();
@@ -208,7 +208,7 @@ export default function AdminUsersPage() {
             <strong>owner</strong> — full access including user management
           </li>
           <li>
-            <strong>trader</strong> — view positions, monitor trades, see analytics; cannot manage users
+            <strong>member</strong> — view positions, monitor trades, see analytics; cannot manage users
           </li>
         </ul>
         <p className="mt-3 text-xs text-gray-400">

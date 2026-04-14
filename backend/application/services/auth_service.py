@@ -42,12 +42,16 @@ class AuthService:
         if existing:
             raise ValueError("Email already registered")
 
-        # First user globally gets tenant_id="default" to preserve existing data
+        # First user globally gets tenant_id="default" and owner role (the platform admin)
+        # All subsequent users get their own tenant and member role
         total_default = self.user_repo.count_by_tenant("default")
-        if total_default == 0:
+        is_first_user = total_default == 0
+        if is_first_user:
             tenant_id = "default"
+            role = "owner"
         else:
             tenant_id = f"tenant_{uuid.uuid4().hex[:12]}"
+            role = "member"
 
         user = User(
             id=str(uuid.uuid4()),
@@ -55,7 +59,7 @@ class AuthService:
             email=email,
             hashed_password=_hash_password(password),
             display_name=display_name or email.split("@")[0],
-            role="owner",
+            role=role,
         )
         self.user_repo.create(user)
         token = self.create_access_token(user)
