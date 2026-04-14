@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { portfolioApi } from '../lib/api';
 import { useAuth } from './AuthContext';
 
@@ -50,6 +51,8 @@ interface TenantPortfolioProviderProps {
 
 export function TenantPortfolioProvider({ children }: TenantPortfolioProviderProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
@@ -138,6 +141,12 @@ export function TenantPortfolioProvider({ children }: TenantPortfolioProviderPro
           }
           return current;
         });
+      } else {
+        // No portfolios — send to onboarding (unless already there)
+        const noRedirect = ['/onboarding', '/login', '/forgot-password', '/reset-password'];
+        if (!noRedirect.includes(location.pathname)) {
+          navigate('/onboarding', { replace: true });
+        }
       }
     } catch (error) {
       console.error('Error loading portfolios:', error);

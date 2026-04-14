@@ -14,6 +14,7 @@ import ImpersonationBanner from './components/ImpersonationBanner';
 import LoginPage from './pages/LoginPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import OnboardingPage from './pages/OnboardingPage';
 
 // New Workspace (Master-Detail Layout)
 import PositionWorkspacePage from './features/workspace/PositionWorkspacePage';
@@ -45,6 +46,9 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+        {/* Onboarding - protected but outside AppShell */}
+        <Route path="/onboarding" element={<ProtectedRoute><OnboardingPage /></ProtectedRoute>} />
 
         {/* All other routes are protected */}
         <Route

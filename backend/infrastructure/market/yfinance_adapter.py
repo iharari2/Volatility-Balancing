@@ -1062,20 +1062,30 @@ class YFinanceAdapter(MarketDataRepo):
             start_str = start_date.strftime("%Y-%m-%d")
             end_str = end_date.strftime("%Y-%m-%d")
 
-            # yfinance only provides minute data for ~30 days
-            # For older data, we must use daily data with synthetic intraday points
+            # yfinance intraday data limits:
+            #   1m / 5m / 15m / 30m : last 60 days only
+            #   1h                   : last 730 days
+            #   daily (1440 min)    : full history
+            # Route to daily synthetic data whenever the span exceeds what yfinance supports
+            # for the requested interval, or when daily resolution is explicitly requested.
             now = datetime.now(timezone.utc)
-            days_ago = (now - start_date).days
+            days_diff = (end_date - start_date).days
 
-            if days_ago > 30:
-                # Historical data beyond 30 days - use daily data with synthetic intraday
-                print(f"Historical period ({days_ago} days ago) - using daily data with synthetic intraday points")
+            intraday_limit_days = {
+                1: 7, 5: 60, 15: 60, 30: 60, 60: 730,
+            }
+            limit_days = intraday_limit_days.get(intraday_interval_minutes, 60)
+
+            if intraday_interval_minutes >= 1440 or days_diff > limit_days:
+                print(
+                    f"Span {days_diff}d exceeds {limit_days}d limit for {intraday_interval_minutes}min "
+                    f"— using daily data with synthetic intraday points"
+                )
                 return self._fetch_daily_with_synthetic_intraday(
                     ticker, start_date, end_date, intraday_interval_minutes
                 )
 
-            # Recent data - try minute data
-            days_diff = (end_date - start_date).days
+            # Within supported range — try minute data
             if days_diff <= 7:
                 interval = "1m"  # 1-minute data for short periods
             else:
