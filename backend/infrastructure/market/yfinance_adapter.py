@@ -1395,6 +1395,34 @@ class YFinanceAdapter(MarketDataRepo):
                 print(f"Daily fetch error for {ticker} (attempt {attempt + 1}): {e}, retrying...")
 
         if hist is None or hist.empty:
+            # Fallback: try fetching by period instead of explicit date range.
+            # Some yfinance versions / Yahoo Finance states handle period better.
+            days_diff = (end_date - start_date).days
+            if days_diff >= 365:
+                period = "2y"
+            elif days_diff >= 180:
+                period = "1y"
+            elif days_diff >= 90:
+                period = "6mo"
+            else:
+                period = "3mo"
+            print(f"Retrying {ticker} with period={period} fallback (start/end fetch returned empty)...")
+            try:
+                stock2 = self._ticker(ticker)
+                hist = stock2.history(period=period, interval="1d")
+                if not hist.empty:
+                    # Trim to requested range
+                    if hist.index.tzinfo is None:
+                        hist.index = hist.index.tz_localize("UTC")
+                    else:
+                        hist.index = hist.index.tz_convert("UTC")
+                    hist = hist[(hist.index >= start_date) & (hist.index <= end_date)]
+                    print(f"Period fallback succeeded: {len(hist)} rows after trimming")
+            except Exception as e:
+                print(f"Period fallback also failed for {ticker}: {e}")
+                hist = None
+
+        if hist is None or hist.empty:
             print(f"Warning: No daily data returned for {ticker}")
             return []
 
