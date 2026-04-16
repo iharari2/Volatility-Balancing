@@ -187,8 +187,10 @@ class SimulationUnifiedUC:
         now = datetime.now(timezone.utc)
         if start_date > now:
             raise ValueError(f"Start date {start_date} cannot be in the future")
+        # Cap end_date at now rather than rejecting — users routinely select "today"
+        # which arrives as end-of-day UTC and can be marginally ahead of server time
         if end_date > now:
-            raise ValueError(f"End date {end_date} cannot be in the future")
+            end_date = now
         if start_date >= end_date:
             raise ValueError(f"Start date {start_date} must be before end date {end_date}")
 

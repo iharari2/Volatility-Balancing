@@ -1380,9 +1380,21 @@ class YFinanceAdapter(MarketDataRepo):
         print(f"Fetching daily data for {ticker} from {start_str} to {end_str}")
 
         stock = self._ticker(ticker)
-        hist = stock.history(start=start_str, end=end_str, interval="1d")
+        hist = None
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                hist = stock.history(start=start_str, end=end_str, interval="1d")
+                if not hist.empty:
+                    break
+                if attempt < max_retries - 1:
+                    print(f"Daily fetch returned empty for {ticker}, retrying ({attempt + 1}/{max_retries})...")
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    raise
+                print(f"Daily fetch error for {ticker} (attempt {attempt + 1}): {e}, retrying...")
 
-        if hist.empty:
+        if hist is None or hist.empty:
             print(f"Warning: No daily data returned for {ticker}")
             return []
 

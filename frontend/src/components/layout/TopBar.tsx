@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
-import { Settings } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { Settings, LogOut, ChevronDown, User } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { marketHoursService, MarketStatus } from '../../services/marketHoursService';
 
 interface TopBarProps {
@@ -10,7 +11,26 @@ interface TopBarProps {
 
 export default function TopBar({ mode = 'Live' }: TopBarProps) {
   const { selectedTenant, selectedPortfolio } = useTenantPortfolio();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [marketStatus, setMarketStatus] = useState<MarketStatus>('CLOSED');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   useEffect(() => {
     const updateMarketStatus = async () => {
@@ -80,6 +100,44 @@ export default function TopBar({ mode = 'Live' }: TopBarProps) {
           >
             <Settings className="h-6 w-6" />
           </Link>
+
+          {/* User menu */}
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setMenuOpen(o => !o)}
+              className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+            >
+              <div className="w-7 h-7 rounded-full bg-primary-600 flex items-center justify-center text-white">
+                <User className="h-4 w-4" />
+              </div>
+              <span className="hidden sm:block text-sm font-medium max-w-[120px] truncate">
+                {user?.display_name || user?.email?.split('@')[0] || 'Account'}
+              </span>
+              <ChevronDown className="h-4 w-4 text-gray-400" />
+            </button>
+
+            {menuOpen && (
+              <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                <div className="px-3 py-2 border-b border-gray-100">
+                  <p className="text-xs font-semibold text-gray-900 truncate">{user?.display_name || user?.email}</p>
+                  {user?.display_name && <p className="text-xs text-gray-400 truncate">{user.email}</p>}
+                </div>
+                <Link
+                  to="/settings"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Settings className="h-4 w-4" /> Settings
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                >
+                  <LogOut className="h-4 w-4" /> Sign out
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
