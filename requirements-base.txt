@@ -60,5 +60,6 @@ uvloop==0.21.0
 watchfiles==1.1.0
 websockets==15.0.1
 yfinance==0.2.66
+curl_cffi>=0.7.0
 openpyxl==3.1.5
 starlette==0.47.3
