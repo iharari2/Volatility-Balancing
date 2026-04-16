@@ -285,6 +285,9 @@ export default function EventsTab() {
                       Price
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      Anchor
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                       Trigger
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -310,6 +313,9 @@ export default function EventsTab() {
                       <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                         {formatCurrency(row.effective_price)}
                       </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                        {row.anchor_price != null ? formatCurrency(row.anchor_price) : <span className="text-gray-400">-</span>}
+                      </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm">
                         {row.trigger_direction ? (
                           <span
@@ -328,15 +334,16 @@ export default function EventsTab() {
                         )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm">
-                        {row.guardrail_allowed !== null && row.guardrail_allowed !== undefined ? (
+                        {row.guardrail_min_stock_pct != null && row.guardrail_max_stock_pct != null ? (
                           <span
-                            className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-                              row.guardrail_allowed
-                                ? 'bg-success-100 text-success-700'
-                                : 'bg-danger-100 text-danger-700'
+                            className={`inline-block px-2 py-0.5 rounded text-xs font-mono font-medium ${
+                              row.guardrail_allowed === false
+                                ? 'bg-danger-100 text-danger-700'
+                                : 'bg-gray-100 text-gray-700'
                             }`}
+                            title={row.guardrail_allowed === false ? (row.guardrail_block_reason || 'Blocked') : 'Allowed'}
                           >
-                            {row.guardrail_allowed ? 'OK' : 'BLOCKED'}
+                            {Math.round(row.guardrail_min_stock_pct * (row.guardrail_min_stock_pct <= 1 ? 100 : 1))}/{Math.round(row.guardrail_max_stock_pct * (row.guardrail_max_stock_pct <= 1 ? 100 : 1))}
                           </span>
                         ) : (
                           <span className="text-gray-400">-</span>
@@ -412,7 +419,13 @@ export default function EventsTab() {
                           {row.timestamp ? new Date(row.timestamp).toLocaleString() : '-'}
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+                        <div>
+                          <span className="text-gray-500">Anchor</span>
+                          <p className="font-medium text-gray-900">
+                            {row.anchor_price != null ? formatCurrency(row.anchor_price) : '-'}
+                          </p>
+                        </div>
                         <div>
                           <span className="text-gray-500">Trigger</span>
                           <p className="font-medium text-gray-900">
@@ -421,11 +434,9 @@ export default function EventsTab() {
                         </div>
                         <div>
                           <span className="text-gray-500">Guardrail</span>
-                          <p className="font-medium text-gray-900">
-                            {row.guardrail_allowed !== null && row.guardrail_allowed !== undefined
-                              ? row.guardrail_allowed
-                                ? 'OK'
-                                : 'Blocked'
+                          <p className={`font-mono font-medium ${row.guardrail_allowed === false ? 'text-danger-700' : 'text-gray-900'}`}>
+                            {row.guardrail_min_stock_pct != null && row.guardrail_max_stock_pct != null
+                              ? `${Math.round(row.guardrail_min_stock_pct * (row.guardrail_min_stock_pct <= 1 ? 100 : 1))}/${Math.round(row.guardrail_max_stock_pct * (row.guardrail_max_stock_pct <= 1 ? 100 : 1))}`
                               : '-'}
                           </p>
                         </div>
