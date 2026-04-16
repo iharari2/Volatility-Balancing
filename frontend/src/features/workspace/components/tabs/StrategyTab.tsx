@@ -121,18 +121,17 @@ export default function StrategyTab() {
       await portfolioScopedApi.updateConfig(tenantId, portfolioId, config);
       setIsPositionSpecific(false);
 
-      // Update effective config to show the saved values
-      // Use the saved config values directly since they are now the effective settings for this position
-      setEffectiveConfig({
-        trigger_threshold_up_pct: config.trigger_threshold_up_pct,
-        trigger_threshold_down_pct: config.trigger_threshold_down_pct,
-        min_stock_pct: config.min_stock_pct,
-        max_stock_pct: config.max_stock_pct,
-        max_trade_pct_of_position: config.max_trade_pct_of_position,
-        commission_rate: config.commission_rate,
-        market_hours_policy: config.market_hours_policy,
-        last_updated: new Date().toISOString(),
-        version: (effectiveConfig?.version || 0) + 1,
+      // Re-fetch from DB to confirm the save persisted (and update "Current Effective Settings")
+      const confirmed = await portfolioScopedApi.getEffectiveConfig(tenantId, portfolioId);
+      setEffectiveConfig(confirmed);
+      setConfig({
+        trigger_threshold_up_pct: confirmed.trigger_threshold_up_pct,
+        trigger_threshold_down_pct: confirmed.trigger_threshold_down_pct,
+        min_stock_pct: confirmed.min_stock_pct,
+        max_stock_pct: confirmed.max_stock_pct,
+        max_trade_pct_of_position: confirmed.max_trade_pct_of_position,
+        commission_rate: confirmed.commission_rate,
+        market_hours_policy: confirmed.market_hours_policy,
       });
 
       toast.success('Strategy saved successfully');

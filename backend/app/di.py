@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from decimal import Decimal
 from typing import Callable, Any
 
 from domain.ports.positions_repo import PositionsRepo
@@ -492,40 +493,62 @@ class _Container:
         def trigger_config_provider(
             tenant_id: str, portfolio_id: str, position_id: str
         ) -> TriggerConfig:
-            # Try ConfigRepo first
+            # Portfolio-level config is the canonical source — the Strategy tab writes here.
+            portfolio_cfg = self.portfolio_config_repo.get(
+                tenant_id=tenant_id, portfolio_id=portfolio_id
+            )
+            if portfolio_cfg is not None:
+                return TriggerConfig(
+                    up_threshold_pct=Decimal(str(portfolio_cfg.trigger_up_pct)),
+                    down_threshold_pct=Decimal(str(portfolio_cfg.trigger_down_pct)),
+                )
+
+            # Fallback: per-position ConfigRepo (legacy)
             config = self.config.get_trigger_config(position_id)
             if config is not None:
                 return config
 
-            # Fallback: extract from Position entity (backward compatibility)
+            # Last resort: extract from Position entity (backward compatibility)
             position = self.positions.get(
                 tenant_id=tenant_id, portfolio_id=portfolio_id, position_id=position_id
             )
             if position is None:
                 raise KeyError(f"Position not found: {position_id}")
             config = order_policy_to_trigger_config(position.order_policy)
-
-            # Save to ConfigRepo for future use (migration helper)
             self.config.set_trigger_config(position_id, config)
             return config
 
         def guardrail_config_provider(
             tenant_id: str, portfolio_id: str, position_id: str
         ) -> GuardrailConfig:
-            # Try ConfigRepo first
+            # Portfolio-level config is the canonical source — the Strategy tab writes here.
+            # Per-position ConfigRepo is legacy and no longer updated by the UI.
+            portfolio_cfg = self.portfolio_config_repo.get(
+                tenant_id=tenant_id, portfolio_id=portfolio_id
+            )
+            if portfolio_cfg is not None:
+                return GuardrailConfig(
+                    min_stock_pct=Decimal(str(portfolio_cfg.min_stock_pct / 100.0)),
+                    max_stock_pct=Decimal(str(portfolio_cfg.max_stock_pct / 100.0)),
+                    max_trade_pct_of_position=(
+                        Decimal(str(portfolio_cfg.max_trade_pct_of_position / 100.0))
+                        if portfolio_cfg.max_trade_pct_of_position is not None
+                        else None
+                    ),
+                )
+
+            # Fallback: per-position ConfigRepo (legacy)
             config = self.config.get_guardrail_config(position_id)
             if config is not None:
                 return config
 
-            # Fallback: extract from Position entity (backward compatibility)
+            # Last resort: extract from Position entity (backward compatibility)
             position = self.positions.get(
                 tenant_id=tenant_id, portfolio_id=portfolio_id, position_id=position_id
             )
             if position is None:
                 raise KeyError(f"Position not found: {position_id}")
             config = guardrail_policy_to_guardrail_config(position.guardrails)
-
-            # Save to ConfigRepo for future use (migration helper)
             self.config.set_guardrail_config(position_id, config)
             return config
 
