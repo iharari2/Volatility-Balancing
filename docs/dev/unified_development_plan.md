@@ -1,7 +1,7 @@
 ---
 owner: Development Team
 status: active
-last_updated: 2026-04-14
+last_updated: 2026-04-16
 ---
 
 # Volatility Balancing — Development Plan
@@ -59,6 +59,7 @@ last_updated: 2026-04-14
 | 27 | Fly.io Migration | Replaced EC2+SSM with Fly.io (backend) + Cloudflare Pages (frontend) + Neon (PostgreSQL); CI deploys via `flyctl deploy`; ~$3/month |
 | 28 | User Management Console | Admin UI at `/admin/users` (owner-only); list/edit-role/enable-disable users; `set-role` CLI subcommand; `GET|PATCH /v1/admin/users` endpoints |
 | 29 | Bug Fixes: Onboarding, Orders, Simulation | Fix blank onboarding page; fix Orders 404 (route prefix `/api/` → `/v1/`); fix onboarding field names + error formatting; add impersonation escape hatch; fix simulation future-date error (cap vs reject); add daily fetch retry logic; add TopBar user menu with logout |
+| 30 | Events Tab: Anchor + Guardrail Columns | Add Anchor price column to Events tab (table + timeline views); change Guardrail column from OK/BLOCKED badge to ##/## format showing min/max stock pct at event time; red styling when blocked |
 
 ---
 
