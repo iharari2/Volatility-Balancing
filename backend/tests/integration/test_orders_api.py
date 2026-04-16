@@ -117,6 +117,7 @@ class TestOrdersAPI:
             f"/v1/tenants/{tenant_id}/portfolios",
             json={
                 "name": f"Test Portfolio {unique_ticker}",
+                "template": "AGGRESSIVE",
                 "starting_cash": {"currency": "USD", "amount": 10000.0},
                 "holdings": [{"asset": unique_ticker, "qty": 100.0, "anchor_price": 150.0}],
             },
@@ -166,6 +167,7 @@ class TestOrdersAPI:
             f"/v1/tenants/{tenant_id}/portfolios",
             json={
                 "name": f"Test Portfolio {unique_ticker}",
+                "template": "AGGRESSIVE",
                 "starting_cash": {"currency": "USD", "amount": 10000.0},
                 "holdings": [{"asset": unique_ticker, "qty": 100.0, "anchor_price": 150.0}],
             },
@@ -330,6 +332,7 @@ class TestOrdersAPI:
             f"/v1/tenants/{tenant_id}/portfolios",
             json={
                 "name": f"Test Portfolio WORKFLOW {unique_suffix}",
+                "template": "AGGRESSIVE",
                 "starting_cash": {"currency": "USD", "amount": 10000.0},
                 "holdings": [{"asset": "TEST_WORKFLOW", "qty": 100.0, "anchor_price": None}],
             },

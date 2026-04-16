@@ -212,7 +212,6 @@ def get_position_performance(
                     price_ts_sorted: List[datetime] = []
                     for p in price_series:
                         try:
-                            from datetime import timezone as _tz
                             dt = datetime.fromisoformat(p.timestamp)
                             if dt.tzinfo is None:
                                 dt = dt.replace(tzinfo=timezone.utc)

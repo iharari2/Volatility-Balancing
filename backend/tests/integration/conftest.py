@@ -55,7 +55,7 @@ def portfolio_id(client, tenant_id):
         json={
             "name": f"Test Portfolio {unique_suffix}",
             "type": "LIVE",
-            "template": "DEFAULT",
+            "template": "AGGRESSIVE",
             "hours_policy": "OPEN_ONLY",
         },
     )
