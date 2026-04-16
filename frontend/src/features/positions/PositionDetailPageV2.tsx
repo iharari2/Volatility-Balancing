@@ -150,28 +150,45 @@ function MarketSnapshotBar({ cockpit, afterHoursEnabled, onToggleAfterHours, tog
 
 // ── Chart ─────────────────────────────────────────────────────────────────────
 
+type MergedPoint = {
+  timestamp: string;
+  price?: number;
+  value?: number;
+  stockValue?: number;
+  anchorLine?: number;
+  triggerUp?: number;
+  triggerDown?: number;
+  guardLow?: number;
+  guardHigh?: number;
+  tradeMarker?: { side: 'BUY' | 'SELL'; qty: number; price: number };
+};
+
 function PerformanceChart({ data, window, onWindowChange }:
   { data: PerformanceData; window: string; onWindowChange: (w: string) => void }) {
 
-  // Merge price + value series by timestamp; also carry anchor_price forward as step function
-  const merged = useMemo(() => {
-    const map = new Map<string, { timestamp: string; price?: number; value?: number; anchorLine?: number }>();
+  const merged = useMemo((): MergedPoint[] => {
+    const triggerUpPct = data.anchor.trigger_up_pct;
+    const triggerDownPct = data.anchor.trigger_down_pct;
+    const minPctFrac = (data.guardrails.min_stock_pct ?? 0) / 100;
+    const maxPctFrac = (data.guardrails.max_stock_pct ?? 0) / 100;
+
+    const map = new Map<string, MergedPoint>();
     for (const p of data.price_series) {
       map.set(p.timestamp, { timestamp: p.timestamp, price: p.price });
     }
     for (const v of data.value_series) {
       const existing = map.get(v.timestamp) ?? { timestamp: v.timestamp };
       existing.value = v.value;
+      if (v.stock_value != null) existing.stockValue = v.stock_value;
       map.set(v.timestamp, existing);
     }
     const sorted = Array.from(map.values()).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 
-    // Paint anchor as a step function: carry the last known anchor forward through price points
+    // Bug 2 fix: anchor step function + per-point trigger prices (move with anchor)
     if (data.anchor_series && data.anchor_series.length > 0) {
       let anchorIdx = 0;
       let currentAnchor = data.anchor_series[0].anchor_price;
       for (const pt of sorted) {
-        // Advance anchor pointer if a later anchor change has passed this timestamp
         while (
           anchorIdx + 1 < data.anchor_series.length &&
           data.anchor_series[anchorIdx + 1].timestamp <= pt.timestamp
@@ -180,21 +197,53 @@ function PerformanceChart({ data, window, onWindowChange }:
           currentAnchor = data.anchor_series[anchorIdx].anchor_price;
         }
         pt.anchorLine = currentAnchor;
+        if (triggerUpPct != null) pt.triggerUp = currentAnchor * (1 + triggerUpPct / 100);
+        if (triggerDownPct != null) pt.triggerDown = currentAnchor * (1 + triggerDownPct / 100);
+      }
+    } else if (data.anchor.price) {
+      const a = data.anchor.price;
+      for (const pt of sorted) {
+        pt.anchorLine = a;
+        if (triggerUpPct != null) pt.triggerUp = a * (1 + triggerUpPct / 100);
+        if (triggerDownPct != null) pt.triggerDown = a * (1 + triggerDownPct / 100);
+      }
+    }
+
+    // Bug 3 fix: dynamic guardrail bands — stock-value bounds track actual total value
+    for (const pt of sorted) {
+      if (pt.value != null) {
+        if (minPctFrac > 0) pt.guardLow = pt.value * minPctFrac;
+        if (maxPctFrac > 0) pt.guardHigh = pt.value * maxPctFrac;
+      }
+    }
+
+    // Bug 1 fix: embed trade markers by nearest timestamp (ms comparison, ≤4h tolerance)
+    if (data.trade_markers.length > 0) {
+      const sortedWithMs = sorted.map(pt => ({ pt, ms: new Date(pt.timestamp).getTime() }));
+      for (const trade of data.trade_markers) {
+        const tradeMs = new Date(trade.timestamp).getTime();
+        let nearest: MergedPoint | null = null;
+        let nearestDiff = Infinity;
+        for (const { pt, ms } of sortedWithMs) {
+          const diff = Math.abs(ms - tradeMs);
+          if (diff < nearestDiff) { nearestDiff = diff; nearest = pt; }
+        }
+        if (nearest && nearestDiff <= 4 * 3600 * 1000) {
+          nearest.tradeMarker = { side: trade.side as 'BUY' | 'SELL', qty: trade.qty, price: trade.price };
+        }
       }
     }
 
     return sorted;
   }, [data]);
 
-  // Build a set of trade timestamps for custom dot rendering
-  const tradeSet = useMemo(() => new Map(
-    data.trade_markers.map((t) => [t.timestamp, t])
-  ), [data.trade_markers]);
+  // Bug 1 fix: vertical trade lines use matched merged timestamps
+  const tradePoints = useMemo(() => merged.filter(pt => pt.tradeMarker), [merged]);
 
-  // Custom dot for BUY/SELL markers on the price line
+  // Bug 1 fix: custom dot uses embedded tradeMarker from payload directly
   const PriceDot = (props: any) => {
     const { cx, cy, payload } = props;
-    const trade = tradeSet.get(payload.timestamp);
+    const trade = (payload as MergedPoint).tradeMarker;
     if (!trade || cx == null || cy == null) return null;
     const isBuy = trade.side === 'BUY';
     return (
@@ -207,27 +256,40 @@ function PerformanceChart({ data, window, onWindowChange }:
     );
   };
 
-  const anchor = data.anchor;
   const hasData = merged.length > 0;
+  const hasGuardrails = data.guardrails.min_stock_pct != null && data.guardrails.max_stock_pct != null;
+  const hasStockValue = merged.some(pt => pt.stockValue != null);
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-bold text-slate-800">Performance Chart</h3>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-3 text-xs">
+          <div className="flex items-center gap-3 text-xs flex-wrap">
             <span className="flex items-center gap-1 text-indigo-600">
               <svg width="16" height="3"><line x1="0" y1="1.5" x2="16" y2="1.5" stroke="#6366f1" strokeWidth="2" /></svg>
-              Ticker price
-            </span>
-            <span className="flex items-center gap-1 text-amber-500">
-              <svg width="16" height="3"><line x1="0" y1="1.5" x2="16" y2="1.5" stroke="#f59e0b" strokeWidth="2" strokeDasharray="4 2" /></svg>
-              Position value
+              Price
             </span>
             <span className="flex items-center gap-1 text-indigo-300">
               <svg width="16" height="3"><line x1="0" y1="1.5" x2="16" y2="1.5" stroke="#a5b4fc" strokeWidth="1.5" strokeDasharray="5 3" /></svg>
               Anchor
             </span>
+            <span className="flex items-center gap-1 text-amber-400">
+              <svg width="16" height="3"><line x1="0" y1="1.5" x2="16" y2="1.5" stroke="#fbbf24" strokeWidth="1.5" strokeDasharray="4 2" /></svg>
+              Triggers
+            </span>
+            {hasStockValue && (
+              <span className="flex items-center gap-1 text-teal-600">
+                <svg width="16" height="3"><line x1="0" y1="1.5" x2="16" y2="1.5" stroke="#0d9488" strokeWidth="2" /></svg>
+                Stock value
+              </span>
+            )}
+            {hasGuardrails && (
+              <span className="flex items-center gap-1 text-gray-400">
+                <svg width="16" height="3"><line x1="0" y1="1.5" x2="16" y2="1.5" stroke="#9ca3af" strokeWidth="1" strokeDasharray="3 2" /></svg>
+                Guardrails
+              </span>
+            )}
             <span className="flex items-center gap-1 text-green-600 text-[10px]">● BUY</span>
             <span className="flex items-center gap-1 text-red-500 text-[10px]">● SELL</span>
           </div>
@@ -248,7 +310,7 @@ function PerformanceChart({ data, window, onWindowChange }:
           No evaluation data for this window yet
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={220}>
+        <ResponsiveContainer width="100%" height={240}>
           <ComposedChart data={merged} margin={{ top: 10, right: 60, bottom: 20, left: 10 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
             <XAxis
@@ -277,70 +339,91 @@ function PerformanceChart({ data, window, onWindowChange }:
             <Tooltip
               content={({ active, payload, label }) => {
                 if (!active || !payload?.length) return null;
+                const pt = merged.find(p => p.timestamp === label);
                 return (
-                  <div className="bg-white border border-gray-200 rounded shadow-lg p-2 text-xs">
+                  <div className="bg-white border border-gray-200 rounded shadow-lg p-2 text-xs space-y-0.5">
                     <div className="text-gray-400 mb-1">{fmtTs(label)}</div>
-                    {payload.map((p: any) => (
+                    {payload.filter((p: any) => p.value != null && !['triggerUp','triggerDown','guardLow','guardHigh','anchorLine'].includes(p.dataKey)).map((p: any) => (
                       <div key={p.name} style={{ color: p.color }}>
-                        {p.name}: {p.name === 'price' ? `$${p.value?.toFixed(2)}` : `$${p.value?.toLocaleString()}`}
+                        {p.name}: {p.dataKey === 'price' ? `$${Number(p.value).toFixed(2)}` : `$${Number(p.value).toLocaleString(undefined, {maximumFractionDigits: 0})}`}
                       </div>
                     ))}
+                    {pt?.tradeMarker && (
+                      <div className={pt.tradeMarker.side === 'BUY' ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold'}>
+                        {pt.tradeMarker.side} {pt.tradeMarker.qty.toFixed(0)} @ ${pt.tradeMarker.price.toFixed(2)}
+                      </div>
+                    )}
                   </div>
                 );
               }}
             />
 
-            {/* Current trigger reference lines (computed from current anchor) */}
-            {anchor.trigger_up_price && (
-              <ReferenceLine yAxisId="left" y={anchor.trigger_up_price} stroke="#fcd34d" strokeDasharray="3 3" opacity={0.8}
-                label={{ value: `+${anchor.trigger_up_pct}% $${anchor.trigger_up_price.toFixed(2)}`, position: 'insideTopRight', fontSize: 8, fill: '#f59e0b' }} />
-            )}
-            {anchor.trigger_down_price && (
-              <ReferenceLine yAxisId="left" y={anchor.trigger_down_price} stroke="#fcd34d" strokeDasharray="3 3" opacity={0.8}
-                label={{ value: `${anchor.trigger_down_pct}% $${anchor.trigger_down_price.toFixed(2)}`, position: 'insideBottomRight', fontSize: 8, fill: '#f59e0b' }} />
-            )}
-
-            {/* Vertical drop lines for each trade */}
-            {data.trade_markers.map((t) => (
+            {/* Bug 1 fix: vertical trade lines at matched merged timestamps */}
+            {tradePoints.map((pt) => (
               <ReferenceLine
-                key={`tl-${t.timestamp}`}
+                key={`tl-${pt.timestamp}`}
                 yAxisId="left"
-                x={t.timestamp}
-                stroke={t.side === 'BUY' ? '#16a34a' : '#dc2626'}
+                x={pt.timestamp}
+                stroke={pt.tradeMarker!.side === 'BUY' ? '#16a34a' : '#dc2626'}
                 strokeWidth={1}
                 strokeDasharray="2 2"
-                opacity={0.35}
+                opacity={0.4}
               />
             ))}
 
-            {/* Ticker price line */}
+            {/* Ticker price line with BUY/SELL dots */}
             <Line
               yAxisId="left"
               type="monotone"
               dataKey="price"
               stroke="#6366f1"
               strokeWidth={2}
-              dot={<PriceDot />}
+              dot={(props: any) => <PriceDot {...props} />}
               activeDot={{ r: 4, fill: '#6366f1' }}
               name="price"
               connectNulls
             />
-            {/* Anchor price step-function line (historical anchor changes) */}
-            {data.anchor_series && data.anchor_series.length > 0 && (
-              <Line
-                yAxisId="left"
-                type="stepAfter"
-                dataKey="anchorLine"
-                stroke="#a5b4fc"
-                strokeWidth={1.5}
-                strokeDasharray="5 3"
-                dot={false}
-                activeDot={false}
-                name="anchor"
-                connectNulls
-              />
-            )}
-            {/* Position value line */}
+            {/* Anchor step-function line */}
+            <Line
+              yAxisId="left"
+              type="stepAfter"
+              dataKey="anchorLine"
+              stroke="#a5b4fc"
+              strokeWidth={1.5}
+              strokeDasharray="5 3"
+              dot={false}
+              activeDot={false}
+              name="anchor"
+              connectNulls
+            />
+            {/* Bug 2 fix: trigger lines step with anchor */}
+            <Line
+              yAxisId="left"
+              type="stepAfter"
+              dataKey="triggerUp"
+              stroke="#fbbf24"
+              strokeWidth={1}
+              strokeDasharray="4 2"
+              dot={false}
+              activeDot={false}
+              name="triggerUp"
+              legendType="none"
+              connectNulls
+            />
+            <Line
+              yAxisId="left"
+              type="stepAfter"
+              dataKey="triggerDown"
+              stroke="#fbbf24"
+              strokeWidth={1}
+              strokeDasharray="4 2"
+              dot={false}
+              activeDot={false}
+              name="triggerDown"
+              legendType="none"
+              connectNulls
+            />
+            {/* Position total value */}
             <Line
               yAxisId="right"
               type="monotone"
@@ -350,9 +433,53 @@ function PerformanceChart({ data, window, onWindowChange }:
               strokeDasharray="6 3"
               dot={false}
               activeDot={{ r: 3, fill: '#f59e0b' }}
-              name="value"
+              name="total value"
               connectNulls
             />
+            {/* Bug 3 fix: stock value + dynamic guardrail bands on right axis */}
+            {hasStockValue && (
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="stockValue"
+                stroke="#0d9488"
+                strokeWidth={1.5}
+                dot={false}
+                activeDot={{ r: 3, fill: '#0d9488' }}
+                name="stock value"
+                connectNulls
+              />
+            )}
+            {hasGuardrails && (
+              <>
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="guardHigh"
+                  stroke="#9ca3af"
+                  strokeWidth={1}
+                  strokeDasharray="3 2"
+                  dot={false}
+                  activeDot={false}
+                  name="guardHigh"
+                  legendType="none"
+                  connectNulls
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="guardLow"
+                  stroke="#9ca3af"
+                  strokeWidth={1}
+                  strokeDasharray="3 2"
+                  dot={false}
+                  activeDot={false}
+                  name="guardLow"
+                  legendType="none"
+                  connectNulls
+                />
+              </>
+            )}
 
             <Brush dataKey="timestamp" height={18} tickFormatter={fmtTsShort}
               travellerWidth={6} stroke="#e2e8f0" fill="#f8fafc" />

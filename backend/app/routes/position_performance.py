@@ -55,6 +55,7 @@ class PricePoint(BaseModel):
 class ValuePoint(BaseModel):
     timestamp: str
     value: float
+    stock_value: Optional[float] = None  # qty * price at this evaluation point
 
 
 class TradeMarker(BaseModel):
@@ -146,10 +147,15 @@ def get_position_performance(
                 ts = _to_iso(r.get("timestamp"))
                 if not ts:
                     continue
-                tv = r.get("position_total_value_after") or r.get("position_total_value")
+                tv = r.get("position_total_value_after") or r.get("position_total_value_before")
+                sv = r.get("position_stock_value_after") or r.get("position_stock_value_before")
                 if tv is not None:
                     try:
-                        value_series.append(ValuePoint(timestamp=ts, value=float(tv)))
+                        value_series.append(ValuePoint(
+                            timestamp=ts,
+                            value=float(tv),
+                            stock_value=float(sv) if sv is not None else None,
+                        ))
                     except (TypeError, ValueError):
                         pass
                 # Build anchor series: emit a point whenever anchor changes

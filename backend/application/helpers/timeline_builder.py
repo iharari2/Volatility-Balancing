@@ -211,6 +211,11 @@ def build_timeline_row_from_evaluation(
         stock_pct_after = (
             (stock_value_after / total_value_after * 100) if total_value_after > 0 else 0.0
         )
+    else:
+        # No trade (HOLD/SKIP): state after = state before at this evaluation point
+        stock_value_after = stock_value_before
+        total_value_after = total_value_before
+        stock_pct_after = stock_pct
 
     # Calculate portfolio impact
     position_weight_pct_before = None

@@ -343,7 +343,9 @@ export default function EventsTab() {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-xs font-mono text-gray-700">
                         {(() => {
-                          const t = computeTriggerValues(row.anchor_price, row.trigger_up_threshold, row.trigger_down_threshold);
+                          const upPct = row.trigger_up_threshold ?? selectedPosition?.trigger_up_pct;
+                          const downPct = row.trigger_down_threshold ?? selectedPosition?.trigger_down_pct;
+                          const t = computeTriggerValues(row.anchor_price, upPct, downPct);
                           if (t.low == null && t.high == null) return <span className="text-gray-400">-</span>;
                           return (
                             <span title={`Direction: ${row.trigger_direction || 'NONE'}`}>
@@ -356,7 +358,10 @@ export default function EventsTab() {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-xs font-mono">
                         {(() => {
-                          const g = computeGuardrailValues(row.guardrail_min_stock_pct, row.guardrail_max_stock_pct, row.position_total_value_before);
+                          const minPct = row.guardrail_min_stock_pct ?? selectedPosition?.guardrail_min_pct;
+                          const maxPct = row.guardrail_max_stock_pct ?? selectedPosition?.guardrail_max_pct;
+                          const totalVal = row.position_total_value_before;
+                          const g = computeGuardrailValues(minPct, maxPct, totalVal);
                           if (g.low == null && g.high == null) return <span className="text-gray-400">-</span>;
                           const blocked = row.guardrail_allowed === false;
                           return (
@@ -388,7 +393,7 @@ export default function EventsTab() {
                         {row.action_reason || row.guardrail_block_reason || '-'}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-medium text-gray-900">
-                        {formatCurrency(row.position_total_value_after)}
+                        {formatCurrency(row.position_total_value_after ?? row.position_total_value_before)}
                       </td>
                     </tr>
                   ))}
@@ -456,7 +461,9 @@ export default function EventsTab() {
                           <span className="text-gray-500">Trigger ▼/▲</span>
                           <p className="font-mono font-medium text-gray-900">
                             {(() => {
-                              const t = computeTriggerValues(row.anchor_price, row.trigger_up_threshold, row.trigger_down_threshold);
+                              const upPct = row.trigger_up_threshold ?? selectedPosition?.trigger_up_pct;
+                              const downPct = row.trigger_down_threshold ?? selectedPosition?.trigger_down_pct;
+                              const t = computeTriggerValues(row.anchor_price, upPct, downPct);
                               if (t.low == null && t.high == null) return '-';
                               return (
                                 <span>
@@ -472,7 +479,9 @@ export default function EventsTab() {
                           <span className="text-gray-500">Guardrail ▼/▲</span>
                           <p className={`font-mono font-medium ${row.guardrail_allowed === false ? 'text-danger-700' : 'text-gray-900'}`}>
                             {(() => {
-                              const g = computeGuardrailValues(row.guardrail_min_stock_pct, row.guardrail_max_stock_pct, row.position_total_value_before);
+                              const minPct = row.guardrail_min_stock_pct ?? selectedPosition?.guardrail_min_pct;
+                              const maxPct = row.guardrail_max_stock_pct ?? selectedPosition?.guardrail_max_pct;
+                              const g = computeGuardrailValues(minPct, maxPct, row.position_total_value_before);
                               if (g.low == null && g.high == null) return '-';
                               return `${formatCurrency(g.low)} / ${formatCurrency(g.high)}`;
                             })()}
@@ -481,7 +490,7 @@ export default function EventsTab() {
                         <div>
                           <span className="text-gray-500">Value After</span>
                           <p className="font-medium text-gray-900">
-                            {formatCurrency(row.position_total_value_after)}
+                            {formatCurrency(row.position_total_value_after ?? row.position_total_value_before)}
                           </p>
                         </div>
                         <div>

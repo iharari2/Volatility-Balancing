@@ -1,7 +1,7 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 export interface PricePoint { timestamp: string; price: number; }
-export interface ValuePoint { timestamp: string; value: number; }
+export interface ValuePoint { timestamp: string; value: number; stock_value?: number | null; }
 export interface TradeMarker { timestamp: string; side: 'BUY' | 'SELL'; qty: number; price: number; }
 
 export interface PerformanceAnchor {
