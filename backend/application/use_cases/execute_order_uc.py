@@ -15,7 +15,7 @@ from domain.ports.positions_repo import PositionsRepo
 from domain.ports.trades_repo import TradesRepo
 from domain.ports.evaluation_timeline_repo import EvaluationTimelineRepo
 from domain.services.guardrail_evaluator import GuardrailEvaluator
-from domain.value_objects.configs import GuardrailConfig, OrderPolicyConfig
+from domain.value_objects.configs import GuardrailConfig, OrderPolicyConfig, TriggerConfig
 from infrastructure.time.clock import Clock
 from infrastructure.adapters.converters import (
     guardrail_policy_to_guardrail_config,
@@ -49,6 +49,7 @@ class ExecuteOrderUC:
         trades: TradesRepo,
         events: EventsRepo,
         clock: Optional[Clock] = None,
+        trigger_config_provider: Optional[Callable[[str, str, str], TriggerConfig]] = None,
         guardrail_config_provider: Optional[Callable[[str, str, str], GuardrailConfig]] = None,
         order_policy_config_provider: Optional[Callable[[str, str, str], OrderPolicyConfig]] = None,
         evaluation_timeline_repo: Optional[EvaluationTimelineRepo] = None,
@@ -59,6 +60,7 @@ class ExecuteOrderUC:
         self.events = events
         self.clock = clock or Clock()
         # Config providers - if None, will fall back to extracting from Position entity (backward compat)
+        self.trigger_config_provider = trigger_config_provider
         self.guardrail_config_provider = guardrail_config_provider
         self.order_policy_config_provider = order_policy_config_provider
         self.evaluation_timeline_repo = evaluation_timeline_repo
@@ -414,6 +416,25 @@ class ExecuteOrderUC:
                 else 0
             )
 
+            # Look up trigger/guardrail configs for threshold data in the timeline row
+            trigger_up_threshold = None
+            trigger_down_threshold = None
+            guardrail_min_stock_pct = None
+            guardrail_max_stock_pct = None
+            try:
+                if self.trigger_config_provider:
+                    tc = self.trigger_config_provider(tenant_id, portfolio_id, position.id)
+                    if tc:
+                        trigger_up_threshold = float(tc.up_threshold_pct)
+                        trigger_down_threshold = float(tc.down_threshold_pct)
+                if self.guardrail_config_provider:
+                    gc = self.guardrail_config_provider(tenant_id, portfolio_id, position.id)
+                    if gc:
+                        guardrail_min_stock_pct = float(gc.min_stock_pct) if gc.min_stock_pct else None
+                        guardrail_max_stock_pct = float(gc.max_stock_pct) if gc.max_stock_pct else None
+            except Exception:
+                pass  # Config lookup failures must not block timeline write
+
             # Build timeline row dict
             timeline_row: Dict[str, Any] = {
                 "id": f"tl_{uuid4().hex[:12]}",
@@ -448,9 +469,13 @@ class ExecuteOrderUC:
                 "trigger_fired": True,
                 "trigger_direction": order.side,
                 "trigger_reason": f"Order {order.id} filled",
+                "trigger_up_threshold": trigger_up_threshold,
+                "trigger_down_threshold": trigger_down_threshold,
                 # Guardrail (passed since we executed)
                 "guardrail_allowed": True,
                 "guardrail_block_reason": None,
+                "guardrail_min_stock_pct": guardrail_min_stock_pct,
+                "guardrail_max_stock_pct": guardrail_max_stock_pct,
                 # Action
                 "action": order.side,  # BUY or SELL
                 "action_reason": f"Order filled: {order.side} {fill_qty:.4f} @ ${fill_price:.2f}",

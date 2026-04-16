@@ -580,6 +580,7 @@ class _Container:
         submit_order_uc.guardrail_config_provider = guardrail_config_provider
 
         # Update execute_order_uc with config providers (for broker integration)
+        execute_order_uc.trigger_config_provider = trigger_config_provider
         execute_order_uc.guardrail_config_provider = guardrail_config_provider
         execute_order_uc.order_policy_config_provider = order_policy_config_provider
 

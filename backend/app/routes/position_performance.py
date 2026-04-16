@@ -64,6 +64,11 @@ class TradeMarker(BaseModel):
     price: float
 
 
+class AnchorPoint(BaseModel):
+    timestamp: str
+    anchor_price: float
+
+
 class AnchorInfo(BaseModel):
     price: Optional[float]
     trigger_up_pct: Optional[float]
@@ -85,6 +90,7 @@ class PerformanceResponse(BaseModel):
     value_series: List[ValuePoint]
     trade_markers: List[TradeMarker]
     anchor: AnchorInfo
+    anchor_series: List[AnchorPoint]
     guardrails: GuardrailInfo
 
 
@@ -112,9 +118,10 @@ def get_position_performance(
         now = datetime.now(timezone.utc)
         start_ts = now - delta if delta else None
 
-        # ── Pull evaluation timeline rows (for position value series) ────────
+        # ── Pull evaluation timeline rows (for position value series + anchor) ──
         price_series: List[PricePoint] = []
         value_series: List[ValuePoint] = []
+        anchor_series: List[AnchorPoint] = []
 
         if hasattr(container, "evaluation_timeline"):
             rows: List[Dict[str, Any]] = container.evaluation_timeline.list_by_position(
@@ -134,6 +141,7 @@ def get_position_performance(
                 step = len(rows) // max_points
                 rows = rows[::step]
 
+            prev_anchor: Optional[float] = None
             for r in rows:
                 ts = _to_iso(r.get("timestamp"))
                 if not ts:
@@ -142,6 +150,16 @@ def get_position_performance(
                 if tv is not None:
                     try:
                         value_series.append(ValuePoint(timestamp=ts, value=float(tv)))
+                    except (TypeError, ValueError):
+                        pass
+                # Build anchor series: emit a point whenever anchor changes
+                ap = r.get("anchor_price")
+                if ap is not None:
+                    try:
+                        ap_float = float(ap)
+                        if ap_float != prev_anchor:
+                            anchor_series.append(AnchorPoint(timestamp=ts, anchor_price=ap_float))
+                            prev_anchor = ap_float
                     except (TypeError, ValueError):
                         pass
 
@@ -189,11 +207,45 @@ def get_position_performance(
                         stmt = stmt.where(OrderModel.created_at >= start_ts)
                     stmt = stmt.order_by(OrderModel.created_at.asc())
                     orders = session.execute(stmt).scalars().all()
+
+                    # Build sorted price-series timestamps for snapping
+                    price_ts_sorted: List[datetime] = []
+                    for p in price_series:
+                        try:
+                            from datetime import timezone as _tz
+                            dt = datetime.fromisoformat(p.timestamp)
+                            if dt.tzinfo is None:
+                                dt = dt.replace(tzinfo=timezone.utc)
+                            price_ts_sorted.append(dt)
+                        except Exception:
+                            pass
+                    price_ts_sorted.sort()
+
                     for o in orders:
-                        ts = _to_iso(o.created_at)
-                        if ts and o.qty and o.avg_fill_price:
+                        if not (o.qty and o.avg_fill_price):
+                            continue
+                        raw_ts = o.created_at
+                        if raw_ts is None:
+                            continue
+                        if isinstance(raw_ts, str):
+                            try:
+                                raw_ts = datetime.fromisoformat(raw_ts)
+                            except Exception:
+                                continue
+                        if hasattr(raw_ts, 'tzinfo') and raw_ts.tzinfo is None:
+                            raw_ts = raw_ts.replace(tzinfo=timezone.utc)
+
+                        # Snap to nearest price series timestamp (within 4 hours)
+                        snapped_ts = raw_ts
+                        if price_ts_sorted:
+                            nearest = min(price_ts_sorted, key=lambda t: abs((t - raw_ts).total_seconds()))
+                            if abs((nearest - raw_ts).total_seconds()) <= 4 * 3600:
+                                snapped_ts = nearest
+
+                        ts_iso = _to_iso(snapped_ts)
+                        if ts_iso:
                             trade_markers.append(TradeMarker(
-                                timestamp=ts,
+                                timestamp=ts_iso,
                                 side=o.side.upper() if o.side else "BUY",
                                 qty=abs(float(o.qty)),
                                 price=float(o.avg_fill_price),
@@ -243,6 +295,7 @@ def get_position_performance(
             price_series=price_series,
             value_series=value_series,
             trade_markers=trade_markers,
+            anchor_series=anchor_series,
             anchor=AnchorInfo(
                 price=anchor_price,
                 trigger_up_pct=trigger_up_pct,

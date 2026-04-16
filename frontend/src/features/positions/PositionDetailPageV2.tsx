@@ -153,9 +153,9 @@ function MarketSnapshotBar({ cockpit, afterHoursEnabled, onToggleAfterHours, tog
 function PerformanceChart({ data, window, onWindowChange }:
   { data: PerformanceData; window: string; onWindowChange: (w: string) => void }) {
 
-  // Merge price + value series by timestamp
+  // Merge price + value series by timestamp; also carry anchor_price forward as step function
   const merged = useMemo(() => {
-    const map = new Map<string, { timestamp: string; price?: number; value?: number }>();
+    const map = new Map<string, { timestamp: string; price?: number; value?: number; anchorLine?: number }>();
     for (const p of data.price_series) {
       map.set(p.timestamp, { timestamp: p.timestamp, price: p.price });
     }
@@ -164,7 +164,26 @@ function PerformanceChart({ data, window, onWindowChange }:
       existing.value = v.value;
       map.set(v.timestamp, existing);
     }
-    return Array.from(map.values()).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    const sorted = Array.from(map.values()).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+    // Paint anchor as a step function: carry the last known anchor forward through price points
+    if (data.anchor_series && data.anchor_series.length > 0) {
+      let anchorIdx = 0;
+      let currentAnchor = data.anchor_series[0].anchor_price;
+      for (const pt of sorted) {
+        // Advance anchor pointer if a later anchor change has passed this timestamp
+        while (
+          anchorIdx + 1 < data.anchor_series.length &&
+          data.anchor_series[anchorIdx + 1].timestamp <= pt.timestamp
+        ) {
+          anchorIdx++;
+          currentAnchor = data.anchor_series[anchorIdx].anchor_price;
+        }
+        pt.anchorLine = currentAnchor;
+      }
+    }
+
+    return sorted;
   }, [data]);
 
   // Build a set of trade timestamps for custom dot rendering
@@ -204,6 +223,10 @@ function PerformanceChart({ data, window, onWindowChange }:
             <span className="flex items-center gap-1 text-amber-500">
               <svg width="16" height="3"><line x1="0" y1="1.5" x2="16" y2="1.5" stroke="#f59e0b" strokeWidth="2" strokeDasharray="4 2" /></svg>
               Position value
+            </span>
+            <span className="flex items-center gap-1 text-indigo-300">
+              <svg width="16" height="3"><line x1="0" y1="1.5" x2="16" y2="1.5" stroke="#a5b4fc" strokeWidth="1.5" strokeDasharray="5 3" /></svg>
+              Anchor
             </span>
             <span className="flex items-center gap-1 text-green-600 text-[10px]">● BUY</span>
             <span className="flex items-center gap-1 text-red-500 text-[10px]">● SELL</span>
@@ -267,11 +290,7 @@ function PerformanceChart({ data, window, onWindowChange }:
               }}
             />
 
-            {/* Anchor + trigger reference lines */}
-            {anchor.price && (
-              <ReferenceLine yAxisId="left" y={anchor.price} stroke="#a5b4fc" strokeDasharray="5 3"
-                label={{ value: `Anchor $${anchor.price.toFixed(2)}`, position: 'insideTopLeft', fontSize: 9, fill: '#a5b4fc' }} />
-            )}
+            {/* Current trigger reference lines (computed from current anchor) */}
             {anchor.trigger_up_price && (
               <ReferenceLine yAxisId="left" y={anchor.trigger_up_price} stroke="#fcd34d" strokeDasharray="3 3" opacity={0.8}
                 label={{ value: `+${anchor.trigger_up_pct}% $${anchor.trigger_up_price.toFixed(2)}`, position: 'insideTopRight', fontSize: 8, fill: '#f59e0b' }} />
@@ -306,6 +325,21 @@ function PerformanceChart({ data, window, onWindowChange }:
               name="price"
               connectNulls
             />
+            {/* Anchor price step-function line (historical anchor changes) */}
+            {data.anchor_series && data.anchor_series.length > 0 && (
+              <Line
+                yAxisId="left"
+                type="stepAfter"
+                dataKey="anchorLine"
+                stroke="#a5b4fc"
+                strokeWidth={1.5}
+                strokeDasharray="5 3"
+                dot={false}
+                activeDot={false}
+                name="anchor"
+                connectNulls
+              />
+            )}
             {/* Position value line */}
             <Line
               yAxisId="right"

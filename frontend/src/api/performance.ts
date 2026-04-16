@@ -18,6 +18,8 @@ export interface PerformanceGuardrails {
   current_stock_pct: number | null;
 }
 
+export interface AnchorPoint { timestamp: string; anchor_price: number; }
+
 export interface PerformanceData {
   ticker: string;
   window: string;
@@ -25,6 +27,7 @@ export interface PerformanceData {
   value_series: ValuePoint[];
   trade_markers: TradeMarker[];
   anchor: PerformanceAnchor;
+  anchor_series: AnchorPoint[];
   guardrails: PerformanceGuardrails;
 }
 

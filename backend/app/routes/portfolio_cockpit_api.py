@@ -295,7 +295,7 @@ def get_position_cockpit(
     position_id: str,
     window: str = Query("7d", description="Timeline window, e.g. 7d, 24h"),
     tenant_id: str = Query("default", description="Tenant scope (overridden by auth)"),
-    timeline_limit: int = Query(200, description="Max timeline rows to return"),
+    timeline_limit: int = Query(10000, description="Max timeline rows to return"),
     quote_limit: int = Query(20, description="Max recent quotes to return"),
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
     user: CurrentUser = Depends(get_current_user),
