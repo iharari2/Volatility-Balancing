@@ -1,7 +1,7 @@
 ---
 owner: Development Team
 status: active
-last_updated: 2026-04-11
+last_updated: 2026-04-14
 ---
 
 # Volatility Balancing — Development Plan
@@ -58,6 +58,7 @@ last_updated: 2026-04-11
 | 26 | Real-time Data UI Indicators | `MarketDataBadge` component; freshness dot + source chip + elapsed timer wired into OverviewTab, TradingTab, WorkspaceTopBar |
 | 27 | Fly.io Migration | Replaced EC2+SSM with Fly.io (backend) + Cloudflare Pages (frontend) + Neon (PostgreSQL); CI deploys via `flyctl deploy`; ~$3/month |
 | 28 | User Management Console | Admin UI at `/admin/users` (owner-only); list/edit-role/enable-disable users; `set-role` CLI subcommand; `GET|PATCH /v1/admin/users` endpoints |
+| 29 | Bug Fixes: Onboarding, Orders, Simulation | Fix blank onboarding page; fix Orders 404 (route prefix `/api/` → `/v1/`); fix onboarding field names + error formatting; add impersonation escape hatch; fix simulation future-date error (cap vs reject); add daily fetch retry logic; add TopBar user menu with logout |
 
 ---
 

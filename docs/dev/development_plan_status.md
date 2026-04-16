@@ -1,6 +1,6 @@
 # Development Plan Status
 
-**Last Updated**: 2026-04-11 (post-Iteration 30)
+**Last Updated**: 2026-04-14 (post-Iteration 29 bug fixes)
 
 > Iteration details are summarized in [`unified_development_plan.md`](unified_development_plan.md).
 > This file tracks per-commit specifics for reference.
@@ -46,3 +46,4 @@
 | 28 | User Management Console | — | `GET|PATCH /v1/admin/users`; owner-only guard; AdminUsersPage; Admin nav section in sidebar; `set-role` CLI |
 | 29 | Dashboard + Position Detail UX Redesign | `1cd548e` | New DashboardPage (KPI cards, positions table, allocation needle bar); PositionDetailPageV2 (combo chart dual-axis, trade markers, anchor/trigger lines); AllocationNeedleBar component; performance API endpoint; extended PositionSummaryItem; commission default 0.01%; guardrail defaults 25%/75%; cockpit.ts URL fix |
 | 30 | Password Reset + Email Notifications | — | `POST /v1/auth/forgot-password` + `POST /v1/auth/reset-password` (time-limited token, 1h TTL); `NotificationService` (SMTP stdlib); `PasswordResetService`; `GET|PUT /v1/settings/notifications`; ForgotPasswordPage + ResetPasswordPage; Settings Notifications card; email alerts wired into trading worker; CI test fix for async simulation endpoint |
+| — | Bug Fixes (Iteration 29) | `e215e81` | Blank onboarding page (removed useTenantPortfolio dep); Orders 404 (route prefix → `/v1/`); onboarding field names + error array display; admin impersonation escape hatch; simulation end_date capped at now; daily data fetch retries (3x); TopBar user menu with logout |
