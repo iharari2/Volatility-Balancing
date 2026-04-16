@@ -56,7 +56,7 @@ export default function EventsTab() {
   const tenantId = selectedTenantId || 'default';
   const [cockpitData, setCockpitData] = useState<CockpitResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [timeWindow, setTimeWindow] = useState('7d');
+  const [timeWindow, setTimeWindow] = useState('all');
   const [viewMode, setViewMode] = useState<ViewMode>('table');
 
   // Filter state
@@ -292,7 +292,11 @@ export default function EventsTab() {
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
           {filteredRows.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
-              {hasActiveFilters ? 'No events match your filters' : 'No events available'}
+              {hasActiveFilters
+                ? 'No events match your filters'
+                : timeWindow !== 'all'
+                  ? `No events in the last ${timeWindow} — try All Time`
+                  : 'No events recorded yet'}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -398,7 +402,11 @@ export default function EventsTab() {
         <div className="bg-white border border-gray-200 rounded-lg p-6">
           {filteredRows.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
-              {hasActiveFilters ? 'No events match your filters' : 'No events available'}
+              {hasActiveFilters
+                ? 'No events match your filters'
+                : timeWindow !== 'all'
+                  ? `No events in the last ${timeWindow} — try All Time`
+                  : 'No events recorded yet'}
             </div>
           ) : (
             <div className="relative">
