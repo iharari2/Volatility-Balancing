@@ -92,65 +92,56 @@ export function TenantPortfolioProvider({ children }: TenantPortfolioProviderPro
 
   const loadPortfolios = async (tenantId: string) => {
     try {
-      // Fetch from API
       const apiPortfolios = await portfolioApi.list(tenantId);
 
-      // Fetch overview for each portfolio to get totalValue and positionCount
-      const portfoliosWithSummary: Portfolio[] = await Promise.all(
-        apiPortfolios.map(async (p) => {
-          try {
-            const overview = await portfolioApi.getOverview(tenantId, p.id);
-            return {
-              id: p.id,
-              name: p.name,
-              description: p.description,
-              tenantId: tenantId,
-              userId: p.user_id,
-              totalValue: overview.kpis.total_value,
-              positionCount: overview.positions.length,
-              autoTradingEnabled: overview.portfolio.state === 'RUNNING',
-              created_at: p.created_at,
-              updated_at: p.updated_at,
-            };
-          } catch (err) {
-            // If overview fails, return basic portfolio info
-            console.warn(`Failed to load overview for portfolio ${p.id}:`, err);
-            return {
-              id: p.id,
-              name: p.name,
-              description: p.description,
-              tenantId: tenantId,
-              userId: p.user_id,
-              totalValue: 0,
-              positionCount: 0,
-              autoTradingEnabled: false,
-              created_at: p.created_at,
-              updated_at: p.updated_at,
-            };
-          }
-        }),
-      );
+      // Show portfolios immediately with basic info — don't block on overview calls
+      const basicPortfolios: Portfolio[] = apiPortfolios.map((p) => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        tenantId: tenantId,
+        userId: p.user_id,
+        created_at: p.created_at,
+        updated_at: p.updated_at,
+      }));
 
-      setPortfolios(portfoliosWithSummary);
+      setPortfolios(basicPortfolios);
 
       // Auto-select first portfolio if none selected
-      if (portfoliosWithSummary.length > 0) {
+      if (basicPortfolios.length > 0) {
         setSelectedPortfolioId((current) => {
-          if (!current && portfoliosWithSummary.length > 0) {
-            return portfoliosWithSummary[0].id;
-          }
+          if (!current) return basicPortfolios[0].id;
           return current;
         });
       } else {
-        // No portfolios — send to onboarding (unless already there)
         const noRedirect = ['/onboarding', '/login', '/forgot-password', '/reset-password'];
         if (!noRedirect.includes(location.pathname)) {
           navigate('/onboarding', { replace: true });
         }
       }
+
+      // Enrich with overview data in background (non-blocking)
+      apiPortfolios.forEach(async (p) => {
+        try {
+          const overview = await portfolioApi.getOverview(tenantId, p.id);
+          setPortfolios((prev) =>
+            prev.map((existing) =>
+              existing.id === p.id
+                ? {
+                    ...existing,
+                    totalValue: overview.kpis.total_value,
+                    positionCount: overview.positions.length,
+                    autoTradingEnabled: overview.portfolio.state === 'RUNNING',
+                  }
+                : existing,
+            ),
+          );
+        } catch {
+          // Overview enrichment is best-effort; ignore failures
+        }
+      });
     } catch (error) {
       console.error('Error loading portfolios:', error);
-      // Fallback to empty array on error
       setPortfolios([]);
     }
   };
