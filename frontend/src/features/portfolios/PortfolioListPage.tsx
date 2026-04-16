@@ -512,6 +512,12 @@ export default function PortfolioListPage() {
         onSave={async () => {
           await refreshPortfolios();
         }}
+        onDelete={(deletedId) => {
+          if (selectedPortfolioId === deletedId) setSelectedPortfolioId('');
+          setShowDetailModal(false);
+          setSelectedPortfolioForDetail(null);
+          refreshPortfolios();
+        }}
       />
     </div>
   );
