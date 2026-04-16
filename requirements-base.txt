@@ -59,6 +59,6 @@ uvicorn==0.30.0
 uvloop==0.21.0
 watchfiles==1.1.0
 websockets==15.0.1
-yfinance==0.2.54
+yfinance==0.2.66
 openpyxl==3.1.5
 starlette==0.47.3

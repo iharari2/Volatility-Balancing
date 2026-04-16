@@ -600,6 +600,8 @@ class _Container:
         self.idempotency.clear()
         self.portfolio_state.clear()
         self.alert_repo.clear()
+        if hasattr(self, "user_repo") and hasattr(self.user_repo, "clear"):
+            self.user_repo.clear()
         if hasattr(self, "_timeline_session_factory"):
             self.evaluation_timeline = EvaluationTimelineRepoSQL(self._timeline_session_factory)
         # Reset broker if it's a stub
