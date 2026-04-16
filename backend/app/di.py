@@ -70,6 +70,7 @@ from infrastructure.persistence.sql.optimization_repo_sql import (
     SQLHeatmapDataRepo,
 )
 from infrastructure.persistence.memory.alert_repo_mem import InMemoryAlertRepo
+from infrastructure.persistence.memory.portfolio_config_repo_mem import InMemoryPortfolioConfigRepo
 from infrastructure.persistence.memory.user_repo_mem import InMemoryUserRepo
 
 # Use cases
@@ -245,7 +246,7 @@ class _Container:
                 bind=portfolio_engine, expire_on_commit=False, autoflush=False
             )
             self.portfolio_repo = SQLPortfolioRepo(PortfolioSession)
-            self.portfolio_config_repo = SQLPortfolioConfigRepo(PortfolioSession)
+            self.portfolio_config_repo = InMemoryPortfolioConfigRepo()
             self.orders = InMemoryOrdersRepo()
             self.trades = InMemoryTradesRepo()
             # Keep in-memory simulation repository for memory persistence
@@ -626,6 +627,8 @@ class _Container:
         self.alert_repo.clear()
         if hasattr(self, "user_repo") and hasattr(self.user_repo, "clear"):
             self.user_repo.clear()
+        if hasattr(self, "portfolio_config_repo") and hasattr(self.portfolio_config_repo, "clear"):
+            self.portfolio_config_repo.clear()
         if hasattr(self, "_timeline_session_factory"):
             self.evaluation_timeline = EvaluationTimelineRepoSQL(self._timeline_session_factory)
         # Reset broker if it's a stub

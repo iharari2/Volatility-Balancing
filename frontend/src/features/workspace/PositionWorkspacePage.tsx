@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Settings, PlaySquare, HelpCircle, Home, ChevronRight, Menu, Briefcase, BarChart3, X } from 'lucide-react';
+import { Settings, PlaySquare, HelpCircle, Home, ChevronRight, Menu, Briefcase, BarChart3, X, LogOut, User } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import MasterDetailLayout from '../../layouts/MasterDetailLayout';
 import { WorkspaceProvider, useWorkspace } from './WorkspaceContext';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
@@ -13,11 +14,14 @@ import MarketDataBadge from '../../components/shared/MarketDataBadge';
 function WorkspaceTopBar() {
   const { selectedPortfolio } = useTenantPortfolio();
   const { selectedPosition, setSelectedPositionId } = useWorkspace();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [marketStatus, setMarketStatus] = useState<MarketStatus>('CLOSED');
   const [mode] = useState<'Live' | 'Simulation' | 'Sandbox'>('Live');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const marketPriceQuery = useMarketPrice(selectedPosition?.asset_symbol ?? '');
 
   useEffect(() => {
@@ -31,19 +35,24 @@ function WorkspaceTopBar() {
     return () => clearInterval(interval);
   }, []);
 
-  // Close menu when clicking outside
+  // Close menus when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsMenuOpen(false);
       }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
     };
-
-    if (isMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
+    document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isMenuOpen]);
+  }, []);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   const handleHomeClick = () => {
     setSelectedPositionId(null);
@@ -192,13 +201,42 @@ function WorkspaceTopBar() {
           <span className="hidden sm:inline">Settings</span>
         </Link>
 
-        <button
-          type="button"
-          className="p-2 text-gray-400 hover:text-gray-600 rounded-lg transition-colors"
-          title="Help"
-        >
-          <HelpCircle className="h-4 w-4" />
-        </button>
+        {/* User menu */}
+        <div className="relative" ref={userMenuRef}>
+          <button
+            onClick={() => setIsUserMenuOpen(o => !o)}
+            className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+            title="Account"
+          >
+            <div className="w-6 h-6 rounded-full bg-primary-600 flex items-center justify-center text-white">
+              <User className="h-3.5 w-3.5" />
+            </div>
+            <span className="hidden sm:block text-xs font-medium max-w-[80px] truncate">
+              {user?.display_name || user?.email?.split('@')[0] || 'Account'}
+            </span>
+          </button>
+          {isUserMenuOpen && (
+            <div className="absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+              <div className="px-3 py-2 border-b border-gray-100">
+                <p className="text-xs font-semibold text-gray-900 truncate">{user?.display_name || user?.email}</p>
+                {user?.display_name && <p className="text-xs text-gray-400 truncate">{user.email}</p>}
+              </div>
+              <Link
+                to="/settings"
+                onClick={() => setIsUserMenuOpen(false)}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                <Settings className="h-4 w-4" /> Settings
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+              >
+                <LogOut className="h-4 w-4" /> Sign out
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
