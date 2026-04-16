@@ -22,9 +22,30 @@ const formatCurrency = (value?: number | null) => {
   return `$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 };
 
-const formatPercent = (value?: number | null) => {
-  if (value === null || value === undefined) return '-';
-  return `${value.toFixed(2)}%`;
+const normalizePct = (pct: number) => (pct <= 1 ? pct : pct / 100);
+
+const computeGuardrailValues = (
+  minPct: number | null | undefined,
+  maxPct: number | null | undefined,
+  totalValue: number | null | undefined,
+): { low: number | null; high: number | null } => {
+  if (minPct == null || maxPct == null || totalValue == null) return { low: null, high: null };
+  return {
+    low: totalValue * normalizePct(minPct),
+    high: totalValue * normalizePct(maxPct),
+  };
+};
+
+const computeTriggerValues = (
+  anchor: number | null | undefined,
+  upPct: number | null | undefined,
+  downPct: number | null | undefined,
+): { low: number | null; high: number | null } => {
+  if (anchor == null) return { low: null, high: null };
+  return {
+    high: upPct != null ? anchor * (1 + upPct / 100) : null,
+    low: downPct != null ? anchor * (1 + downPct / 100) : null,
+  };
 };
 
 type ViewMode = 'timeline' | 'table';
@@ -288,10 +309,10 @@ export default function EventsTab() {
                       Anchor
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                      Trigger
+                      Trigger ▼/▲
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                      Guardrail
+                      Guardrail ▼/▲
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                       Action
@@ -316,38 +337,35 @@ export default function EventsTab() {
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
                         {row.anchor_price != null ? formatCurrency(row.anchor_price) : <span className="text-gray-400">-</span>}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm">
-                        {row.trigger_direction ? (
-                          <span
-                            className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-                              row.trigger_direction === 'UP'
-                                ? 'bg-success-100 text-success-700'
-                                : row.trigger_direction === 'DOWN'
-                                ? 'bg-danger-100 text-danger-700'
-                                : 'bg-gray-100 text-gray-700'
-                            }`}
-                          >
-                            {row.trigger_direction}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
+                      <td className="px-4 py-3 whitespace-nowrap text-xs font-mono text-gray-700">
+                        {(() => {
+                          const t = computeTriggerValues(row.anchor_price, row.trigger_up_threshold, row.trigger_down_threshold);
+                          if (t.low == null && t.high == null) return <span className="text-gray-400">-</span>;
+                          return (
+                            <span title={`Direction: ${row.trigger_direction || 'NONE'}`}>
+                              <span className="text-danger-600">{t.low != null ? formatCurrency(t.low) : '-'}</span>
+                              {' / '}
+                              <span className="text-success-600">{t.high != null ? formatCurrency(t.high) : '-'}</span>
+                            </span>
+                          );
+                        })()}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm">
-                        {row.guardrail_min_stock_pct != null && row.guardrail_max_stock_pct != null ? (
-                          <span
-                            className={`inline-block px-2 py-0.5 rounded text-xs font-mono font-medium ${
-                              row.guardrail_allowed === false
-                                ? 'bg-danger-100 text-danger-700'
-                                : 'bg-gray-100 text-gray-700'
-                            }`}
-                            title={row.guardrail_allowed === false ? (row.guardrail_block_reason || 'Blocked') : 'Allowed'}
-                          >
-                            {Math.round(row.guardrail_min_stock_pct * (row.guardrail_min_stock_pct <= 1 ? 100 : 1))}/{Math.round(row.guardrail_max_stock_pct * (row.guardrail_max_stock_pct <= 1 ? 100 : 1))}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
+                      <td className="px-4 py-3 whitespace-nowrap text-xs font-mono">
+                        {(() => {
+                          const g = computeGuardrailValues(row.guardrail_min_stock_pct, row.guardrail_max_stock_pct, row.position_total_value_before);
+                          if (g.low == null && g.high == null) return <span className="text-gray-400">-</span>;
+                          const blocked = row.guardrail_allowed === false;
+                          return (
+                            <span
+                              className={blocked ? 'text-danger-700' : 'text-gray-700'}
+                              title={blocked ? (row.guardrail_block_reason || 'Blocked') : 'Allowed'}
+                            >
+                              {g.low != null ? formatCurrency(g.low) : '-'}
+                              {' / '}
+                              {g.high != null ? formatCurrency(g.high) : '-'}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm">
                         <span
@@ -427,17 +445,29 @@ export default function EventsTab() {
                           </p>
                         </div>
                         <div>
-                          <span className="text-gray-500">Trigger</span>
-                          <p className="font-medium text-gray-900">
-                            {row.trigger_direction || '-'}
+                          <span className="text-gray-500">Trigger ▼/▲</span>
+                          <p className="font-mono font-medium text-gray-900">
+                            {(() => {
+                              const t = computeTriggerValues(row.anchor_price, row.trigger_up_threshold, row.trigger_down_threshold);
+                              if (t.low == null && t.high == null) return '-';
+                              return (
+                                <span>
+                                  <span className="text-danger-600">{t.low != null ? formatCurrency(t.low) : '-'}</span>
+                                  {' / '}
+                                  <span className="text-success-600">{t.high != null ? formatCurrency(t.high) : '-'}</span>
+                                </span>
+                              );
+                            })()}
                           </p>
                         </div>
                         <div>
-                          <span className="text-gray-500">Guardrail</span>
+                          <span className="text-gray-500">Guardrail ▼/▲</span>
                           <p className={`font-mono font-medium ${row.guardrail_allowed === false ? 'text-danger-700' : 'text-gray-900'}`}>
-                            {row.guardrail_min_stock_pct != null && row.guardrail_max_stock_pct != null
-                              ? `${Math.round(row.guardrail_min_stock_pct * (row.guardrail_min_stock_pct <= 1 ? 100 : 1))}/${Math.round(row.guardrail_max_stock_pct * (row.guardrail_max_stock_pct <= 1 ? 100 : 1))}`
-                              : '-'}
+                            {(() => {
+                              const g = computeGuardrailValues(row.guardrail_min_stock_pct, row.guardrail_max_stock_pct, row.position_total_value_before);
+                              if (g.low == null && g.high == null) return '-';
+                              return `${formatCurrency(g.low)} / ${formatCurrency(g.high)}`;
+                            })()}
                           </p>
                         </div>
                         <div>
