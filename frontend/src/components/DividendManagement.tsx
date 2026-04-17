@@ -1,21 +1,11 @@
-import { useState } from 'react';
 import {
   useDividendPositionStatus,
-  useProcessExDividend,
   useProcessDividendPayment,
+  useDividendMarketInfo,
+  useUpcomingDividends,
 } from '../hooks/useDividends';
-import { useDividendMarketInfo, useUpcomingDividends } from '../hooks/useDividends';
-import {
-  DollarSign,
-  Calendar,
-  TrendingUp,
-  AlertCircle,
-  CheckCircle,
-  Play,
-  Clock,
-  Download,
-} from 'lucide-react';
-import { format } from 'date-fns';
+import { DollarSign, Calendar, TrendingUp, AlertCircle, Play, Download, Clock } from 'lucide-react';
+import { format, isPast, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
 import { exportToExcel } from '../utils/exportExcel';
 
@@ -26,315 +16,229 @@ interface DividendManagementProps {
   ticker: string;
 }
 
+function fmt$(n: number) {
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 export default function DividendManagement({ tenantId, portfolioId, positionId, ticker }: DividendManagementProps) {
-  const [activeTab, setActiveTab] = useState<'status' | 'market' | 'upcoming'>('status');
+  const { data: positionStatus, isLoading: statusLoading } =
+    useDividendPositionStatus(tenantId, portfolioId, positionId);
+  const { data: marketInfo, isLoading: marketLoading } = useDividendMarketInfo(ticker);
+  const { data: upcoming, isLoading: upcomingLoading } = useUpcomingDividends(ticker);
 
-  const {
-    data: positionStatus,
-    isLoading: statusLoading,
-    error: statusError,
-  } = useDividendPositionStatus(tenantId, portfolioId, positionId);
-  const {
-    data: marketInfo,
-    isLoading: marketLoading,
-    error: marketError,
-  } = useDividendMarketInfo(ticker);
-  const {
-    data: upcoming,
-    isLoading: upcomingLoading,
-    error: upcomingError,
-  } = useUpcomingDividends(ticker);
-
-  const processExDividend = useProcessExDividend(tenantId, portfolioId, positionId);
   const processPayment = useProcessDividendPayment(tenantId, portfolioId, positionId);
-
-  const handleProcessExDividend = async () => {
-    try {
-      await processExDividend.mutateAsync();
-    } catch (error) {
-      console.error('Failed to process ex-dividend:', error);
-    }
-  };
 
   const handleProcessPayment = async (receivableId: string) => {
     try {
       await processPayment.mutateAsync(receivableId);
-    } catch (error) {
-      console.error('Failed to process payment:', error);
+      toast.success('Payment processed');
+    } catch {
+      toast.error('Failed to process payment');
     }
   };
 
-  const tabs = [
-    { id: 'status', label: 'Position Status', icon: CheckCircle },
-    { id: 'market', label: 'Market Info', icon: TrendingUp },
-    { id: 'upcoming', label: 'Upcoming', icon: Calendar },
-  ];
+  const loading = statusLoading || marketLoading || upcomingLoading;
 
-  // Only block rendering for non-network errors (data issues are shown inline)
-  const hasFatalError = statusError && !(statusError.message?.includes('404'));
-  if (hasFatalError) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">Dividend Management</h3>
-        </div>
-        <div className="card">
-          <div className="text-center py-8">
-            <AlertCircle className="w-12 h-12 mx-auto text-red-500 mb-4" />
-            <h4 className="text-lg font-medium text-gray-900 mb-2">Error Loading Dividend Data</h4>
-            <div className="text-sm text-gray-600 space-y-1">
-              {statusError && <p>Status Error: {statusError.message}</p>}
-            </div>
-            <button
-              onClick={() => window.location.reload()}
-              className="mt-4 btn btn-primary btn-sm"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+  // ── Build upcoming events ────────────────────────────────────────────────
+  const upcomingEvents: { ex_date: string; pay_date: string; dps: number; currency?: string; source: 'market' }[] = [];
+
+  if (upcoming?.upcoming_dividends) {
+    for (const d of upcoming.upcoming_dividends) {
+      upcomingEvents.push({ ...d, source: 'market' });
+    }
   }
+  // Also add next from marketInfo if not already covered
+  if (marketInfo?.next_ex_date && marketInfo?.next_dps) {
+    const alreadyIn = upcomingEvents.some((e) => e.ex_date === marketInfo.next_ex_date);
+    if (!alreadyIn) {
+      upcomingEvents.push({
+        ex_date: marketInfo.next_ex_date,
+        pay_date: marketInfo.next_pay_date ?? marketInfo.next_ex_date,
+        dps: marketInfo.next_dps,
+        source: 'market',
+      });
+    }
+  }
+  upcomingEvents.sort((a, b) => a.ex_date.localeCompare(b.ex_date));
+
+  // ── Build history: past ex-div records + paid/pending receivables ────────
+  const pastDividends: { id: string; ex_date: string; dps: number; type: 'ex-div' }[] =
+    (positionStatus?.recent_dividends ?? []).map((d: any) => ({
+      id: d.id,
+      ex_date: d.ex_date,
+      dps: d.dps,
+      type: 'ex-div',
+    }));
+
+  const pendingReceivables: { id: string; net_amount: number; pay_date: string; status: 'pending' }[] =
+    (positionStatus?.pending_receivables ?? []).map((r: any) => ({
+      id: r.id,
+      net_amount: r.net_amount,
+      pay_date: r.pay_date,
+      status: 'pending',
+    }));
+
+  const hasPending = pendingReceivables.length > 0;
+  const hasHistory = pastDividends.length > 0;
+  const hasUpcoming = upcomingEvents.length > 0;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h3 className="text-lg font-semibold text-gray-900">Dividend Management</h3>
-          <button
-            onClick={async () => {
-              try {
-                await exportToExcel(
-                  `/v1/excel/dividends/export?tenant_id=${tenantId}&portfolio_id=${portfolioId}&position_id=${positionId}`,
-                  `dividends_${ticker}_${new Date().toISOString().split('T')[0]}.xlsx`,
-                );
-                toast.success('Dividends exported');
-              } catch (err) {
-                toast.error(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-              }
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
-            title="Export to Excel"
-          >
-            <Download className="h-4 w-4" />
-            Excel
-          </button>
+        <div>
+          <h3 className="text-base font-bold text-gray-900">Dividends — {ticker}</h3>
+          {marketInfo?.dividend_frequency && (
+            <p className="text-xs text-gray-400 mt-0.5">Frequency: {marketInfo.dividend_frequency}</p>
+          )}
         </div>
-        <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center space-x-1 px-3 py-1 text-sm rounded-md transition-colors ${
-                  activeTab === tab.id
-                    ? 'bg-white text-primary-600 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
+        <button
+          onClick={async () => {
+            try {
+              await exportToExcel(
+                `/v1/excel/dividends/export?tenant_id=${tenantId}&portfolio_id=${portfolioId}&position_id=${positionId}`,
+                `dividends_${ticker}_${new Date().toISOString().split('T')[0]}.xlsx`,
+              );
+              toast.success('Exported');
+            } catch (err) {
+              toast.error(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+            }
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+        >
+          <Download className="h-3.5 w-3.5" /> Excel
+        </button>
       </div>
 
-      {/* Content */}
-      <div className="card">
-        {activeTab === 'status' && (
-          <div className="space-y-4">
-            <h4 className="font-medium text-gray-900">Position Dividend Status</h4>
+      {loading && (
+        <div className="space-y-2 animate-pulse">
+          {[1, 2, 3].map((i) => <div key={i} className="h-10 bg-gray-100 rounded-lg" />)}
+        </div>
+      )}
 
-            {statusLoading ? (
-              <div className="animate-pulse space-y-2">
-                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+      {!loading && (
+        <>
+          {/* ── Pending receivables (action required) ── */}
+          {hasPending && (
+            <div className="border border-amber-200 bg-amber-50 rounded-lg overflow-hidden">
+              <div className="px-4 py-2 bg-amber-100 border-b border-amber-200">
+                <span className="text-xs font-bold text-amber-800 uppercase tracking-wide">
+                  Pending Payment
+                </span>
               </div>
-            ) : positionStatus ? (
-              <div className="space-y-4">
-                {/* Pending Receivables */}
-                {positionStatus.pending_receivables &&
-                positionStatus.pending_receivables.length > 0 ? (
-                  <div>
-                    <h5 className="text-sm font-medium text-gray-700 mb-2">Pending Receivables</h5>
-                    <div className="space-y-2">
-                      {positionStatus.pending_receivables.map((receivable) => (
-                        <div
-                          key={receivable.id}
-                          className="flex items-center justify-between p-3 bg-warning-50 border border-warning-200 rounded-lg"
-                        >
-                          <div className="flex items-center space-x-3">
-                            <DollarSign className="w-5 h-5 text-warning-600" />
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">
-                                ${receivable.net_amount.toFixed(2)} (net)
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                Pay date: {format(new Date(receivable.pay_date), 'MMM dd, yyyy')}
-                              </div>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleProcessPayment(receivable.id)}
-                            disabled={processPayment.isPending}
-                            className="btn btn-sm btn-primary"
-                          >
-                            <Play className="w-3 h-3 mr-1" />
-                            Process
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-4 text-gray-500">
-                    <CheckCircle className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                    <p className="text-sm">No pending receivables</p>
-                  </div>
-                )}
-
-                {/* Recent Dividends */}
-                {positionStatus.recent_dividends && positionStatus.recent_dividends.length > 0 && (
-                  <div>
-                    <h5 className="text-sm font-medium text-gray-700 mb-2">Recent Dividends</h5>
-                    <div className="space-y-1">
-                      {positionStatus.recent_dividends.slice(0, 3).map((dividend) => (
-                        <div
-                          key={dividend.id}
-                          className="flex items-center justify-between py-2 text-sm"
-                        >
-                          <div className="flex items-center space-x-2">
-                            <Calendar className="w-4 h-4 text-gray-400" />
-                            <span>${dividend.dps.toFixed(2)} per share</span>
-                          </div>
-                          <span className="text-gray-500">
-                            {format(new Date(dividend.ex_date), 'MMM dd')}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="text-center py-4 text-gray-500">
-                <AlertCircle className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                <p className="text-sm">Failed to load dividend status</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'market' && (
-          <div className="space-y-4">
-            <h4 className="font-medium text-gray-900">Market Dividend Information</h4>
-
-            {marketLoading ? (
-              <div className="animate-pulse space-y-2">
-                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-              </div>
-            ) : marketInfo ? (
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs text-gray-500">Frequency</label>
-                    <p className="text-sm font-medium">{marketInfo.dividend_frequency}</p>
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500">Next Ex-Date</label>
-                    <p className="text-sm font-medium">
-                      {marketInfo.next_ex_date
-                        ? format(new Date(marketInfo.next_ex_date), 'MMM dd, yyyy')
-                        : 'N/A'}
-                    </p>
-                  </div>
-                </div>
-
-                {marketInfo.next_dps && (
-                  <div className="p-3 bg-primary-50 border border-primary-200 rounded-lg">
-                    <div className="flex items-center space-x-2">
-                      <TrendingUp className="w-4 h-4 text-primary-600" />
-                      <span className="text-sm font-medium text-primary-900">
-                        Next Dividend: ${marketInfo.next_dps.toFixed(2)} per share
-                      </span>
-                    </div>
-                    {marketInfo.next_pay_date && (
-                      <p className="text-xs text-primary-700 mt-1">
-                        Pay date: {format(new Date(marketInfo.next_pay_date), 'MMM dd, yyyy')}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {marketInfo.last_dividend && (
-                  <div>
-                    <label className="text-xs text-gray-500">Last Dividend</label>
-                    <div className="text-sm">
-                      ${marketInfo.last_dividend.dps.toFixed(2)} on{' '}
-                      {format(new Date(marketInfo.last_dividend.ex_date), 'MMM dd, yyyy')}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="text-center py-4 text-gray-500">
-                <AlertCircle className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                <p className="text-sm">Failed to load market information</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'upcoming' && (
-          <div className="space-y-4">
-            <h4 className="font-medium text-gray-900">Upcoming Dividends</h4>
-
-            {upcomingLoading ? (
-              <div className="animate-pulse space-y-2">
-                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-              </div>
-            ) : upcoming?.upcoming_dividends && upcoming.upcoming_dividends.length > 0 ? (
-              <div className="space-y-2">
-                {upcoming.upcoming_dividends.map((dividend, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-3 border border-gray-200 rounded-lg"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <Calendar className="w-5 h-5 text-gray-400" />
+              <div className="divide-y divide-amber-100">
+                {pendingReceivables.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <DollarSign className="h-4 w-4 text-amber-600 flex-shrink-0" />
                       <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          ${dividend.dps.toFixed(2)} per share
-                        </div>
+                        <div className="text-sm font-semibold text-gray-900">{fmt$(r.net_amount)} net</div>
                         <div className="text-xs text-gray-500">
-                          Ex: {format(new Date(dividend.ex_date), 'MMM dd, yyyy')} • Pay:{' '}
-                          {format(new Date(dividend.pay_date), 'MMM dd, yyyy')}
+                          Pay date: {format(parseISO(r.pay_date), 'MMM d, yyyy')}
                         </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-xs text-gray-500">
-                        {format(new Date(dividend.ex_date), 'MMM dd')}
-                      </div>
-                    </div>
+                    <button
+                      onClick={() => handleProcessPayment(r.id)}
+                      disabled={processPayment.isPending}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50"
+                    >
+                      <Play className="h-3 w-3" /> Process
+                    </button>
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* ── Upcoming dividends ── */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp className="h-4 w-4 text-indigo-500" />
+              <h4 className="text-sm font-bold text-gray-700">Upcoming</h4>
+            </div>
+            {hasUpcoming ? (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="px-4 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wide">Ex-Date</th>
+                      <th className="px-4 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wide">Pay Date</th>
+                      <th className="px-4 py-2 text-right text-[10px] font-bold text-gray-400 uppercase tracking-wide">$/Share</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {upcomingEvents.map((d, i) => (
+                      <tr key={i} className="hover:bg-indigo-50/30">
+                        <td className="px-4 py-2.5 font-medium text-indigo-700">
+                          {format(parseISO(d.ex_date), 'MMM d, yyyy')}
+                        </td>
+                        <td className="px-4 py-2.5 text-gray-600">
+                          {format(parseISO(d.pay_date), 'MMM d, yyyy')}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-semibold text-gray-900">
+                          {fmt$(d.dps)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
-              <div className="text-center py-4 text-gray-500">
-                <Clock className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                <p className="text-sm">No upcoming dividends found</p>
+              <div className="text-center py-6 text-gray-400 border border-dashed border-gray-200 rounded-lg">
+                <Clock className="h-6 w-6 mx-auto mb-1 text-gray-300" />
+                <p className="text-xs">No upcoming dividends found</p>
               </div>
             )}
           </div>
-        )}
-      </div>
+
+          {/* ── Past ex-div events ── */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Calendar className="h-4 w-4 text-gray-400" />
+              <h4 className="text-sm font-bold text-gray-700">History</h4>
+            </div>
+            {hasHistory ? (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="px-4 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wide">Ex-Date</th>
+                      <th className="px-4 py-2 text-right text-[10px] font-bold text-gray-400 uppercase tracking-wide">$/Share</th>
+                      <th className="px-4 py-2 text-right text-[10px] font-bold text-gray-400 uppercase tracking-wide">Type</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {pastDividends
+                      .sort((a, b) => b.ex_date.localeCompare(a.ex_date))
+                      .map((d) => (
+                        <tr key={d.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-2.5 text-gray-700">
+                            {format(parseISO(d.ex_date), 'MMM d, yyyy')}
+                          </td>
+                          <td className="px-4 py-2.5 text-right font-semibold text-gray-900">
+                            {fmt$(d.dps)}
+                          </td>
+                          <td className="px-4 py-2.5 text-right">
+                            <span className="text-[10px] font-semibold bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded">
+                              Ex-Div
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-6 text-gray-400 border border-dashed border-gray-200 rounded-lg">
+                <AlertCircle className="h-6 w-6 mx-auto mb-1 text-gray-300" />
+                <p className="text-xs">No dividend history recorded</p>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
