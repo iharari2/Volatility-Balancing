@@ -172,16 +172,18 @@ function PerformanceChart({ data, window, onWindowChange }:
     const minPctFrac = (data.guardrails.min_stock_pct ?? 0) / 100;
     const maxPctFrac = (data.guardrails.max_stock_pct ?? 0) / 100;
 
+    // price_series and value_series share the same timestamps (both from evaluation timeline)
     const map = new Map<string, MergedPoint>();
     for (const p of data.price_series) {
       map.set(p.timestamp, { timestamp: p.timestamp, price: p.price });
     }
     for (const v of data.value_series) {
-      const existing = map.get(v.timestamp) ?? { timestamp: v.timestamp };
-      existing.value = v.value;
-      if (v.stock_value != null) existing.stockValue = v.stock_value;
-      map.set(v.timestamp, existing);
+      const pt = map.get(v.timestamp) ?? { timestamp: v.timestamp };
+      pt.value = v.value;
+      if (v.stock_value != null) pt.stockValue = v.stock_value;
+      map.set(v.timestamp, pt);
     }
+
     const sorted = Array.from(map.values()).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 
     // Bug 2 fix: anchor step function + per-point trigger prices (move with anchor)
@@ -217,20 +219,11 @@ function PerformanceChart({ data, window, onWindowChange }:
       }
     }
 
-    // Bug 1 fix: embed trade markers by nearest timestamp (ms comparison, ≤4h tolerance)
-    if (data.trade_markers.length > 0) {
-      const sortedWithMs = sorted.map(pt => ({ pt, ms: new Date(pt.timestamp).getTime() }));
-      for (const trade of data.trade_markers) {
-        const tradeMs = new Date(trade.timestamp).getTime();
-        let nearest: MergedPoint | null = null;
-        let nearestDiff = Infinity;
-        for (const { pt, ms } of sortedWithMs) {
-          const diff = Math.abs(ms - tradeMs);
-          if (diff < nearestDiff) { nearestDiff = diff; nearest = pt; }
-        }
-        if (nearest && nearestDiff <= 4 * 3600 * 1000) {
-          nearest.tradeMarker = { side: trade.side as 'BUY' | 'SELL', qty: trade.qty, price: trade.price };
-        }
+    // Trade markers share exact timestamps with the merged map (same timeline source)
+    for (const trade of data.trade_markers) {
+      const pt = map.get(trade.timestamp);
+      if (pt) {
+        pt.tradeMarker = { side: trade.side as 'BUY' | 'SELL', qty: trade.qty, price: trade.price };
       }
     }
 
