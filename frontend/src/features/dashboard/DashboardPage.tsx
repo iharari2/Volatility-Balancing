@@ -439,15 +439,19 @@ function DashboardInner() {
               <div className="bg-white border border-gray-200 rounded-lg p-4">
                 <h3 className="text-sm font-bold text-slate-800 mb-3">Recent Activity</h3>
                 {(() => {
+                  const NOTABLE = new Set(['BUY', 'SELL', 'DIVIDEND']);
                   const feed = positions
-                    .filter((p) => p.last_action?.timestamp)
+                    .filter((p) => {
+                      const act = (p.last_action?.action ?? '').toUpperCase();
+                      return p.last_action?.timestamp && NOTABLE.has(act);
+                    })
                     .sort((a, b) =>
                       new Date(b.last_action!.timestamp!).getTime() -
                       new Date(a.last_action!.timestamp!).getTime()
                     );
                   if (feed.length === 0) {
                     return (
-                      <p className="text-xs text-gray-400 py-4 text-center">No recent activity</p>
+                      <p className="text-xs text-gray-400 py-4 text-center">No recent trades</p>
                     );
                   }
                   return (
@@ -456,12 +460,14 @@ function DashboardInner() {
                         const a = p.last_action!;
                         const act = (a.action ?? '').toUpperCase();
                         const iconBg =
-                          act === 'BUY'  ? 'bg-green-100' :
-                          act === 'SELL' ? 'bg-red-100'   : 'bg-gray-100';
+                          act === 'BUY'      ? 'bg-green-100' :
+                          act === 'SELL'     ? 'bg-red-100'   :
+                          act === 'DIVIDEND' ? 'bg-amber-100' : 'bg-gray-100';
                         const iconColor =
-                          act === 'BUY'  ? 'text-green-700' :
-                          act === 'SELL' ? 'text-red-600'   : 'text-gray-500';
-                        const icon = act === 'BUY' ? '▲' : act === 'SELL' ? '▼' : '—';
+                          act === 'BUY'      ? 'text-green-700' :
+                          act === 'SELL'     ? 'text-red-600'   :
+                          act === 'DIVIDEND' ? 'text-amber-600' : 'text-gray-500';
+                        const icon = act === 'BUY' ? '▲' : act === 'SELL' ? '▼' : act === 'DIVIDEND' ? '$' : '—';
                         const ts = a.timestamp
                           ? new Date(a.timestamp).toLocaleString('en-US', {
                               month: 'short', day: 'numeric',
