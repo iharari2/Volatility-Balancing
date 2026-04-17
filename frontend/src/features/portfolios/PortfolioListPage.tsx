@@ -505,9 +505,11 @@ export default function PortfolioListPage() {
       <ConfirmDialog
         isOpen={!!deleteConfirmId}
         title="Delete Portfolio"
-        message="Are you sure you want to delete this portfolio? This action cannot be undone."
-        confirmLabel="Delete"
+        message={`This will permanently delete the portfolio and all its positions, orders, and history. This cannot be undone.\n\nAny active auto-trading will stop immediately.`}
+        confirmLabel="Yes, delete permanently"
+        cancelLabel="Keep portfolio"
         variant="danger"
+        requireTyping={portfolios.find((p) => p.id === deleteConfirmId)?.name}
         onConfirm={confirmDeletePortfolio}
         onCancel={() => setDeleteConfirmId(null)}
       />
