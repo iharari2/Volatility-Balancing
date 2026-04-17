@@ -55,7 +55,7 @@ function getStoredPortfolioId(): string | null {
   try { return localStorage.getItem(DEFAULT_PORTFOLIO_KEY); } catch { return null; }
 }
 function storePortfolioId(id: string) {
-  try { localStorage.setItem(DEFAULT_PORTFOLIO_KEY, id); } catch {}
+  try { localStorage.setItem(DEFAULT_PORTFOLIO_KEY, id); } catch (_e) { /* storage unavailable */ }
 }
 
 export function TenantPortfolioProvider({ children }: TenantPortfolioProviderProps) {
