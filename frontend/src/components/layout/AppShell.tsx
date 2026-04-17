@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { RefreshCw } from 'lucide-react';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { LogOut } from 'lucide-react';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { marketHoursService, type MarketStatus } from '../../services/marketHoursService';
@@ -26,7 +26,7 @@ export default function AppShell({ children, topBarActions }: AppShellProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { selectedPortfolio, portfolios, setSelectedPortfolioId } = useTenantPortfolio();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [marketStatus, setMarketStatus] = useState<MarketStatus>('CLOSED');
   const [showCreatePortfolio, setShowCreatePortfolio] = useState(false);
 
@@ -73,6 +73,14 @@ export default function AppShell({ children, topBarActions }: AppShellProps) {
             {marketStatus === 'OPEN' ? 'Market Open' : 'Market Closed'}
           </div>
           {topBarActions}
+          <span className="text-slate-500 text-xs">{user?.display_name || user?.email}</span>
+          <button
+            onClick={() => { logout(); navigate('/login'); }}
+            title="Sign out"
+            className="flex items-center gap-1 text-slate-400 hover:text-red-400 transition-colors"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+          </button>
         </div>
       </div>
 
@@ -102,6 +110,14 @@ export default function AppShell({ children, topBarActions }: AppShellProps) {
               </button>
             </div>
           )}
+
+          {/* Manage portfolios link */}
+          <Link
+            to="/portfolios"
+            className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 hover:underline px-1"
+          >
+            Manage portfolios →
+          </Link>
 
           {/* Nav links */}
           <nav className="flex flex-col gap-0.5 text-xs font-medium">
