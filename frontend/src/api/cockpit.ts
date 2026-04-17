@@ -101,6 +101,7 @@ export function getPositionCockpit(
   portfolioId: string,
   positionId: string,
   window: string = '7d',
+  limit: number = 500,
 ): Promise<CockpitResponse> {
-  return request<CockpitResponse>(`/${portfolioId}/positions/${positionId}/cockpit?window=${window}`);
+  return request<CockpitResponse>(`/${portfolioId}/positions/${positionId}/cockpit?window=${window}&timeline_limit=${limit}`);
 }

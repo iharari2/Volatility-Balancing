@@ -254,39 +254,64 @@ function PerformanceChart({ data, window, onWindowChange }:
   const hasGuardrails = (data.guardrails.min_stock_pct ?? 0) > 0 && (data.guardrails.max_stock_pct ?? 0) > 0;
   const hasStockValue = merged.some(pt => pt.stockValue != null);
 
+  const sharedMargin = { top: 6, right: 55, bottom: 0, left: 55 };
+  const sharedXAxis = (showTicks: boolean) => (
+    <XAxis
+      dataKey="timestamp"
+      tickFormatter={fmtTsShort}
+      tick={showTicks ? { fontSize: 9, fill: '#94a3b8' } : false}
+      minTickGap={60}
+      height={showTicks ? 20 : 4}
+    />
+  );
+
+  const priceTooltip = (
+    <Tooltip
+      content={({ active, payload, label }) => {
+        if (!active || !payload?.length) return null;
+        const pt = merged.find(p => p.timestamp === label);
+        return (
+          <div className="bg-white border border-gray-200 rounded shadow-lg p-2 text-xs space-y-0.5">
+            <div className="text-gray-400 mb-1">{fmtTs(label)}</div>
+            {payload.filter((p: any) => p.value != null && !['triggerUp','triggerDown','anchorLine'].includes(p.dataKey)).map((p: any) => (
+              <div key={p.dataKey} style={{ color: p.color }}>
+                {p.name}: ${Number(p.value).toFixed(2)}
+              </div>
+            ))}
+            {pt?.tradeMarker && (
+              <div className={pt.tradeMarker.side === 'BUY' ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold'}>
+                {pt.tradeMarker.side} {pt.tradeMarker.qty.toFixed(0)} @ ${pt.tradeMarker.price.toFixed(2)}
+              </div>
+            )}
+          </div>
+        );
+      }}
+    />
+  );
+
+  const valueTooltip = (
+    <Tooltip
+      content={({ active, payload, label }) => {
+        if (!active || !payload?.length) return null;
+        return (
+          <div className="bg-white border border-gray-200 rounded shadow-lg p-2 text-xs space-y-0.5">
+            <div className="text-gray-400 mb-1">{fmtTs(label)}</div>
+            {payload.filter((p: any) => p.value != null && !['guardLow','guardHigh'].includes(p.dataKey)).map((p: any) => (
+              <div key={p.dataKey} style={{ color: p.color }}>
+                {p.name}: ${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </div>
+            ))}
+          </div>
+        );
+      }}
+    />
+  );
+
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-bold text-slate-800">Performance Chart</h3>
+        <h3 className="text-sm font-bold text-slate-800">Performance</h3>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-3 text-xs flex-wrap">
-            <span className="flex items-center gap-1 text-indigo-600">
-              <svg width="16" height="3"><line x1="0" y1="1.5" x2="16" y2="1.5" stroke="#6366f1" strokeWidth="2" /></svg>
-              Price
-            </span>
-            <span className="flex items-center gap-1 text-indigo-300">
-              <svg width="16" height="3"><line x1="0" y1="1.5" x2="16" y2="1.5" stroke="#a5b4fc" strokeWidth="1.5" strokeDasharray="5 3" /></svg>
-              Anchor
-            </span>
-            <span className="flex items-center gap-1 text-amber-400">
-              <svg width="16" height="3"><line x1="0" y1="1.5" x2="16" y2="1.5" stroke="#fbbf24" strokeWidth="1.5" strokeDasharray="4 2" /></svg>
-              Triggers
-            </span>
-            {hasStockValue && (
-              <span className="flex items-center gap-1 text-teal-600">
-                <svg width="16" height="3"><line x1="0" y1="1.5" x2="16" y2="1.5" stroke="#0d9488" strokeWidth="2" /></svg>
-                Stock value
-              </span>
-            )}
-            {hasGuardrails && (
-              <span className="flex items-center gap-1 text-gray-400">
-                <svg width="16" height="3"><line x1="0" y1="1.5" x2="16" y2="1.5" stroke="#9ca3af" strokeWidth="1" strokeDasharray="3 2" /></svg>
-                Guardrails
-              </span>
-            )}
-            <span className="flex items-center gap-1 text-green-600 text-[10px]">● BUY</span>
-            <span className="flex items-center gap-1 text-red-500 text-[10px]">● SELL</span>
-          </div>
           <select
             value={window}
             onChange={(e) => onWindowChange(e.target.value)}
@@ -304,181 +329,123 @@ function PerformanceChart({ data, window, onWindowChange }:
           No evaluation data for this window yet
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={240}>
-          <ComposedChart data={merged} margin={{ top: 10, right: 60, bottom: 20, left: 10 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-            <XAxis
-              dataKey="timestamp"
-              tickFormatter={fmtTsShort}
-              tick={{ fontSize: 9, fill: '#94a3b8' }}
-              minTickGap={60}
-            />
-            {/* Left axis: ticker price */}
-            <YAxis
-              yAxisId="left"
-              domain={['auto', 'auto']}
-              tick={{ fontSize: 9, fill: '#6366f1' }}
-              tickFormatter={(v) => `$${v.toFixed(2)}`}
-              width={55}
-            />
-            {/* Right axis: position value */}
-            <YAxis
-              yAxisId="right"
-              orientation="right"
-              domain={['auto', 'auto']}
-              tick={{ fontSize: 9, fill: '#f59e0b' }}
-              tickFormatter={(v) => `$${(v / 1000).toFixed(1)}k`}
-              width={45}
-            />
-            <Tooltip
-              content={({ active, payload, label }) => {
-                if (!active || !payload?.length) return null;
-                const pt = merged.find(p => p.timestamp === label);
-                return (
-                  <div className="bg-white border border-gray-200 rounded shadow-lg p-2 text-xs space-y-0.5">
-                    <div className="text-gray-400 mb-1">{fmtTs(label)}</div>
-                    {payload.filter((p: any) => p.value != null && !['triggerUp','triggerDown','guardLow','guardHigh','anchorLine'].includes(p.dataKey)).map((p: any) => (
-                      <div key={p.name} style={{ color: p.color }}>
-                        {p.name}: {p.dataKey === 'price' ? `$${Number(p.value).toFixed(2)}` : `$${Number(p.value).toLocaleString(undefined, {maximumFractionDigits: 0})}`}
-                      </div>
-                    ))}
-                    {pt?.tradeMarker && (
-                      <div className={pt.tradeMarker.side === 'BUY' ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold'}>
-                        {pt.tradeMarker.side} {pt.tradeMarker.qty.toFixed(0)} @ ${pt.tradeMarker.price.toFixed(2)}
-                      </div>
-                    )}
-                  </div>
-                );
-              }}
-            />
-
-            {/* Bug 1 fix: vertical trade lines at matched merged timestamps */}
-            {tradePoints.map((pt) => (
-              <ReferenceLine
-                key={`tl-${pt.timestamp}`}
-                yAxisId="left"
-                x={pt.timestamp}
-                stroke={pt.tradeMarker!.side === 'BUY' ? '#16a34a' : '#dc2626'}
-                strokeWidth={1}
-                strokeDasharray="2 2"
-                opacity={0.4}
-              />
-            ))}
-
-            {/* Ticker price line with BUY/SELL dots */}
-            <Line
-              yAxisId="left"
-              type="monotone"
-              dataKey="price"
-              stroke="#6366f1"
-              strokeWidth={2}
-              dot={(props: any) => <PriceDot {...props} />}
-              activeDot={{ r: 4, fill: '#6366f1' }}
-              name="price"
-              connectNulls
-            />
-            {/* Anchor step-function line */}
-            <Line
-              yAxisId="left"
-              type="stepAfter"
-              dataKey="anchorLine"
-              stroke="#a5b4fc"
-              strokeWidth={1.5}
-              strokeDasharray="5 3"
-              dot={false}
-              activeDot={false}
-              name="anchor"
-              connectNulls
-            />
-            {/* Bug 2 fix: trigger lines step with anchor */}
-            <Line
-              yAxisId="left"
-              type="stepAfter"
-              dataKey="triggerUp"
-              stroke="#fbbf24"
-              strokeWidth={1}
-              strokeDasharray="4 2"
-              dot={false}
-              activeDot={false}
-              name="triggerUp"
-              legendType="none"
-              connectNulls
-            />
-            <Line
-              yAxisId="left"
-              type="stepAfter"
-              dataKey="triggerDown"
-              stroke="#fbbf24"
-              strokeWidth={1}
-              strokeDasharray="4 2"
-              dot={false}
-              activeDot={false}
-              name="triggerDown"
-              legendType="none"
-              connectNulls
-            />
-            {/* Position total value */}
-            <Line
-              yAxisId="right"
-              type="monotone"
-              dataKey="value"
-              stroke="#f59e0b"
-              strokeWidth={2}
-              strokeDasharray="6 3"
-              dot={false}
-              activeDot={{ r: 3, fill: '#f59e0b' }}
-              name="total value"
-              connectNulls
-            />
-            {/* Bug 3 fix: stock value + dynamic guardrail bands on right axis */}
-            {hasStockValue && (
-              <Line
-                yAxisId="right"
-                type="monotone"
-                dataKey="stockValue"
-                stroke="#0d9488"
-                strokeWidth={1.5}
-                dot={false}
-                activeDot={{ r: 3, fill: '#0d9488' }}
-                name="stock value"
-                connectNulls
-              />
-            )}
-            {hasGuardrails && (
-              <>
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="guardHigh"
-                  stroke="#9ca3af"
-                  strokeWidth={1}
-                  strokeDasharray="3 2"
-                  dot={false}
-                  activeDot={false}
-                  name="guardHigh"
-                  legendType="none"
-                  connectNulls
+        <div className="space-y-0">
+          {/* ── Chart 1: Stock price, anchor, triggers, BUY/SELL markers ── */}
+          <div>
+            <div className="flex items-center gap-3 text-xs mb-1 flex-wrap">
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Stock Price</span>
+              <span className="flex items-center gap-1 text-indigo-600">
+                <svg width="14" height="3"><line x1="0" y1="1.5" x2="14" y2="1.5" stroke="#6366f1" strokeWidth="2" /></svg>
+                Price
+              </span>
+              <span className="flex items-center gap-1 text-indigo-300">
+                <svg width="14" height="3"><line x1="0" y1="1.5" x2="14" y2="1.5" stroke="#a5b4fc" strokeWidth="1.5" strokeDasharray="5 3" /></svg>
+                Anchor
+              </span>
+              <span className="flex items-center gap-1 text-amber-400">
+                <svg width="14" height="3"><line x1="0" y1="1.5" x2="14" y2="1.5" stroke="#fbbf24" strokeWidth="1.5" strokeDasharray="4 2" /></svg>
+                Triggers
+              </span>
+              <span className="flex items-center gap-1 text-green-600 text-[10px]">● BUY</span>
+              <span className="flex items-center gap-1 text-red-500 text-[10px]">● SELL</span>
+            </div>
+            <ResponsiveContainer width="100%" height={180}>
+              <ComposedChart data={merged} margin={sharedMargin} syncId="perf">
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                {sharedXAxis(false)}
+                <YAxis
+                  domain={['auto', 'auto']}
+                  tick={{ fontSize: 9, fill: '#6366f1' }}
+                  tickFormatter={(v) => `$${v.toFixed(2)}`}
+                  width={50}
                 />
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="guardLow"
-                  stroke="#9ca3af"
-                  strokeWidth={1}
-                  strokeDasharray="3 2"
-                  dot={false}
-                  activeDot={false}
-                  name="guardLow"
-                  legendType="none"
-                  connectNulls
-                />
-              </>
-            )}
+                {priceTooltip}
+                {tradePoints.map((pt) => (
+                  <ReferenceLine
+                    key={`tp-${pt.timestamp}`}
+                    x={pt.timestamp}
+                    stroke={pt.tradeMarker!.side === 'BUY' ? '#16a34a' : '#dc2626'}
+                    strokeWidth={1}
+                    strokeDasharray="2 2"
+                    opacity={0.4}
+                  />
+                ))}
+                <Line type="monotone" dataKey="price" stroke="#6366f1" strokeWidth={2}
+                  dot={(props: any) => <PriceDot {...props} />}
+                  activeDot={{ r: 4, fill: '#6366f1' }} name="price" connectNulls />
+                <Line type="stepAfter" dataKey="anchorLine" stroke="#a5b4fc" strokeWidth={1.5}
+                  strokeDasharray="5 3" dot={false} activeDot={false} name="anchor" connectNulls />
+                <Line type="stepAfter" dataKey="triggerUp" stroke="#fbbf24" strokeWidth={1}
+                  strokeDasharray="4 2" dot={false} activeDot={false} name="trigger ▲" legendType="none" connectNulls />
+                <Line type="stepAfter" dataKey="triggerDown" stroke="#fbbf24" strokeWidth={1}
+                  strokeDasharray="4 2" dot={false} activeDot={false} name="trigger ▼" legendType="none" connectNulls />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
 
-            <Brush dataKey="timestamp" height={18} tickFormatter={fmtTsShort}
-              travellerWidth={6} stroke="#e2e8f0" fill="#f8fafc" />
-          </ComposedChart>
-        </ResponsiveContainer>
+          {/* ── Chart 2: Position value, stock value, guardrails ── */}
+          <div>
+            <div className="flex items-center gap-3 text-xs mb-1 flex-wrap">
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Position Value</span>
+              <span className="flex items-center gap-1 text-amber-500">
+                <svg width="14" height="3"><line x1="0" y1="1.5" x2="14" y2="1.5" stroke="#f59e0b" strokeWidth="2" strokeDasharray="6 3" /></svg>
+                Total
+              </span>
+              {hasStockValue && (
+                <span className="flex items-center gap-1 text-teal-600">
+                  <svg width="14" height="3"><line x1="0" y1="1.5" x2="14" y2="1.5" stroke="#0d9488" strokeWidth="1.5" /></svg>
+                  Stock
+                </span>
+              )}
+              {hasGuardrails && (
+                <span className="flex items-center gap-1 text-gray-400">
+                  <svg width="14" height="3"><line x1="0" y1="1.5" x2="14" y2="1.5" stroke="#9ca3af" strokeWidth="1" strokeDasharray="3 2" /></svg>
+                  Guardrails
+                </span>
+              )}
+            </div>
+            <ResponsiveContainer width="100%" height={180}>
+              <ComposedChart data={merged} margin={{ ...sharedMargin, bottom: 20 }} syncId="perf">
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                {sharedXAxis(true)}
+                <YAxis
+                  domain={['auto', 'auto']}
+                  tick={{ fontSize: 9, fill: '#f59e0b' }}
+                  tickFormatter={(v) => `$${(v / 1000).toFixed(1)}k`}
+                  width={50}
+                />
+                {valueTooltip}
+                {tradePoints.map((pt) => (
+                  <ReferenceLine
+                    key={`tv-${pt.timestamp}`}
+                    x={pt.timestamp}
+                    stroke={pt.tradeMarker!.side === 'BUY' ? '#16a34a' : '#dc2626'}
+                    strokeWidth={1}
+                    strokeDasharray="2 2"
+                    opacity={0.4}
+                  />
+                ))}
+                <Line type="monotone" dataKey="value" stroke="#f59e0b" strokeWidth={2}
+                  strokeDasharray="6 3" dot={false} activeDot={{ r: 3, fill: '#f59e0b' }}
+                  name="total" connectNulls />
+                {hasStockValue && (
+                  <Line type="monotone" dataKey="stockValue" stroke="#0d9488" strokeWidth={1.5}
+                    dot={false} activeDot={{ r: 3, fill: '#0d9488' }} name="stock" connectNulls />
+                )}
+                {hasGuardrails && (
+                  <>
+                    <Line type="monotone" dataKey="guardHigh" stroke="#9ca3af" strokeWidth={1}
+                      strokeDasharray="3 2" dot={false} activeDot={false} name="guard ▲" legendType="none" connectNulls />
+                    <Line type="monotone" dataKey="guardLow" stroke="#9ca3af" strokeWidth={1}
+                      strokeDasharray="3 2" dot={false} activeDot={false} name="guard ▼" legendType="none" connectNulls />
+                  </>
+                )}
+                <Brush dataKey="timestamp" height={18} tickFormatter={fmtTsShort}
+                  travellerWidth={6} stroke="#e2e8f0" fill="#f8fafc" />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
       )}
     </div>
   );

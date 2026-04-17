@@ -412,6 +412,30 @@ def get_position_cockpit(
                 limit=timeline_limit,
             )
 
+        # Enrich rows: fill null trigger/guardrail thresholds from current portfolio config
+        # so the frontend can always compute dollar values from per-row anchor + total_value.
+        try:
+            cfg = portfolio_service._portfolio_config_repo.get(
+                tenant_id=tenant_id, portfolio_id=portfolio_id
+            )
+        except Exception:
+            cfg = None
+
+        if cfg and timeline_rows:
+            cfg_trigger_up = getattr(cfg, "trigger_up_pct", None)
+            cfg_trigger_dn = getattr(cfg, "trigger_down_pct", None)
+            cfg_min_pct = float(getattr(cfg, "min_stock_pct", None) or 0)
+            cfg_max_pct = float(getattr(cfg, "max_stock_pct", None) or 0)
+            for row in timeline_rows:
+                if row.get("trigger_up_threshold") is None and cfg_trigger_up is not None:
+                    row["trigger_up_threshold"] = float(cfg_trigger_up)
+                if row.get("trigger_down_threshold") is None and cfg_trigger_dn is not None:
+                    row["trigger_down_threshold"] = float(cfg_trigger_dn)
+                if row.get("guardrail_min_stock_pct") is None and cfg_min_pct:
+                    row["guardrail_min_stock_pct"] = cfg_min_pct
+                if row.get("guardrail_max_stock_pct") is None and cfg_max_pct:
+                    row["guardrail_max_stock_pct"] = cfg_max_pct
+
         return CockpitResponse(
             position_summary=position_summary,
             baseline_comparison=baseline_comparison,
