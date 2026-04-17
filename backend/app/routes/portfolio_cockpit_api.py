@@ -402,7 +402,8 @@ def get_position_cockpit(
 
         timeline_rows: List[Dict[str, Any]] = []
         if hasattr(container, "evaluation_timeline"):
-            timeline_rows = container.evaluation_timeline.list_by_position(
+            # Recent evaluation rows (capped to avoid timeout)
+            recent_rows = container.evaluation_timeline.list_by_position(
                 tenant_id=tenant_id,
                 portfolio_id=portfolio_id,
                 position_id=position_id,
@@ -410,6 +411,26 @@ def get_position_cockpit(
                 start_date=start_ts,
                 end_date=end_ts,
                 limit=timeline_limit,
+            )
+            # Always fetch all trade events (BUY/SELL) regardless of time window
+            # so they are never excluded by the row limit
+            trade_rows = container.evaluation_timeline.list_by_position(
+                tenant_id=tenant_id,
+                portfolio_id=portfolio_id,
+                position_id=position_id,
+                mode="LIVE",
+                start_date=None,
+                end_date=end_ts,
+                action_filter=["BUY", "SELL"],
+                limit=1000,
+            )
+            # Merge: start with recent rows, add any trade rows not already included
+            seen_ids = {r.get("id") for r in recent_rows if r.get("id")}
+            extra_trades = [r for r in trade_rows if r.get("id") not in seen_ids]
+            timeline_rows = sorted(
+                recent_rows + extra_trades,
+                key=lambda r: str(r.get("timestamp") or ""),
+                reverse=True,
             )
 
         # Enrich rows: fill null trigger/guardrail thresholds from current portfolio config

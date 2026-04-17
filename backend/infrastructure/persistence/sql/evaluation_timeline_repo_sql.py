@@ -463,6 +463,7 @@ class EvaluationTimelineRepoSQL(EvaluationTimelineRepo):
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         limit: Optional[int] = None,
+        action_filter: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
         """List evaluation records for a position."""
         try:
@@ -511,6 +512,12 @@ class EvaluationTimelineRepoSQL(EvaluationTimelineRepo):
                 if end_date and timestamp_col:
                     where_clauses.append(f"{timestamp_col} <= :end_date")
                     params["end_date"] = end_date
+
+                if action_filter and "action" in actual_db_columns:
+                    placeholders = ", ".join(f":action_{i}" for i in range(len(action_filter)))
+                    where_clauses.append(f"action IN ({placeholders})")
+                    for i, a in enumerate(action_filter):
+                        params[f"action_{i}"] = a
 
                 # Build SELECT with only columns that exist
                 columns_str = ", ".join(sorted(actual_db_columns))

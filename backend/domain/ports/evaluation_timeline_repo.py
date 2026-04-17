@@ -39,6 +39,7 @@ class EvaluationTimelineRepo(ABC):
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         limit: Optional[int] = None,
+        action_filter: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
         """
         List evaluation records for a position.
