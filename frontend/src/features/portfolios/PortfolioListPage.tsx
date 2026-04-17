@@ -13,6 +13,7 @@ import {
   ChevronUp,
   ArrowRight,
   Briefcase,
+  Star,
 } from 'lucide-react';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import { portfolioApi } from '../../lib/api';
@@ -359,17 +360,35 @@ export default function PortfolioListPage() {
                   className="cursor-pointer group flex-1"
                   onClick={() => handleSelectPortfolio(portfolio.id)}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-lg font-bold text-gray-900 group-hover:text-primary-600 transition-colors">
                       {portfolio.name}
                     </h3>
                     {isSelected && <span className="badge badge-info">Active</span>}
+                    {isSelected && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                        <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" /> Default
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm text-gray-500 line-clamp-1 mt-1">
                     {portfolio.description || 'No description'}
                   </p>
                 </div>
                 <div className="flex items-center gap-1">
+                  {!isSelected && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelectPortfolio(portfolio.id);
+                        toast.success(`${portfolio.name} set as default`);
+                      }}
+                      className="p-1.5 text-gray-400 hover:text-amber-500 hover:bg-amber-50 rounded-md transition-colors"
+                      title="Set as default"
+                    >
+                      <Star className="h-4 w-4" />
+                    </button>
+                  )}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

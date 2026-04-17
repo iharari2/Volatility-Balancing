@@ -49,6 +49,15 @@ interface TenantPortfolioProviderProps {
   children: ReactNode;
 }
 
+const DEFAULT_PORTFOLIO_KEY = 'vb.default_portfolio_id';
+
+function getStoredPortfolioId(): string | null {
+  try { return localStorage.getItem(DEFAULT_PORTFOLIO_KEY); } catch { return null; }
+}
+function storePortfolioId(id: string) {
+  try { localStorage.setItem(DEFAULT_PORTFOLIO_KEY, id); } catch {}
+}
+
 export function TenantPortfolioProvider({ children }: TenantPortfolioProviderProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -56,7 +65,7 @@ export function TenantPortfolioProvider({ children }: TenantPortfolioProviderPro
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
-  const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(null);
+  const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(getStoredPortfolioId);
   const [loading, setLoading] = useState(true);
 
   // Derive tenant from authenticated user
@@ -107,11 +116,13 @@ export function TenantPortfolioProvider({ children }: TenantPortfolioProviderPro
 
       setPortfolios(basicPortfolios);
 
-      // Auto-select first portfolio if none selected
+      // Auto-select: prefer stored default, fall back to first
       if (basicPortfolios.length > 0) {
         setSelectedPortfolioId((current) => {
-          if (!current) return basicPortfolios[0].id;
-          return current;
+          const stored = getStoredPortfolioId();
+          if (current && basicPortfolios.some((p) => p.id === current)) return current;
+          if (stored && basicPortfolios.some((p) => p.id === stored)) return stored;
+          return basicPortfolios[0].id;
         });
       } else {
         const noRedirect = ['/onboarding', '/login', '/forgot-password', '/reset-password'];
@@ -155,6 +166,11 @@ export function TenantPortfolioProvider({ children }: TenantPortfolioProviderPro
   const selectedTenant = tenants.find((t) => t.id === selectedTenantId) || null;
   const selectedPortfolio = portfolios.find((p) => p.id === selectedPortfolioId) || null;
 
+  const handleSetSelectedPortfolioId = (id: string) => {
+    storePortfolioId(id);
+    setSelectedPortfolioId(id);
+  };
+
   return (
     <TenantPortfolioContext.Provider
       value={{
@@ -165,7 +181,7 @@ export function TenantPortfolioProvider({ children }: TenantPortfolioProviderPro
         selectedTenant,
         selectedPortfolio,
         setSelectedTenantId,
-        setSelectedPortfolioId,
+        setSelectedPortfolioId: handleSetSelectedPortfolioId,
         refreshPortfolios,
         loading,
       }}

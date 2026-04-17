@@ -8,7 +8,6 @@ import {
   BarChart3,
   FileSearch,
   Cog,
-  Menu,
   X,
   ChevronDown,
   LogOut,
@@ -80,6 +79,17 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
           <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none">
             <ChevronDown className="h-4 w-4 text-gray-400" />
           </div>
+        </div>
+
+        {/* Manage link */}
+        <div className="mt-2 px-2">
+          <Link
+            to="/portfolios"
+            className="text-[11px] font-semibold text-primary-600 hover:text-primary-800 hover:underline"
+            onClick={onMobileClose}
+          >
+            Manage portfolios →
+          </Link>
         </div>
 
         {/* Portfolio Summary Panel */}
