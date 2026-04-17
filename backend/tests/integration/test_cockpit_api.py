@@ -96,6 +96,7 @@ class InMemoryEvaluationTimelineRepo(EvaluationTimelineRepo):
         start_date: datetime | None = None,
         end_date: datetime | None = None,
         limit: int | None = None,
+        action_filter: list | None = None,
     ) -> List[Dict[str, object]]:
         rows = [
             row
@@ -109,6 +110,8 @@ class InMemoryEvaluationTimelineRepo(EvaluationTimelineRepo):
             rows = [row for row in rows if row.get("timestamp") and row["timestamp"] >= start_date]
         if end_date:
             rows = [row for row in rows if row.get("timestamp") and row["timestamp"] <= end_date]
+        if action_filter:
+            rows = [row for row in rows if row.get("action") in action_filter]
         rows.sort(key=lambda row: row.get("timestamp") or datetime.min, reverse=True)
         if limit:
             rows = rows[:limit]

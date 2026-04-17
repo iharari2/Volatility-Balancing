@@ -241,8 +241,11 @@ def get_position_performance(
                 if cfg:
                     last_trigger_up_pct = last_trigger_up_pct or cfg.trigger_up_pct
                     last_trigger_down_pct = last_trigger_down_pct or cfg.trigger_down_pct
-                    last_min_pct = last_min_pct or cfg.min_stock_pct
-                    last_max_pct = last_max_pct or cfg.max_stock_pct
+                    # cfg stores min/max as percentage (25.0); timeline stores as fraction (0.25)
+                    if last_min_pct is None and cfg.min_stock_pct is not None:
+                        last_min_pct = float(cfg.min_stock_pct) / 100
+                    if last_max_pct is None and cfg.max_stock_pct is not None:
+                        last_max_pct = float(cfg.max_stock_pct) / 100
             except Exception:
                 pass
 

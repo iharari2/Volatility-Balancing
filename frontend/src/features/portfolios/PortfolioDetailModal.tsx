@@ -73,12 +73,14 @@ export default function PortfolioDetailModal({
   useEffect(() => {
     if (isOpen && portfolioId) {
       setActiveTab('general');
+      setConfig(null);
+      setStrategyForm({});
       loadGeneral();
     }
   }, [isOpen, portfolioId]);
 
   useEffect(() => {
-    if (isOpen && portfolioId && activeTab === 'strategy' && !config && !loadingStrategy) {
+    if (isOpen && portfolioId && activeTab === 'strategy' && !loadingStrategy) {
       loadStrategy();
     }
   }, [activeTab, isOpen, portfolioId]);
