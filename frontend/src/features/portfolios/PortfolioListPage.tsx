@@ -460,7 +460,8 @@ export default function PortfolioListPage() {
                     )}
                   </button>
                   <Link
-                    to={`/portfolios/${portfolio.id}`}
+                    to="/"
+                    onClick={() => setSelectedPortfolioId(portfolio.id)}
                     className="btn btn-primary py-1 text-xs flex items-center gap-1"
                   >
                     Dashboard <ArrowRight className="h-3 w-3" />
