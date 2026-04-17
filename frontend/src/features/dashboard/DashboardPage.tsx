@@ -431,35 +431,98 @@ function DashboardInner() {
             </div>
           )}
 
-          {/* Strategy snapshot */}
+          {/* Bottom row: Recent Activity + Strategy Snapshot */}
           {positions.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
-              <h3 className="text-sm font-bold text-slate-800 mb-3">Strategy Snapshot</h3>
-              <table className="w-full border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    {['Asset', 'Trigger ▲', 'Trigger ▼', 'Guard Min', 'Guard Max', 'Auto-trade'].map((h) => (
-                      <th key={h} className="pb-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wide pr-6">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {positions.map((p) => (
-                    <tr key={p.position_id} className="border-b border-gray-50">
-                      <td className="py-2 font-bold pr-6">{p.asset_symbol}</td>
-                      <td className="py-2 pr-6 text-green-600">{p.trigger_up_pct != null ? `+${p.trigger_up_pct}%` : '—'}</td>
-                      <td className="py-2 pr-6 text-red-500">{p.trigger_down_pct != null ? `${p.trigger_down_pct}%` : '—'}</td>
-                      <td className="py-2 pr-6 text-indigo-600">{p.guardrail_min_pct != null ? `${p.guardrail_min_pct}%` : '—'}</td>
-                      <td className="py-2 pr-6 text-indigo-600">{p.guardrail_max_pct != null ? `${p.guardrail_max_pct}%` : '—'}</td>
-                      <td className="py-2">
-                        <span className={`font-bold text-xs ${p.status === 'RUNNING' ? 'text-green-600' : 'text-amber-600'}`}>
-                          {p.status === 'RUNNING' ? 'ON' : 'PAUSED'}
-                        </span>
-                      </td>
+            <div className="grid grid-cols-2 gap-4">
+
+              {/* Recent Activity */}
+              <div className="bg-white border border-gray-200 rounded-lg p-4">
+                <h3 className="text-sm font-bold text-slate-800 mb-3">Recent Activity</h3>
+                {(() => {
+                  const feed = positions
+                    .filter((p) => p.last_action?.timestamp)
+                    .sort((a, b) =>
+                      new Date(b.last_action!.timestamp!).getTime() -
+                      new Date(a.last_action!.timestamp!).getTime()
+                    );
+                  if (feed.length === 0) {
+                    return (
+                      <p className="text-xs text-gray-400 py-4 text-center">No recent activity</p>
+                    );
+                  }
+                  return (
+                    <div className="space-y-0">
+                      {feed.map((p) => {
+                        const a = p.last_action!;
+                        const act = (a.action ?? '').toUpperCase();
+                        const iconBg =
+                          act === 'BUY'  ? 'bg-green-100' :
+                          act === 'SELL' ? 'bg-red-100'   : 'bg-gray-100';
+                        const iconColor =
+                          act === 'BUY'  ? 'text-green-700' :
+                          act === 'SELL' ? 'text-red-600'   : 'text-gray-500';
+                        const icon = act === 'BUY' ? '▲' : act === 'SELL' ? '▼' : '—';
+                        const ts = a.timestamp
+                          ? new Date(a.timestamp).toLocaleString('en-US', {
+                              month: 'short', day: 'numeric',
+                              hour: '2-digit', minute: '2-digit',
+                            })
+                          : '';
+                        return (
+                          <div key={p.position_id}
+                            className="flex items-start gap-3 py-2.5 border-b border-gray-50 last:border-0"
+                          >
+                            <div className={`w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold flex-shrink-0 ${iconBg} ${iconColor}`}>
+                              {icon}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm text-slate-800">
+                                <span className="font-bold">{p.asset_symbol}</span>
+                                {act && <span className="text-gray-500"> — {act}</span>}
+                              </div>
+                              {a.reason && (
+                                <div className="text-[11px] text-gray-400 truncate">{a.reason}</div>
+                              )}
+                              <div className="text-[10px] text-gray-300 mt-0.5">{ts}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Strategy Snapshot */}
+              <div className="bg-white border border-gray-200 rounded-lg p-4">
+                <h3 className="text-sm font-bold text-slate-800 mb-3">Strategy Snapshot</h3>
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      {['Asset', 'Trigger ▲', 'Trigger ▼', 'Guard Min', 'Guard Max', 'Auto-trade'].map((h) => (
+                        <th key={h} className="pb-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wide pr-6">{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {positions.map((p) => (
+                      <tr key={p.position_id} className="border-b border-gray-50">
+                        <td className="py-2 font-bold pr-6">{p.asset_symbol}</td>
+                        <td className="py-2 pr-6 text-green-600">{p.trigger_up_pct != null ? `+${p.trigger_up_pct}%` : '—'}</td>
+                        <td className="py-2 pr-6 text-red-500">{p.trigger_down_pct != null ? `${p.trigger_down_pct}%` : '—'}</td>
+                        <td className="py-2 pr-6 text-indigo-600">{p.guardrail_min_pct != null ? `${p.guardrail_min_pct}%` : '—'}</td>
+                        <td className="py-2 pr-6 text-indigo-600">{p.guardrail_max_pct != null ? `${p.guardrail_max_pct}%` : '—'}</td>
+                        <td className="py-2">
+                          <span className={`font-bold text-xs ${p.status === 'RUNNING' ? 'text-green-600' : 'text-amber-600'}`}>
+                            {p.status === 'RUNNING' ? 'ON' : 'PAUSED'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
             </div>
           )}
       {showAddModal && (

@@ -169,8 +169,9 @@ function PerformanceChart({ data, window, onWindowChange }:
   const merged = useMemo((): MergedPoint[] => {
     const triggerUpPct = data.anchor.trigger_up_pct;
     const triggerDownPct = data.anchor.trigger_down_pct;
-    const minPctFrac = (data.guardrails.min_stock_pct ?? 0) / 100;
-    const maxPctFrac = (data.guardrails.max_stock_pct ?? 0) / 100;
+    // guardrail values are stored as fractions (0.25 = 25%), not percentages
+    const minPctFrac = data.guardrails.min_stock_pct ?? 0;
+    const maxPctFrac = data.guardrails.max_stock_pct ?? 0;
 
     // price_series and value_series share the same timestamps (both from evaluation timeline)
     const map = new Map<string, MergedPoint>();
@@ -250,7 +251,7 @@ function PerformanceChart({ data, window, onWindowChange }:
   };
 
   const hasData = merged.length > 0;
-  const hasGuardrails = data.guardrails.min_stock_pct != null && data.guardrails.max_stock_pct != null;
+  const hasGuardrails = (data.guardrails.min_stock_pct ?? 0) > 0 && (data.guardrails.max_stock_pct ?? 0) > 0;
   const hasStockValue = merged.some(pt => pt.stockValue != null);
 
   return (

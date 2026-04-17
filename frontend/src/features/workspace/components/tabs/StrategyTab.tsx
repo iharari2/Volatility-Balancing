@@ -9,6 +9,120 @@ import {
 } from '../../../../services/portfolioScopedApi';
 import { marketHoursService, MarketStatus } from '../../../../services/marketHoursService';
 import LoadingSpinner from '../../../../components/shared/LoadingSpinner';
+import { monitoringApi, SystemStatusResponse } from '../../../../lib/api';
+
+// ── Worker Status Panel ───────────────────────────────────────────────────────
+
+function WorkerStatusPanel() {
+  const [status, setStatus] = useState<SystemStatusResponse | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const s = await monitoringApi.getSystemStatus();
+        if (!cancelled) setStatus(s);
+      } catch {
+        // silent — worker status is non-critical
+      }
+    };
+
+    load();
+    const poll = setInterval(load, 30_000);
+    return () => { cancelled = true; clearInterval(poll); };
+  }, []);
+
+  // Countdown tick
+  useEffect(() => {
+    if (!status?.worker?.running || !status?.last_evaluation_time) {
+      setCountdown(null);
+      return;
+    }
+
+    const tick = () => {
+      const lastMs = new Date(status.last_evaluation_time!).getTime();
+      const intervalMs = (status.worker.interval_seconds ?? 60) * 1000;
+      const nextMs = lastMs + intervalMs;
+      const remaining = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
+      setCountdown(remaining);
+    };
+
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [status]);
+
+  const worker = status?.worker;
+  const isRunning = worker?.running ?? false;
+  const isEnabled = worker?.enabled ?? false;
+  const intervalSec = worker?.interval_seconds ?? 60;
+  const lastEval = status?.last_evaluation_time
+    ? new Date(status.last_evaluation_time).toLocaleTimeString()
+    : null;
+
+  const formatCountdown = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return m > 0 ? `${m}:${String(sec).padStart(2, '0')}` : `${sec}s`;
+  };
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg p-5 space-y-4">
+      <h3 className="text-sm font-semibold text-gray-900">Worker Status</h3>
+
+      <div className="grid grid-cols-2 gap-4">
+        {/* Running */}
+        <div className="flex items-center gap-2">
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isRunning ? 'bg-green-500' : 'bg-red-400'}`} />
+          <div>
+            <div className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide">Status</div>
+            <div className={`text-sm font-bold ${isRunning ? 'text-green-700' : 'text-red-600'}`}>
+              {isRunning ? 'Running' : 'Stopped'}
+            </div>
+          </div>
+        </div>
+
+        {/* Enabled */}
+        <div>
+          <div className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide">Auto-trade</div>
+          <div className={`text-sm font-bold ${isEnabled ? 'text-green-700' : 'text-amber-600'}`}>
+            {isEnabled ? 'Enabled' : 'Disabled'}
+          </div>
+        </div>
+
+        {/* Interval */}
+        <div>
+          <div className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide">Cycle Interval</div>
+          <div className="text-sm font-semibold text-gray-800">every {intervalSec}s</div>
+        </div>
+
+        {/* Last evaluation */}
+        <div>
+          <div className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide">Last Cycle</div>
+          <div className="text-sm font-semibold text-gray-800">{lastEval ?? '—'}</div>
+        </div>
+      </div>
+
+      {/* Countdown */}
+      {isRunning && countdown !== null && (
+        <div className="border-t border-gray-100 pt-3 flex items-center gap-3">
+          <div className="text-2xl font-black text-indigo-600 tabular-nums">
+            {formatCountdown(countdown)}
+          </div>
+          <div className="text-xs text-gray-500">until next evaluation</div>
+        </div>
+      )}
+
+      {!isRunning && (
+        <div className="border-t border-gray-100 pt-3 text-xs text-red-500 font-medium">
+          Worker is not running — positions will not be evaluated
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function StrategyTab() {
   const { selectedPosition, portfolioId } = useWorkspace();
@@ -408,6 +522,8 @@ export default function StrategyTab() {
           </button>
         </div>
       </div>
+
+      <WorkerStatusPanel />
     </div>
   );
 }
