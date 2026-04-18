@@ -62,9 +62,9 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { selectedPortfolioId, setSelectedPortfolioId, selectedTenantId } = useTenantPortfolio();
 
-  // Position state
+  // Position state — start loading immediately if we already know which portfolio to fetch
   const [positions, setPositions] = useState<Position[]>([]);
-  const [positionsLoading, setPositionsLoading] = useState(false);
+  const [positionsLoading, setPositionsLoading] = useState(!!selectedPortfolioId);
   const [selectedPositionId, setSelectedPositionIdState] = useState<string | null>(
     searchParams.get('position')
   );
