@@ -916,7 +916,7 @@ class PortfolioConfigRequest(BaseModel):
     trigger_threshold_down_pct: float
     min_stock_pct: float
     max_stock_pct: float
-    max_trade_pct_of_position: float
+    max_trade_pct_of_position: Optional[float] = None
     commission_rate: float
     market_hours_policy: str  # 'market-open-only' | 'market-plus-after-hours'
 
@@ -944,7 +944,7 @@ def get_portfolio_config(
             "trigger_threshold_down_pct": config.trigger_down_pct if config else -3.0,
             "min_stock_pct": config.min_stock_pct if config else 25.0,
             "max_stock_pct": config.max_stock_pct if config else 75.0,
-            "max_trade_pct_of_position": config.max_trade_pct_of_position if config else 50.0,
+            "max_trade_pct_of_position": (config.max_trade_pct_of_position or 50.0) if config else 50.0,
             "commission_rate": config.commission_rate_pct if config else 0.1,
             "market_hours_policy": (
                 "market-plus-after-hours"
@@ -1146,7 +1146,7 @@ def get_effective_config(
             "trigger_threshold_down_pct": config.trigger_down_pct if config else -3.0,
             "min_stock_pct": config.min_stock_pct if config else 25.0,
             "max_stock_pct": config.max_stock_pct if config else 75.0,
-            "max_trade_pct_of_position": config.max_trade_pct_of_position if config else 50.0,
+            "max_trade_pct_of_position": (config.max_trade_pct_of_position or 50.0) if config else 50.0,
             "commission_rate": config.commission_rate_pct if config else 0.1,
             "market_hours_policy": (
                 "market-plus-after-hours"
