@@ -1458,12 +1458,25 @@ class YFinanceAdapter(MarketDataRepo):
                 et_close = day_date.astimezone(self.tz_eastern).replace(
                     hour=16, minute=0, second=0, microsecond=0
                 )
-                price_data_list.append(PriceData(
-                    timestamp=et_close.astimezone(self.tz_utc),
-                    price=close_price,
+                utc_close = et_close.astimezone(self.tz_utc)
+                price_point = PriceData(
+                    ticker=ticker,
+                    price=float(close_price),
+                    source=PriceSource.LAST_TRADE,
+                    timestamp=utc_close,
                     volume=volume,
-                    is_after_hours=False,
-                ))
+                    last_trade_price=float(close_price),
+                    last_trade_time=utc_close,
+                    is_market_hours=True,
+                    is_fresh=True,
+                    is_inline=True,
+                    open=float(row["Open"]) if not pd.isna(row["Open"]) else None,
+                    high=float(row["High"]) if not pd.isna(row["High"]) else None,
+                    low=float(row["Low"]) if not pd.isna(row["Low"]) else None,
+                    close=float(close_price),
+                )
+                price_data_list.append(price_point)
+                self.storage.store_price_data(ticker, price_point)
             return price_data_list
 
         # Generate intraday times (9:30 AM to 4:00 PM ET) for sub-daily intervals

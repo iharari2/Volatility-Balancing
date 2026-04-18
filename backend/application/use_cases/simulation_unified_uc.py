@@ -560,9 +560,7 @@ class SimulationUnifiedUC:
             events=temp_events,
             market_data=market_data_source,
             clock=self.clock,
-            evaluation_timeline_repo=self.evaluation_timeline_repo,  # Pass timeline repo for simulation
-            # Simulation runs on a synthetic portfolio; after-hours is controlled by include_after_hours.
-            # We intentionally do NOT pass portfolio_repo here.
+            evaluation_timeline_repo=None,  # Skip DB writes during simulation for performance
         )
         # Create in-memory config repo for simulation
         temp_config = InMemoryConfigRepo()
@@ -665,9 +663,9 @@ class SimulationUnifiedUC:
                 current_time = current_time.to_pydatetime()
             current_day = current_time.date()
 
-            # Update the market_storage price cache so get_price() returns current simulation price
-            if market_data_source and hasattr(market_data_source, 'store_price_data'):
-                market_data_source.store_price_data(sim_data.ticker, price_data)
+            # Update only the price cache (not historical_data) — avoids O(n) sorted insert
+            if market_data_source and hasattr(market_data_source, 'price_cache'):
+                market_data_source.price_cache[sim_data.ticker] = price_data
 
             # Update progress less frequently for better performance
             processed_points += 1
@@ -877,18 +875,19 @@ class SimulationUnifiedUC:
                     write_timeline=False,  # Simulation writes its own timeline
                 )
 
-                # Write to timeline for EVERY evaluation (simulation mode)
-                self._write_simulation_timeline_row(
-                    position=position,
-                    price_data=price_data,
-                    evaluation=evaluation,
-                    trigger_info=trigger_info,
-                    order_proposal=evaluation.get("order_proposal"),
-                    execution_info=None,  # Will be updated after execution
-                    simulation_id=simulation_id,
-                    ticker=ticker or sim_data.ticker,
-                    timestamp=current_time,
-                )
+                # Write timeline only on trigger events (not every HOLD) for performance
+                if evaluation.get("trigger_detected"):
+                    self._write_simulation_timeline_row(
+                        position=position,
+                        price_data=price_data,
+                        evaluation=evaluation,
+                        trigger_info=trigger_info,
+                        order_proposal=evaluation.get("order_proposal"),
+                        execution_info=None,  # Will be updated after execution
+                        simulation_id=simulation_id,
+                        ticker=ticker or sim_data.ticker,
+                        timestamp=current_time,
+                    )
 
                 # Debug: Log ALL evaluations that detect triggers
                 delta_pct = evaluation.get("delta_pct", 0)

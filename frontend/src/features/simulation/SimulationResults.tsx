@@ -1,5 +1,17 @@
 import { useState } from 'react';
-import { Download, Play, Filter, Clock, TrendingUp, TrendingDown, DollarSign, RotateCcw, Trash2 } from 'lucide-react';
+import { Download, Play, Filter, Clock, TrendingUp, TrendingDown, DollarSign, RotateCcw, Trash2, HelpCircle } from 'lucide-react';
+
+function MetricTooltip({ text }: { text: string }) {
+  return (
+    <span className="group relative inline-flex ml-1 cursor-help align-middle">
+      <HelpCircle className="h-3 w-3 text-gray-300 group-hover:text-gray-500 transition-colors" />
+      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-52 rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs text-white leading-snug opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg whitespace-normal text-center">
+        {text}
+        <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+      </span>
+    </span>
+  );
+}
 import toast from 'react-hot-toast';
 import { exportToExcel } from '../../utils/exportExcel';
 import GuardrailBandChart from '../../components/charts/GuardrailBandChart';
@@ -290,16 +302,18 @@ export default function SimulationResults({ result, onRerun, onDelete }: Simulat
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1 flex items-center">
             Final Value
+            <MetricTooltip text="Total portfolio value (stock + cash) at the end of the simulation period." />
           </p>
           <p className="text-xl font-bold text-gray-900">
             ${(result.finalValue || timelineEvents[timelineEvents.length - 1]?.total_value || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
           </p>
         </div>
         <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1 flex items-center">
             Return
+            <MetricTooltip text="Total percentage gain or loss on initial capital over the simulation period." />
           </p>
           <p
             className={`text-xl font-bold ${
@@ -311,28 +325,32 @@ export default function SimulationResults({ result, onRerun, onDelete }: Simulat
           </p>
         </div>
         <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1 flex items-center">
             Max Drawdown
+            <MetricTooltip text="Largest peak-to-trough decline in portfolio value. Measures worst-case loss from a high point before recovery." />
           </p>
           <p className="text-xl font-bold text-red-600">
             {(result.maxDrawdown || result.algorithm_max_drawdown || 0).toFixed(1)}%
           </p>
         </div>
         <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1 flex items-center">
             Volatility
+            <MetricTooltip text="Annualized standard deviation of portfolio returns. Higher values mean larger swings in portfolio value." />
           </p>
           <p className="text-xl font-bold text-gray-900">{(result.volatility || result.algorithm_volatility || 0).toFixed(2)}</p>
         </div>
         <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1 flex items-center">
             Trades
+            <MetricTooltip text="Total number of buy and sell orders executed by the algorithm during the simulation." />
           </p>
           <p className="text-xl font-bold text-purple-600">{result.algorithm_trades || result.trades?.length || result.trade_log?.length || 0}</p>
         </div>
         <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1 flex items-center">
             Dividends
+            <MetricTooltip text="Total net dividend income received during the simulation, after withholding tax." />
           </p>
           <p className="text-xl font-bold text-teal-600">
             ${(result.total_dividends_received || result.dividend_analysis?.total_dividends || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
@@ -535,20 +553,23 @@ export default function SimulationResults({ result, onRerun, onDelete }: Simulat
             {/* Summary metrics */}
             <div className="mt-4 grid grid-cols-3 gap-4 pt-4 border-t border-gray-100">
               <div className="text-center">
-                <p className="text-xs text-gray-500 uppercase tracking-wider">Strategy Return</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wider flex items-center justify-center">Strategy Return<MetricTooltip text="Total return of the volatility-balancing algorithm over the simulation period." /></p>
                 <p className={`text-lg font-bold ${(result.algorithm_return_pct || 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
                   {(result.algorithm_return_pct || 0) >= 0 ? '+' : ''}{(result.algorithm_return_pct || 0).toFixed(2)}%
                 </p>
               </div>
               <div className="text-center">
-                <p className="text-xs text-gray-500 uppercase tracking-wider">Buy & Hold Return</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wider flex items-center justify-center">Buy &amp; Hold Return<MetricTooltip text="Return from simply buying and holding the same asset with the same initial capital — the passive baseline." /></p>
                 <p className={`text-lg font-bold ${(result.buy_hold_return_pct || 0) >= 0 ? 'text-gray-600' : 'text-red-600'}`}>
                   {(result.buy_hold_return_pct || 0) >= 0 ? '+' : ''}{(result.buy_hold_return_pct || 0).toFixed(2)}%
                 </p>
               </div>
               <div className="text-center">
-                <p className="text-xs text-gray-500 uppercase tracking-wider">
+                <p className="text-xs text-gray-500 uppercase tracking-wider flex items-center justify-center">
                   {result.comparison_ticker ? `${result.comparison_ticker} Return` : 'Alpha'}
+                  {result.comparison_ticker
+                    ? <MetricTooltip text={`Return of ${result.comparison_ticker} over the same period — used as a market benchmark.`} />
+                    : <MetricTooltip text="Alpha: strategy return minus buy-and-hold return. Positive alpha means the algorithm outperformed passive holding." />}
                 </p>
                 {result.comparison_ticker && result.comparison_data && result.comparison_data.length > 0 ? (
                   <p className={`text-lg font-bold ${result.comparison_data[result.comparison_data.length - 1]?.normalized_return >= 0 ? 'text-orange-600' : 'text-red-600'}`}>

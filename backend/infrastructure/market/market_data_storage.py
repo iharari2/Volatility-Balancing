@@ -25,21 +25,25 @@ class MarketDataStorage:
         # Update cache
         self.price_cache[ticker] = price_data
 
-        # Store in historical data (sorted by timestamp)
-        if ticker not in self.historical_data:
-            self.historical_data[ticker] = []
-
-        # Insert in sorted order (most recent first)
+        # Store in historical data (sorted descending: most recent first)
         historical = self.historical_data[ticker]
-        inserted = False
+
+        # Fast path: new point is newest (chronological append from yfinance)
+        if not historical or price_data.timestamp >= historical[0].timestamp:
+            historical.insert(0, price_data)
+            return
+
+        # Fast path: new point is oldest (unlikely but handle cleanly)
+        if price_data.timestamp <= historical[-1].timestamp:
+            historical.append(price_data)
+            return
+
+        # Rare general case: linear scan insertion
         for i, existing in enumerate(historical):
             if price_data.timestamp >= existing.timestamp:
                 historical.insert(i, price_data)
-                inserted = True
-                break
-
-        if not inserted:
-            historical.append(price_data)
+                return
+        historical.append(price_data)
 
     def clear_price_cache(self, ticker: Optional[str] = None) -> None:
         """Clear cached price data for a ticker or all tickers."""
