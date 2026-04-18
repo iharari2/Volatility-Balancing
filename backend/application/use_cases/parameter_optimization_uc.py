@@ -6,6 +6,7 @@ from typing import List, Optional, Dict, Any, TYPE_CHECKING
 from uuid import UUID, uuid4
 from datetime import datetime, timezone, timedelta
 import statistics
+import time
 import traceback
 
 from domain.entities.optimization_config import OptimizationConfig, OptimizationStatus
@@ -393,8 +394,12 @@ class ParameterOptimizationUC:
         - rebalance_ratio, commission_rate, min_notional: used as-is.
         """
         # Convert percentage inputs to fractions for OrderPolicy/GuardrailPolicy
-        trigger_pct = params.get("trigger_threshold_pct", 3.0)
-        trigger_fraction = trigger_pct / 100.0
+        # Support both "trigger_threshold" (fraction, e.g. 0.03) and
+        # "trigger_threshold_pct" (percentage, e.g. 3.0) parameter names.
+        if "trigger_threshold" in params:
+            trigger_fraction = params["trigger_threshold"]
+        else:
+            trigger_fraction = params.get("trigger_threshold_pct", 3.0) / 100.0
 
         min_alloc_pct = params.get("min_stock_alloc_pct", 25.0)
         min_alloc_fraction = min_alloc_pct / 100.0 if min_alloc_pct > 1.0 else min_alloc_pct
@@ -523,24 +528,22 @@ class ParameterOptimizationUC:
             return
 
         total = len(combinations)
+
+        # Build lookup dict once to avoid O(N²) DB fetches inside the loop
+        existing_results = self.result_repo.get_by_config(config.id)
+        result_by_combination_id = {
+            r.parameter_combination.combination_id: r for r in existing_results
+        }
+
         for i, combination in enumerate(combinations):
             print(f"[Optimization] Processing combination {i + 1}/{total}: "
                   f"{combination.parameters}")
 
-            # Find the result for this combination
-            results = self.result_repo.get_by_config(config.id)
-            result = next(
-                (
-                    r
-                    for r in results
-                    if r.parameter_combination.combination_id == combination.combination_id
-                ),
-                None,
-            )
-
+            result = result_by_combination_id.get(combination.combination_id)
             if not result:
                 continue
 
+            t0 = time.perf_counter()
             try:
                 # Build position config from flat parameters
                 position_config = self._build_position_config(combination.parameters)
@@ -560,6 +563,7 @@ class ParameterOptimizationUC:
 
                 # Map simulation result to optimization metrics
                 metrics = self._map_simulation_result_to_metrics(sim_result)
+                elapsed = time.perf_counter() - t0
 
                 result.metrics = metrics
                 result.simulation_result = {
@@ -569,20 +573,18 @@ class ParameterOptimizationUC:
                     "total_dividends_received": getattr(sim_result, "total_dividends_received", 0.0),
                     "dividend_events": getattr(sim_result, "dividend_events", []),
                 }
-                result.status = OptimizationResultStatus.COMPLETED
-                result.completed_at = datetime.now(timezone.utc)
+                result.mark_completed(execution_time=elapsed)
                 self.result_repo.save_result(result)
 
-                print(f"[Optimization] Combination {i + 1}/{total} completed: "
+                print(f"[Optimization] Combination {i + 1}/{total} completed in {elapsed:.2f}s: "
                       f"return={metrics.get(OptimizationMetric.TOTAL_RETURN, 0):.2f}%, "
                       f"sharpe={metrics.get(OptimizationMetric.SHARPE_RATIO, 0):.3f}")
 
             except Exception as e:
-                print(f"[Optimization] Combination {i + 1}/{total} failed: {e}")
+                elapsed = time.perf_counter() - t0
+                print(f"[Optimization] Combination {i + 1}/{total} failed after {elapsed:.2f}s: {e}")
                 traceback.print_exc()
-                result.status = OptimizationResultStatus.FAILED
-                result.error_message = str(e)
-                result.completed_at = datetime.now(timezone.utc)
+                result.mark_failed(str(e))
                 self.result_repo.save_result(result)
 
         # Update config status to completed
