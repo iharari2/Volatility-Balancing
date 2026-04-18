@@ -2,7 +2,7 @@
 # backend/application/use_cases/process_dividend_uc.py
 # =========================
 from __future__ import annotations
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from decimal import Decimal
 
@@ -243,6 +243,31 @@ class ProcessDividendUC:
             position.asset_symbol
         )  # Use asset_symbol instead of ticker
 
+        # Get dividend history from market data (yfinance)
+        recent_dividends = []
+        try:
+            now = datetime.now(timezone.utc)
+            history_start = datetime(2000, 1, 1, tzinfo=timezone.utc)
+            past_divs = self.dividend_market_data_repo.get_dividend_history(
+                position.asset_symbol, history_start, now
+            )
+            recent_dividends = sorted(
+                [
+                    {
+                        "id": div.id,
+                        "ex_date": div.ex_date.isoformat() if div.ex_date else None,
+                        "pay_date": div.pay_date.isoformat() if div.pay_date else None,
+                        "dps": float(div.dps),
+                        "currency": div.currency,
+                    }
+                    for div in (past_divs or [])
+                ],
+                key=lambda d: d["ex_date"] or "",
+                reverse=True,
+            )
+        except Exception:
+            pass
+
         # Cash lives in position (cash lives in PositionCell)
 
         return {
@@ -268,6 +293,7 @@ class ProcessDividendUC:
                 }
                 for div in (upcoming_dividends or [])
             ],
+            "recent_dividends": recent_dividends,
         }
 
     def _create_event(

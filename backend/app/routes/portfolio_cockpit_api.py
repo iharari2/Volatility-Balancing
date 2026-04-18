@@ -251,6 +251,7 @@ def list_positions_for_portfolio(
                         mode="LIVE",
                         start_date=None,
                         end_date=None,
+                        action_filter=["BUY", "SELL"],
                         limit=1,
                     )
                     if rows:
