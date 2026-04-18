@@ -522,8 +522,12 @@ class _Container:
         def guardrail_config_provider(
             tenant_id: str, portfolio_id: str, position_id: str
         ) -> GuardrailConfig:
-            # Portfolio-level config is the canonical source — the Strategy tab writes here.
-            # Per-position ConfigRepo is legacy and no longer updated by the UI.
+            # Per-position config takes priority (set via Strategy tab per position)
+            config = self.config.get_guardrail_config(position_id)
+            if config is not None:
+                return config
+
+            # Fallback: portfolio-level config (applies to all positions without an override)
             portfolio_cfg = self.portfolio_config_repo.get(
                 tenant_id=tenant_id, portfolio_id=portfolio_id
             )
@@ -537,11 +541,6 @@ class _Container:
                         else None
                     ),
                 )
-
-            # Fallback: per-position ConfigRepo (legacy)
-            config = self.config.get_guardrail_config(position_id)
-            if config is not None:
-                return config
 
             # Last resort: extract from Position entity (backward compatibility)
             position = self.positions.get(

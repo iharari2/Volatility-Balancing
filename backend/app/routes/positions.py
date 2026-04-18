@@ -1180,3 +1180,106 @@ def clear_all_positions_legacy(user: CurrentUser = Depends(get_current_user)) ->
         )
 
     return {"message": "All positions cleared", "count": remaining}
+
+
+# ── Per-position strategy config ─────────────────────────────────────────────
+
+class PositionConfigRequest(BaseModel):
+    trigger_threshold_up_pct: float
+    trigger_threshold_down_pct: float
+    min_stock_pct: float
+    max_stock_pct: float
+    max_trade_pct_of_position: float
+    commission_rate: float
+    allow_after_hours: bool
+
+
+@router.get("/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/config")
+def get_position_config(
+    tenant_id: str,
+    portfolio_id: str,
+    position_id: str,
+    user: CurrentUser = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Return the effective config for a position (per-position override or portfolio default)."""
+    from domain.value_objects.configs import TriggerConfig, GuardrailConfig, OrderPolicyConfig
+
+    trigger = container.config.get_trigger_config(position_id)
+    guardrail = container.config.get_guardrail_config(position_id)
+    order_policy = container.config.get_order_policy_config(position_id)
+
+    is_position_specific = any(x is not None for x in [trigger, guardrail, order_policy])
+
+    # Fall back to portfolio config when no per-position config exists
+    if not is_position_specific:
+        try:
+            from infrastructure.persistence.sql.models import PortfolioConfigModel
+            from sqlalchemy import select as _sel
+            if hasattr(container.portfolio_config_repo, "_sf"):
+                with container.portfolio_config_repo._sf() as s:
+                    pcfg = s.execute(
+                        _sel(PortfolioConfigModel).where(
+                            PortfolioConfigModel.portfolio_id == portfolio_id
+                        )
+                    ).scalar_one_or_none()
+                    if pcfg:
+                        return {
+                            "trigger_threshold_up_pct": pcfg.trigger_up_pct,
+                            "trigger_threshold_down_pct": pcfg.trigger_down_pct,
+                            "min_stock_pct": pcfg.min_stock_pct,
+                            "max_stock_pct": pcfg.max_stock_pct,
+                            "max_trade_pct_of_position": pcfg.max_trade_pct_of_position or 50.0,
+                            "commission_rate": pcfg.commission_rate_pct or 0.1,
+                            "allow_after_hours": False,
+                            "is_position_specific": False,
+                        }
+        except Exception:
+            pass
+
+    return {
+        "trigger_threshold_up_pct": float(trigger.up_threshold_pct) if trigger else 3.0,
+        "trigger_threshold_down_pct": float(trigger.down_threshold_pct) if trigger else -3.0,
+        "min_stock_pct": float(guardrail.min_stock_pct) * 100 if guardrail else 25.0,
+        "max_stock_pct": float(guardrail.max_stock_pct) * 100 if guardrail else 75.0,
+        "max_trade_pct_of_position": float(guardrail.max_trade_pct_of_position) * 100 if guardrail and guardrail.max_trade_pct_of_position else 50.0,
+        "commission_rate": float(order_policy.commission_rate) if order_policy and order_policy.commission_rate else 0.1,
+        "allow_after_hours": order_policy.allow_after_hours if order_policy else False,
+        "is_position_specific": is_position_specific,
+    }
+
+
+@router.put("/tenants/{tenant_id}/portfolios/{portfolio_id}/positions/{position_id}/config", status_code=200)
+def update_position_config(
+    tenant_id: str,
+    portfolio_id: str,
+    position_id: str,
+    request: PositionConfigRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Save per-position strategy config (independent of other positions)."""
+    from decimal import Decimal
+    from domain.value_objects.configs import TriggerConfig, GuardrailConfig, OrderPolicyConfig
+
+    container.config.set_trigger_config(
+        position_id,
+        TriggerConfig(
+            up_threshold_pct=Decimal(str(request.trigger_threshold_up_pct)),
+            down_threshold_pct=Decimal(str(request.trigger_threshold_down_pct)),
+        ),
+    )
+    container.config.set_guardrail_config(
+        position_id,
+        GuardrailConfig(
+            min_stock_pct=Decimal(str(request.min_stock_pct)),
+            max_stock_pct=Decimal(str(request.max_stock_pct)),
+            max_trade_pct_of_position=Decimal(str(request.max_trade_pct_of_position)),
+        ),
+    )
+    container.config.set_order_policy_config(
+        position_id,
+        OrderPolicyConfig(
+            allow_after_hours=request.allow_after_hours,
+            commission_rate=Decimal(str(request.commission_rate)),
+        ),
+    )
+    return {"message": "Config saved"}

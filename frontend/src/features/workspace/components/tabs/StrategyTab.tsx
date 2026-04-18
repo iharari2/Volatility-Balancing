@@ -4,7 +4,7 @@ import { useWorkspace } from '../../WorkspaceContext';
 import { useTenantPortfolio } from '../../../../contexts/TenantPortfolioContext';
 import {
   portfolioScopedApi,
-  EffectiveConfig,
+  PositionConfig,
   PortfolioConfig,
 } from '../../../../services/portfolioScopedApi';
 import { marketHoursService, MarketStatus } from '../../../../services/marketHoursService';
@@ -129,45 +129,40 @@ export default function StrategyTab() {
   const { selectedTenantId } = useTenantPortfolio();
   const tenantId = selectedTenantId || 'default';
 
-  const [effectiveConfig, setEffectiveConfig] = useState<EffectiveConfig | null>(null);
-  const [editableConfig, setEditableConfig] = useState<PortfolioConfig | null>(null);
+  const [positionConfig, setPositionConfig] = useState<PositionConfig | null>(null);
   const [config, setConfig] = useState<PortfolioConfig | null>(null);
   const [marketStatus, setMarketStatus] = useState<MarketStatus>('CLOSED');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isPositionSpecific, setIsPositionSpecific] = useState(false);
+
+  const positionId = selectedPosition?.position_id;
 
   useEffect(() => {
     const loadConfig = async () => {
-      if (!portfolioId || !selectedPosition) {
+      if (!portfolioId || !positionId) {
         setLoading(false);
         return;
       }
 
       try {
         setLoading(true);
-
-        // Load market status
         const marketState = await marketHoursService.getMarketState();
         setMarketStatus(marketState.status);
 
-        // Load portfolio-level config (portfolio is the config scope the backend supports)
-        const effective = await portfolioScopedApi.getEffectiveConfig(tenantId, portfolioId);
-        setEffectiveConfig(effective);
+        const pc = await portfolioScopedApi.getPositionConfig(tenantId, portfolioId, positionId);
+        setPositionConfig(pc);
         setConfig({
-          trigger_threshold_up_pct: effective.trigger_threshold_up_pct,
-          trigger_threshold_down_pct: effective.trigger_threshold_down_pct,
-          min_stock_pct: effective.min_stock_pct,
-          max_stock_pct: effective.max_stock_pct,
-          max_trade_pct_of_position: effective.max_trade_pct_of_position,
-          commission_rate: effective.commission_rate,
-          market_hours_policy: effective.market_hours_policy,
+          trigger_threshold_up_pct: pc.trigger_threshold_up_pct,
+          trigger_threshold_down_pct: pc.trigger_threshold_down_pct,
+          min_stock_pct: pc.min_stock_pct,
+          max_stock_pct: pc.max_stock_pct,
+          max_trade_pct_of_position: pc.max_trade_pct_of_position,
+          commission_rate: pc.commission_rate,
+          market_hours_policy: pc.allow_after_hours ? 'market-plus-after-hours' : 'market-open-only',
         });
-        setIsPositionSpecific(false);
       } catch (error) {
         console.error('Error loading config:', error);
-        // Set default values
         setConfig({
           trigger_threshold_up_pct: 3.0,
           trigger_threshold_down_pct: -3.0,
@@ -183,7 +178,7 @@ export default function StrategyTab() {
     };
 
     loadConfig();
-  }, [portfolioId, selectedPosition?.position_id, tenantId]);
+  }, [portfolioId, positionId, tenantId]);
 
   const validateConfig = (cfg: PortfolioConfig): boolean => {
     const newErrors: Record<string, string> = {};
@@ -224,7 +219,7 @@ export default function StrategyTab() {
   };
 
   const handleSave = async () => {
-    if (!config || !portfolioId || !selectedPosition) return;
+    if (!config || !portfolioId || !positionId) return;
     if (!validateConfig(config)) {
       toast.error('Please fix validation errors');
       return;
@@ -232,12 +227,18 @@ export default function StrategyTab() {
 
     setSaving(true);
     try {
-      await portfolioScopedApi.updateConfig(tenantId, portfolioId, config);
-      setIsPositionSpecific(false);
+      await portfolioScopedApi.updatePositionConfig(tenantId, portfolioId, positionId, {
+        trigger_threshold_up_pct: config.trigger_threshold_up_pct,
+        trigger_threshold_down_pct: config.trigger_threshold_down_pct,
+        min_stock_pct: config.min_stock_pct,
+        max_stock_pct: config.max_stock_pct,
+        max_trade_pct_of_position: config.max_trade_pct_of_position,
+        commission_rate: config.commission_rate,
+        allow_after_hours: config.market_hours_policy === 'market-plus-after-hours',
+      });
 
-      // Re-fetch from DB to confirm the save persisted (and update "Current Effective Settings")
-      const confirmed = await portfolioScopedApi.getEffectiveConfig(tenantId, portfolioId);
-      setEffectiveConfig(confirmed);
+      const confirmed = await portfolioScopedApi.getPositionConfig(tenantId, portfolioId, positionId);
+      setPositionConfig(confirmed);
       setConfig({
         trigger_threshold_up_pct: confirmed.trigger_threshold_up_pct,
         trigger_threshold_down_pct: confirmed.trigger_threshold_down_pct,
@@ -245,7 +246,7 @@ export default function StrategyTab() {
         max_stock_pct: confirmed.max_stock_pct,
         max_trade_pct_of_position: confirmed.max_trade_pct_of_position,
         commission_rate: confirmed.commission_rate,
-        market_hours_policy: confirmed.market_hours_policy,
+        market_hours_policy: confirmed.allow_after_hours ? 'market-plus-after-hours' : 'market-open-only',
       });
 
       toast.success('Strategy saved successfully');
@@ -257,17 +258,16 @@ export default function StrategyTab() {
   };
 
   const handleReset = () => {
-    if (!effectiveConfig) return;
+    if (!positionConfig) return;
     if (!window.confirm('Reset to portfolio defaults?')) return;
-
     setConfig({
-      trigger_threshold_up_pct: effectiveConfig.trigger_threshold_up_pct,
-      trigger_threshold_down_pct: effectiveConfig.trigger_threshold_down_pct,
-      min_stock_pct: effectiveConfig.min_stock_pct,
-      max_stock_pct: effectiveConfig.max_stock_pct,
-      max_trade_pct_of_position: effectiveConfig.max_trade_pct_of_position,
-      commission_rate: effectiveConfig.commission_rate,
-      market_hours_policy: effectiveConfig.market_hours_policy,
+      trigger_threshold_up_pct: positionConfig.trigger_threshold_up_pct,
+      trigger_threshold_down_pct: positionConfig.trigger_threshold_down_pct,
+      min_stock_pct: positionConfig.min_stock_pct,
+      max_stock_pct: positionConfig.max_stock_pct,
+      max_trade_pct_of_position: positionConfig.max_trade_pct_of_position,
+      commission_rate: positionConfig.commission_rate,
+      market_hours_policy: positionConfig.allow_after_hours ? 'market-plus-after-hours' : 'market-open-only',
     });
   };
 
@@ -300,44 +300,11 @@ export default function StrategyTab() {
       {/* Position-specific indicator */}
       <div className="border rounded-lg p-4 bg-blue-50 border-blue-200">
         <p className="text-sm text-blue-700">
-          These settings apply to all positions in this portfolio. Changes saved here affect the whole portfolio.
+          {positionConfig?.is_position_specific
+            ? `These settings are specific to ${selectedPosition.asset_symbol} and override portfolio defaults.`
+            : `Using portfolio defaults. Saving will create a ${selectedPosition.asset_symbol}-specific override.`}
         </p>
       </div>
-
-      {/* Effective Config Summary */}
-      {effectiveConfig && (
-        <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
-          <h3 className="text-sm font-semibold text-primary-900 mb-3">
-            Current Effective Settings
-          </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-            <div>
-              <span className="text-primary-600">Up Trigger</span>
-              <p className="font-semibold text-primary-900">
-                +{effectiveConfig.trigger_threshold_up_pct.toFixed(1)}%
-              </p>
-            </div>
-            <div>
-              <span className="text-primary-600">Down Trigger</span>
-              <p className="font-semibold text-primary-900">
-                {effectiveConfig.trigger_threshold_down_pct.toFixed(1)}%
-              </p>
-            </div>
-            <div>
-              <span className="text-primary-600">Min Stock</span>
-              <p className="font-semibold text-primary-900">
-                {effectiveConfig.min_stock_pct.toFixed(0)}%
-              </p>
-            </div>
-            <div>
-              <span className="text-primary-600">Max Stock</span>
-              <p className="font-semibold text-primary-900">
-                {effectiveConfig.max_stock_pct.toFixed(0)}%
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Editable Form */}
       <div className="bg-white border border-gray-200 rounded-lg p-5 space-y-6">

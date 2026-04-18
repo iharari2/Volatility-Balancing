@@ -191,12 +191,28 @@ def list_positions_for_portfolio(
             tenant_id=tenant_id, portfolio_id=portfolio_id
         )
 
-        # Fetch portfolio config once (not per position)
+        # Fetch portfolio config once (used as fallback for positions without their own config)
         cfg = None
         try:
             cfg = portfolio_service._portfolio_config_repo.get(
                 tenant_id=tenant_id, portfolio_id=portfolio_id
             )
+        except Exception:
+            pass
+
+        # Batch-fetch per-position guardrail configs (one query for all positions)
+        pos_guardrail_map: dict = {}
+        try:
+            from infrastructure.persistence.sql.models import GuardrailConfigModel
+            from sqlalchemy import select as _gsel
+            pos_ids = [p.id for p in positions]
+            if pos_ids and hasattr(container.config, "_sf"):
+                with container.config._sf() as _gs:
+                    _rows = _gs.execute(
+                        _gsel(GuardrailConfigModel).where(GuardrailConfigModel.position_id.in_(pos_ids))
+                    ).scalars().all()
+                    for r in _rows:
+                        pos_guardrail_map[r.position_id] = r
         except Exception:
             pass
 
@@ -244,19 +260,25 @@ def list_positions_for_portfolio(
             total_value = position.cash + stock_value
             stock_pct = (stock_value / total_value * 100) if total_value > 0 else None
 
-            # Guardrail / trigger config (from DB config, no market call)
+            # Guardrail / trigger config — per-position first, portfolio as fallback
             guardrail_min_pct: Optional[float] = None
             guardrail_max_pct: Optional[float] = None
             trigger_up_pct: Optional[float] = None
             trigger_down_pct: Optional[float] = None
-            if cfg:
-                try:
+            try:
+                pg = pos_guardrail_map.get(position.id)
+                if pg:
+                    # GuardrailConfigModel stores as fraction (0.25 = 25%)
+                    guardrail_min_pct = float(pg.min_stock_pct) * 100
+                    guardrail_max_pct = float(pg.max_stock_pct) * 100
+                elif cfg:
                     guardrail_min_pct = cfg.min_stock_pct
                     guardrail_max_pct = cfg.max_stock_pct
+                if cfg:
                     trigger_up_pct = cfg.trigger_up_pct
                     trigger_down_pct = cfg.trigger_down_pct
-                except Exception:
-                    pass
+            except Exception:
+                pass
 
             status: Optional[str] = status_map.get(position.id, "RUNNING")
 

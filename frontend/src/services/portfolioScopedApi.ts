@@ -83,6 +83,17 @@ export interface PortfolioConfig {
   market_hours_policy: 'market-open-only' | 'market-plus-after-hours';
 }
 
+export interface PositionConfig {
+  trigger_threshold_up_pct: number;
+  trigger_threshold_down_pct: number;
+  min_stock_pct: number;
+  max_stock_pct: number;
+  max_trade_pct_of_position: number;
+  commission_rate: number;
+  allow_after_hours: boolean;
+  is_position_specific: boolean;
+}
+
 export interface PerAssetOverride {
   asset: string;
   override_type: 'commission' | 'triggers' | 'guardrails';
@@ -226,6 +237,28 @@ class PortfolioScopedApi {
       method: 'PUT',
       body: JSON.stringify(config),
     });
+  }
+
+  /**
+   * Get per-position config (falls back to portfolio config when no override set)
+   */
+  async getPositionConfig(tenantId: string, portfolioId: string, positionId: string): Promise<PositionConfig> {
+    return request<PositionConfig>(`/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/config`);
+  }
+
+  /**
+   * Save per-position config (independent of other positions)
+   */
+  async updatePositionConfig(
+    tenantId: string,
+    portfolioId: string,
+    positionId: string,
+    config: Omit<PositionConfig, 'is_position_specific'>,
+  ): Promise<ApiResponse<void>> {
+    return request<ApiResponse<void>>(
+      `/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/config`,
+      { method: 'PUT', body: JSON.stringify(config) },
+    );
   }
 
   /**
