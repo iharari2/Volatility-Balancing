@@ -203,6 +203,7 @@ export interface AnalyticsData {
     num_positions: number;
   };
   benchmarks?: {
+    buy_hold?: BenchmarkSeries;
     spy?: BenchmarkSeries;
     custom?: BenchmarkSeries;
   };

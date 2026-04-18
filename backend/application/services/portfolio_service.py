@@ -1140,6 +1140,24 @@ class PortfolioService:
                 last_date_str = time_series[-1].get("date")
 
                 if first_date_str and last_date_str:
+                    # Buy & Hold benchmark — fetch actual ticker prices via yfinance
+                    # so the curve matches Yahoo Finance rather than relying on snapshot data
+                    if "buy_hold" in active_benchmarks:
+                        # Determine which ticker(s) to use for buy-hold
+                        position_tickers = list({
+                            p.asset_symbol for p in positions
+                            if p.asset_symbol and p.asset_symbol != "CASH"
+                        })
+                        if len(position_tickers) == 1:
+                            bh_result = _fetch_ticker_series(position_tickers[0], first_date_str[:10], last_date_str[:10])
+                            if bh_result:
+                                benchmarks_result["buy_hold"] = {**bh_result, "ticker": position_tickers[0]}
+                                performance["benchmark_return_pct"] = bh_result["return_pct"]
+                                performance["alpha"] = round(
+                                    performance["portfolio_return_pct"] - bh_result["return_pct"], 2
+                                )
+                                print(f"📊 Buy & Hold ({position_tickers[0]}): return={bh_result['return_pct']:.2f}%")
+
                     # SPY benchmark
                     if "spy" in active_benchmarks:
                         spy_result = _fetch_ticker_series("SPY", first_date_str[:10], last_date_str[:10])

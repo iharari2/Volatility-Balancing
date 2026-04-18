@@ -119,7 +119,15 @@ export default function AnalyticsCharts({
   // ANA-4: Normalised performance comparison with benchmarks
   const performance = analyticsData?.performance;
 
-  // Build a date->normalised-value map for custom benchmark series (if provided)
+  // Build date->normalised-value maps for benchmark series
+  const buyHoldByDate = useMemo(() => {
+    const data = analyticsData?.benchmarks?.buy_hold;
+    if (!data?.series) return new Map<string, number>();
+    const map = new Map<string, number>();
+    data.series.forEach((p) => map.set(p.date, p.value));
+    return map;
+  }, [analyticsData]);
+
   const customBenchmarkByDate = useMemo(() => {
     const customData = analyticsData?.benchmarks?.custom;
     if (!customData?.series) return new Map<string, number>();
@@ -138,7 +146,10 @@ export default function AnalyticsCharts({
     const initialStockValue = initialPoint.stock || 0;
     const initialValue = initialPoint.value || 0;
 
-    if (initialValue === 0 || initialStockValue === 0) return [];
+    if (initialValue === 0) return [];
+
+    // Use yfinance-sourced buy_hold series when available; fall back to snapshot-derived
+    const useYfinanceBuyHold = buyHoldByDate.size > 0;
 
     return portfolioValueData.map(
       (
@@ -155,8 +166,17 @@ export default function AnalyticsCharts({
         if (!currentPoint) return { date: point.date, portfolioReturn: 0, stockReturn: 0 };
 
         const portfolioReturn = ((point.value - initialValue) / initialValue) * 100;
-        const stockReturn =
-          ((currentPoint.stock - initialStockValue) / initialStockValue) * 100;
+
+        // Buy & Hold: prefer yfinance series (value is normalised to 100 at start)
+        let stockReturn: number;
+        if (useYfinanceBuyHold) {
+          const bhValue = buyHoldByDate.get(point.date);
+          stockReturn = bhValue !== undefined ? bhValue - 100 : 0;
+        } else {
+          stockReturn = initialStockValue > 0
+            ? ((currentPoint.stock - initialStockValue) / initialStockValue) * 100
+            : 0;
+        }
 
         // Custom benchmark – normalised to 100 at start, converted to % change
         const customBmValue = customBenchmarkByDate.get(point.date);
