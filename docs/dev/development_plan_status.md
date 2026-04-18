@@ -1,6 +1,6 @@
 # Development Plan Status
 
-**Last Updated**: 2026-04-16 (post-Iteration 30 Events tab enhancements)
+**Last Updated**: 2026-04-19 (Fix: extended-hours price in live trading)
 
 > Iteration details are summarized in [`unified_development_plan.md`](unified_development_plan.md).
 > This file tracks per-commit specifics for reference.
@@ -48,3 +48,4 @@
 | 30 | Password Reset + Email Notifications | — | `POST /v1/auth/forgot-password` + `POST /v1/auth/reset-password` (time-limited token, 1h TTL); `NotificationService` (SMTP stdlib); `PasswordResetService`; `GET|PUT /v1/settings/notifications`; ForgotPasswordPage + ResetPasswordPage; Settings Notifications card; email alerts wired into trading worker; CI test fix for async simulation endpoint |
 | — | Bug Fixes (Iteration 29) | `e215e81` | Blank onboarding page (removed useTenantPortfolio dep); Orders 404 (route prefix → `/v1/`); onboarding field names + error array display; admin impersonation escape hatch; simulation end_date capped at now; daily data fetch retries (3x); TopBar user menu with logout |
 | 31 | Events Tab: Anchor + Guardrail Columns | `46bf9df` | Add Anchor price column (table + timeline); change Guardrail to ##/## format; Strategy config disconnect fix (di.py reads portfolio_config_repo first); curl_cffi added to requirements; user_repo.clear() in container.reset() |
+| — | Fix: Extended-hours price for live trading | pending | `yfinance_adapter.py`: use `postMarketPrice`/`preMarketPrice` from fast_info/info when outside regular session; all 3 price-fetch paths fixed; simulation after-hours gap added to backlog |

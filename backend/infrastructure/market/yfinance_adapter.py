@@ -337,12 +337,31 @@ class YFinanceAdapter(MarketDataRepo):
                 # Access fast_info - this should be fresh
                 with self._suppress_yfinance_output():
                     fast_info = stock.fast_info
+
+                market_status = self.get_market_status()
+
+                # Outside regular hours, prefer extended-hours price so triggers/guardrails
+                # evaluate against the actual current market price, not the frozen close.
+                extended_price: Optional[float] = None
+                if not market_status.is_open:
+                    now_et = datetime.now(self.tz_eastern)
+                    # Post-market: 4:00pm–8:00pm ET
+                    if now_et.hour >= 16:
+                        extended_price = fast_info.get("postMarketPrice")
+                    # Pre-market: midnight–9:30am ET (most active 4am–9:30am)
+                    elif now_et.hour < 9 or (now_et.hour == 9 and now_et.minute < 30):
+                        extended_price = fast_info.get("preMarketPrice")
+                    if extended_price and extended_price > 0:
+                        print(f"📊 Using extended-hours price for {ticker}: ${extended_price:.2f}")
+
                 # fast_info has the most current data
-                current_price = (
+                regular_price = (
                     fast_info.get("lastPrice")
                     or fast_info.get("regularMarketPrice")
                     or fast_info.get("previousClose")
                 )
+                # Use extended-hours price when available and outside regular hours
+                current_price = (extended_price if extended_price and extended_price > 0 else regular_price)
                 bid = fast_info.get("bid")
                 ask = fast_info.get("ask")
 
@@ -496,11 +515,24 @@ class YFinanceAdapter(MarketDataRepo):
                 stock = self._ticker(ticker)
                 with self._suppress_yfinance_output():
                     info = stock.info
-            current_price = (
+
+            # Prefer extended-hours price from info when outside regular session
+            market_status_info = self.get_market_status()
+            extended_price_info: Optional[float] = None
+            if not market_status_info.is_open:
+                now_et_info = datetime.now(self.tz_eastern)
+                if now_et_info.hour >= 16:
+                    extended_price_info = info.get("postMarketPrice")
+                elif now_et_info.hour < 9 or (now_et_info.hour == 9 and now_et_info.minute < 30):
+                    extended_price_info = info.get("preMarketPrice")
+
+            regular_price_info = (
                 info.get("currentPrice")
                 or info.get("regularMarketPrice")
                 or info.get("regularMarketPreviousClose")
             )
+            current_price = (extended_price_info if extended_price_info and extended_price_info > 0
+                             else regular_price_info)
 
             if current_price and current_price > 0:
                 # Use info data (more current than history)
@@ -948,12 +980,24 @@ class YFinanceAdapter(MarketDataRepo):
             try:
                 with self._suppress_yfinance_output():
                     fast_info = stock.fast_info
-                current_price = fast_info.get("lastPrice") or fast_info.get("regularMarketPrice")
+
+                market_status = self.get_market_status()
+                now_et = datetime.now(self.tz_eastern)
+
+                # Use extended-hours price when outside regular session
+                extended_price: Optional[float] = None
+                if not market_status.is_open:
+                    if now_et.hour >= 16:
+                        extended_price = fast_info.get("postMarketPrice")
+                    elif now_et.hour < 9 or (now_et.hour == 9 and now_et.minute < 30):
+                        extended_price = fast_info.get("preMarketPrice")
+
+                regular_price = fast_info.get("lastPrice") or fast_info.get("regularMarketPrice")
+                current_price = (extended_price if extended_price and extended_price > 0
+                                 else regular_price)
                 if current_price:
                     bid = fast_info.get("bid", current_price * 0.999)
                     ask = fast_info.get("ask", current_price * 1.001)
-
-                    market_status = self.get_market_status()
 
                     return PriceData(
                         ticker=ticker,
@@ -975,16 +1019,26 @@ class YFinanceAdapter(MarketDataRepo):
             # Fallback to info
             with self._suppress_yfinance_output():
                 info = stock.info
-            current_price = (
+
+            market_status_fb = self.get_market_status()
+            now_et_fb = datetime.now(self.tz_eastern)
+            extended_price_fb: Optional[float] = None
+            if not market_status_fb.is_open:
+                if now_et_fb.hour >= 16:
+                    extended_price_fb = info.get("postMarketPrice")
+                elif now_et_fb.hour < 9 or (now_et_fb.hour == 9 and now_et_fb.minute < 30):
+                    extended_price_fb = info.get("preMarketPrice")
+
+            regular_price_fb = (
                 info.get("currentPrice")
                 or info.get("regularMarketPrice")
                 or info.get("regularMarketPreviousClose")
             )
+            current_price = (extended_price_fb if extended_price_fb and extended_price_fb > 0
+                             else regular_price_fb)
             if current_price:
                 bid = info.get("bid", current_price * 0.999)
                 ask = info.get("ask", current_price * 1.001)
-
-                market_status = self.get_market_status()
 
                 return PriceData(
                     ticker=ticker,
@@ -996,7 +1050,7 @@ class YFinanceAdapter(MarketDataRepo):
                     volume=info.get("volume"),
                     last_trade_price=current_price,
                     last_trade_time=current_time,
-                    is_market_hours=market_status.is_open,
+                    is_market_hours=market_status_fb.is_open,
                     is_fresh=True,
                     is_inline=True,
                 )

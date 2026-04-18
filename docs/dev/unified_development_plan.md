@@ -1,7 +1,7 @@
 ---
 owner: Development Team
 status: active
-last_updated: 2026-04-16
+last_updated: 2026-04-19
 ---
 
 # Volatility Balancing — Development Plan
@@ -133,3 +133,4 @@ Deliverables:
 - DRIP support
 - Tax-lot optimization
 - Notification / alert system (configurable, medium priority)
+- **Simulation after-hours historical data** — pass `prePost=True` to `yfinance stock.history()` in `fetch_historical_data` so simulation replay includes real pre/post market OHLC bars (currently all synthetic intraday points are market-hours only, so `include_after_hours=True` in simulation has no real effect)
