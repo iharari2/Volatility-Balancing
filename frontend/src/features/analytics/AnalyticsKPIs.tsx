@@ -34,6 +34,9 @@ export default function AnalyticsKPIs({ positions, analyticsData }: AnalyticsKPI
     };
   }, [analyticsData]);
 
+  const zoneTime = analyticsData?.kpis?.zone_time;
+  const tradeStats = analyticsData?.kpis?.trade_stats;
+
   const kpiCards = [
     {
       label: 'Return',
@@ -71,6 +74,19 @@ export default function AnalyticsKPIs({ positions, analyticsData }: AnalyticsKPI
       value: `$${metrics.dividendTotal.toFixed(2)}`,
       color: 'text-green-600',
     },
+    {
+      label: 'In Target Zone',
+      tooltip: 'Percentage of trading days the stock allocation stayed within the guardrail target band. Higher is better.',
+      value: zoneTime ? `${zoneTime.in_pct.toFixed(0)}%` : '—',
+      color: zoneTime && zoneTime.in_pct >= 70 ? 'text-green-600' : zoneTime ? 'text-amber-600' : 'text-gray-400',
+    },
+    {
+      label: 'Trades',
+      tooltip: 'Total number of guardrail trades executed. Shows buys and sells separately.',
+      value: tradeStats ? `${tradeStats.total_trades}` : '—',
+      subValue: tradeStats ? `${tradeStats.buy_count}B / ${tradeStats.sell_count}S` : undefined,
+      color: 'text-gray-900',
+    },
   ];
 
   const [showMethodology, setShowMethodology] = useState(false);
@@ -98,7 +114,7 @@ export default function AnalyticsKPIs({ positions, analyticsData }: AnalyticsKPI
           How are these calculated?
         </button>
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-8">
         {kpiCards.map((kpi) => (
           <div key={kpi.label} className="card p-4 flex flex-col justify-between">
             <dt className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center">
@@ -106,6 +122,9 @@ export default function AnalyticsKPIs({ positions, analyticsData }: AnalyticsKPI
               <MetricTooltip text={kpi.tooltip} />
             </dt>
             <dd className={`text-xl font-bold ${kpi.color}`}>{kpi.value}</dd>
+            {'subValue' in kpi && kpi.subValue && (
+              <span className="text-[10px] text-gray-400 mt-0.5">{kpi.subValue}</span>
+            )}
           </div>
         ))}
       </div>

@@ -888,6 +888,7 @@ class PortfolioService:
                             "commission": trade.commission,
                             "position_id": pos.id,
                             "asset_symbol": pos.asset_symbol,
+                            "anchor_price": getattr(pos, "anchor_price", None),
                         })
 
             # Also fetch BUY/SELL actions from evaluation_timeline to catch trades not yet in trades table
@@ -939,6 +940,7 @@ class PortfolioService:
                                 "commission": row.get("commission") or 0.0,
                                 "position_id": pos.id,
                                 "asset_symbol": pos.asset_symbol,
+                                "anchor_price": getattr(pos, "anchor_price", None),
                             })
 
             # Fetch dividends for each position
@@ -973,6 +975,28 @@ class PortfolioService:
 
             # Sort events by date
             events.sort(key=lambda e: e["date"])
+
+            # Compute trade stats
+            trade_events_only = [e for e in events if e["type"] == "TRADE"]
+            buy_events = [e for e in trade_events_only if e.get("side") == "BUY"]
+            sell_events = [e for e in trade_events_only if e.get("side") == "SELL"]
+            buy_spreads = [
+                (e["price"] - e["anchor_price"]) / e["anchor_price"] * 100
+                for e in buy_events
+                if e.get("anchor_price") and e["anchor_price"] > 0 and e.get("price")
+            ]
+            sell_spreads = [
+                (e["price"] - e["anchor_price"]) / e["anchor_price"] * 100
+                for e in sell_events
+                if e.get("anchor_price") and e["anchor_price"] > 0 and e.get("price")
+            ]
+            kpis["trade_stats"] = {
+                "buy_count": len(buy_events),
+                "sell_count": len(sell_events),
+                "total_trades": len(trade_events_only),
+                "avg_buy_spread_pct": round(sum(buy_spreads) / len(buy_spreads), 2) if buy_spreads else None,
+                "avg_sell_spread_pct": round(sum(sell_spreads) / len(sell_spreads), 2) if sell_spreads else None,
+            }
 
             # Warn if no events found but trades exist (potential data issue)
             if not events and time_series:
@@ -1020,6 +1044,35 @@ class PortfolioService:
         except Exception as e:
             print(f"Warning: Failed to fetch guardrails for analytics: {e}")
 
+        # Annotate time-series points with guardrail zone + compute zone_time KPI
+        if guardrails and time_series:
+            min_pct = guardrails["min_stock_pct"]
+            max_pct = guardrails["max_stock_pct"]
+            in_count = over_count = under_count = 0
+            for point in time_series:
+                stock_pct = point.get("stock_pct", 0)
+                if stock_pct > max_pct:
+                    point["zone"] = "over"
+                    over_count += 1
+                elif stock_pct < min_pct:
+                    point["zone"] = "under"
+                    under_count += 1
+                else:
+                    point["zone"] = "in"
+                    in_count += 1
+            total_pts = len(time_series)
+            kpis["zone_time"] = {
+                "in_pct": round(in_count / total_pts * 100, 1),
+                "over_pct": round(over_count / total_pts * 100, 1),
+                "under_pct": round(under_count / total_pts * 100, 1),
+                "in_days": in_count,
+                "over_days": over_count,
+                "under_days": under_count,
+            }
+        else:
+            for point in time_series:
+                point["zone"] = "unknown"
+
         # 8. Calculate performance metrics (alpha = portfolio return - buy-hold return)
         performance: Dict[str, float] = {
             "alpha": 0.0,
@@ -1049,6 +1102,25 @@ class PortfolioService:
             performance["alpha"] = round(
                 performance["portfolio_return_pct"] - performance["benchmark_return_pct"], 2
             )
+
+        # P&L attribution breakdown
+        pnl_attribution: Dict[str, Any] = {}
+        if time_series and len(time_series) >= 2:
+            start_val = time_series[0]["value"]
+            end_val = time_series[-1]["value"]
+            total_return_raw = end_val - start_val
+            dividend_income = total_dividends_received
+            commission_cost = total_commission_paid
+            # trading_pnl = what's left after accounting for dividends and commissions
+            trading_pnl = total_return_raw - dividend_income + commission_cost
+            pnl_attribution = {
+                "start_value": round(start_val, 2),
+                "end_value": round(end_val, 2),
+                "total_return_raw": round(total_return_raw, 2),
+                "trading_pnl": round(trading_pnl, 2),
+                "dividend_income": round(dividend_income, 2),
+                "commission_cost": round(commission_cost, 2),
+            }
 
         # 9. Fetch benchmark data (SPY and/or custom ticker) – conditional on selection
         benchmarks_result: Dict[str, Any] = {}
@@ -1124,6 +1196,7 @@ class PortfolioService:
             "performance": performance,
             "benchmarks": benchmarks_result,
             "resolution": resolution,
+            "pnl_attribution": pnl_attribution,
         }
 
     def get_portfolio_overview(self, tenant_id: str, portfolio_id: str) -> Optional[Dict[str, Any]]:

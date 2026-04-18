@@ -129,6 +129,7 @@ export interface AnalyticsEvent {
   qty?: number;
   price?: number;
   commission?: number;
+  anchor_price?: number;
   gross_amount?: number;
   net_amount?: number;
   shares_held?: number;
@@ -165,6 +166,7 @@ export interface AnalyticsTimeSeriesPoint {
   cash: number;
   stock_pct: number;
   cash_pct: number;
+  zone?: 'in' | 'over' | 'under' | 'unknown';
 }
 
 export interface AnalyticsData {
@@ -179,6 +181,21 @@ export interface AnalyticsData {
     pnl_pct: number;
     commission_total: number;
     dividend_total: number;
+    zone_time?: {
+      in_pct: number;
+      over_pct: number;
+      under_pct: number;
+      in_days: number;
+      over_days: number;
+      under_days: number;
+    };
+    trade_stats?: {
+      buy_count: number;
+      sell_count: number;
+      total_trades: number;
+      avg_buy_spread_pct: number | null;
+      avg_sell_spread_pct: number | null;
+    };
   };
   allocation: Record<string, { value: number; percentage: number }>;
   diversification: {
@@ -188,6 +205,14 @@ export interface AnalyticsData {
   benchmarks?: {
     spy?: BenchmarkSeries;
     custom?: BenchmarkSeries;
+  };
+  pnl_attribution?: {
+    start_value: number;
+    end_value: number;
+    total_return_raw: number;
+    trading_pnl: number;
+    dividend_income: number;
+    commission_cost: number;
   };
   resolution?: string;
   portfolio_name?: string;

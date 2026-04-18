@@ -4,7 +4,11 @@ import {
   Line,
   AreaChart,
   Area,
+  BarChart,
+  Bar,
   ComposedChart,
+  PieChart,
+  Pie,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -216,6 +220,76 @@ export default function AnalyticsCharts({
     return result;
   }, [analyticsData]);
 
+  // Drawdown curve
+  const drawdownData = useMemo(() => {
+    if (!analyticsData?.time_series?.length) return [];
+    const ts = analyticsData.time_series;
+    let peak = ts[0].value;
+    return ts.map((point) => {
+      if (point.value > peak) peak = point.value;
+      const dd = peak > 0 ? ((point.value - peak) / peak) * 100 : 0;
+      return { date: point.date, drawdown: Math.round(dd * 100) / 100 };
+    });
+  }, [analyticsData]);
+
+  // 30-day rolling Sharpe
+  const rollingSharpData = useMemo(() => {
+    if (!analyticsData?.time_series?.length || analyticsData.time_series.length < 31) return [];
+    const ts = analyticsData.time_series;
+    const WINDOW = 30;
+    const dailyReturns: number[] = [];
+    for (let i = 1; i < ts.length; i++) {
+      const prev = ts[i - 1].value;
+      const curr = ts[i].value;
+      dailyReturns.push(prev > 0 ? (curr - prev) / prev : 0);
+    }
+    const result: Array<{ date: string; sharpe: number }> = [];
+    for (let i = WINDOW; i < ts.length; i++) {
+      const window = dailyReturns.slice(i - WINDOW, i);
+      const mean = window.reduce((a, b) => a + b, 0) / WINDOW;
+      const variance = window.reduce((s, r) => s + (r - mean) ** 2, 0) / (WINDOW - 1);
+      const std = Math.sqrt(variance);
+      const annReturn = mean * 252;
+      const annVol = std * Math.sqrt(252);
+      result.push({ date: ts[i].date, sharpe: annVol > 0 ? Math.round((annReturn / annVol) * 100) / 100 : 0 });
+    }
+    return result;
+  }, [analyticsData]);
+
+  // P&L attribution waterfall (invisible base + colored delta stacked bars)
+  const waterfallData = useMemo(() => {
+    const attr = analyticsData?.pnl_attribution;
+    if (!attr || !attr.start_value) return [];
+    const { start_value, trading_pnl, dividend_income, commission_cost, end_value } = attr;
+    let running = 0;
+    const fmt = (v: number) => `$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+    const points = [
+      { name: 'Start', base: 0, amount: start_value, fill: '#3b82f6', label: fmt(start_value) },
+    ];
+    running = start_value;
+    const tradingBase = trading_pnl >= 0 ? running : running + trading_pnl;
+    points.push({ name: 'Trading P&L', base: tradingBase, amount: Math.abs(trading_pnl), fill: trading_pnl >= 0 ? '#10b981' : '#ef4444', label: `${trading_pnl >= 0 ? '+' : '-'}${fmt(trading_pnl)}` });
+    running += trading_pnl;
+    points.push({ name: 'Dividends', base: running, amount: dividend_income, fill: '#10b981', label: `+${fmt(dividend_income)}` });
+    running += dividend_income;
+    points.push({ name: 'Fees', base: running - commission_cost, amount: commission_cost, fill: '#ef4444', label: `-${fmt(commission_cost)}` });
+    running -= commission_cost;
+    points.push({ name: 'End', base: 0, amount: end_value, fill: '#1f2937', label: fmt(end_value) });
+    return points;
+  }, [analyticsData]);
+
+  // Trade efficiency data (trades with anchor price)
+  const tradeEfficiencyRows = useMemo(() => {
+    return events
+      .filter((e: AnalyticsEvent) => e.type === 'TRADE' && e.anchor_price && e.price)
+      .map((e: AnalyticsEvent) => {
+        const spread = ((e.price! - e.anchor_price!) / e.anchor_price!) * 100;
+        const intendedDir = e.side === 'BUY' ? spread < 0 : spread > 0;
+        return { ...e, spread: Math.round(spread * 100) / 100, intendedDir };
+      })
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [events]);
+
   const hasData = portfolioValueData.length > 0;
 
   // Determine whether to show chart brush (only useful with > 20 data points)
@@ -244,6 +318,7 @@ export default function AnalyticsCharts({
   const showCustom = activeBenchmarks.includes('custom') && !!customTicker;
 
   return (
+    <div className="space-y-6">
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* ANA-2: Portfolio Value Over Time - Stacked Areas + Event Markers + Brush */}
       <div className="card lg:col-span-2">
@@ -625,6 +700,257 @@ export default function AnalyticsCharts({
           </div>
         )}
       </div>
+    </div>
+
+      {/* ── Drawdown Curve + Rolling Sharpe ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {/* Drawdown Curve */}
+        <div className="card">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Drawdown Curve</h3>
+            {drawdownData.length > 0 && (
+              <div className="flex gap-3 text-xs">
+                <span className="text-red-600 font-semibold">
+                  Max: {Math.min(...drawdownData.map((d) => d.drawdown)).toFixed(1)}%
+                </span>
+                <span className="text-gray-400">
+                  {drawdownData.filter((d) => d.drawdown < -1).length}d underwater
+                </span>
+              </div>
+            )}
+          </div>
+          {drawdownData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={240}>
+              <AreaChart data={drawdownData} syncId="analytics">
+                <defs>
+                  <linearGradient id="ddGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
+                <ReferenceLine y={0} stroke="#e5e7eb" strokeWidth={1} />
+                <Tooltip
+                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                  formatter={(v: number) => [`${v.toFixed(2)}%`, 'Drawdown']}
+                />
+                <Area type="monotone" dataKey="drawdown" stroke="#ef4444" strokeWidth={2} fill="url(#ddGrad)" name="Drawdown" />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[240px] flex items-center justify-center text-gray-400 text-sm">
+              Need at least 2 data points
+            </div>
+          )}
+          <p className="text-[10px] text-gray-400 mt-2">How far below its peak the portfolio sat at each point in time.</p>
+        </div>
+
+        {/* Rolling Sharpe */}
+        <div className="card">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">30-Day Rolling Sharpe</h3>
+            {rollingSharpData.length > 0 && (
+              <span className="text-xs font-semibold text-gray-900">
+                Current: {rollingSharpData[rollingSharpData.length - 1]?.sharpe.toFixed(2)}
+              </span>
+            )}
+          </div>
+          {rollingSharpData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={240}>
+              <ComposedChart data={rollingSharpData} syncId="analytics">
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                <ReferenceLine y={0} stroke="#e5e7eb" strokeWidth={1} />
+                <ReferenceLine y={1} stroke="#10b981" strokeDasharray="4 3" strokeWidth={1} label={{ value: 'Sharpe 1.0', position: 'right', fill: '#10b981', fontSize: 9 }} />
+                <Tooltip
+                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                  formatter={(v: number) => [v.toFixed(2), 'Rolling Sharpe']}
+                />
+                <Line type="monotone" dataKey="sharpe" stroke="#f59e0b" strokeWidth={2.5} dot={false} name="Rolling Sharpe" />
+              </ComposedChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[240px] flex items-center justify-center text-gray-400 text-sm">
+              Need at least 31 days of data
+            </div>
+          )}
+          <p className="text-[10px] text-gray-400 mt-2">Annualized return ÷ annualized volatility over trailing 30 days. Green dashed = Sharpe 1.0 target.</p>
+        </div>
+      </div>
+
+      {/* ── Guardrail Zone Analysis + P&L Attribution ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {/* Guardrail Zone Analysis */}
+        {(() => {
+          const zoneTime = analyticsData?.kpis?.zone_time;
+          const hasZone = !!zoneTime && analyticsData?.time_series?.length > 0;
+          return (
+            <div className="card">
+              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">Guardrail Zone Analysis</h3>
+              {hasZone ? (
+                <>
+                  <div className="flex items-center gap-6 mb-5">
+                    <PieChart width={110} height={110}>
+                      <Pie
+                        data={[
+                          { name: 'In Zone', value: zoneTime.in_pct, fill: '#10b981' },
+                          { name: 'Over', value: zoneTime.over_pct, fill: '#f59e0b' },
+                          { name: 'Under', value: zoneTime.under_pct, fill: '#ef4444' },
+                        ]}
+                        cx={55} cy={55}
+                        innerRadius={30} outerRadius={50}
+                        dataKey="value"
+                        startAngle={90} endAngle={-270}
+                      >
+                        <Cell fill="#10b981" />
+                        <Cell fill="#f59e0b" />
+                        <Cell fill="#ef4444" />
+                      </Pie>
+                    </PieChart>
+                    <div className="space-y-2 text-xs flex-1">
+                      {[
+                        { label: 'In target band', pct: zoneTime.in_pct, days: zoneTime.in_days, color: 'bg-emerald-500', textColor: 'text-emerald-600' },
+                        { label: 'Over-exposed', pct: zoneTime.over_pct, days: zoneTime.over_days, color: 'bg-amber-400', textColor: 'text-amber-600' },
+                        { label: 'Under-exposed', pct: zoneTime.under_pct, days: zoneTime.under_days, color: 'bg-red-400', textColor: 'text-red-600' },
+                      ].map((row) => (
+                        <div key={row.label} className="flex items-center gap-2">
+                          <span className={`w-2.5 h-2.5 rounded-sm flex-shrink-0 ${row.color}`} />
+                          <span className="text-gray-600 flex-1">{row.label}</span>
+                          <span className={`font-bold ${row.textColor}`}>{row.pct.toFixed(0)}%</span>
+                          <span className="text-gray-400 w-8 text-right">{row.days}d</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400 mb-1.5">Daily zone timeline</p>
+                    <div className="flex flex-wrap gap-0.5">
+                      {analyticsData!.time_series.map((point, i) => (
+                        <div
+                          key={i}
+                          title={`${point.date}: ${point.zone}`}
+                          className={`w-3.5 h-3.5 rounded-sm flex-shrink-0 ${
+                            point.zone === 'in' ? 'bg-emerald-500' :
+                            point.zone === 'over' ? 'bg-amber-400' :
+                            point.zone === 'under' ? 'bg-red-400' : 'bg-gray-200'
+                          } opacity-80`}
+                        />
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1.5">Each square = 1 period. Hover for date and zone.</p>
+                  </div>
+                </>
+              ) : (
+                <div className="h-48 flex items-center justify-center text-gray-400 text-sm">
+                  Guardrail config required to compute zone analysis
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* P&L Attribution Waterfall */}
+        <div className="card">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">P&L Attribution</h3>
+            <span className="text-xs text-gray-400">Where did the return come from?</span>
+          </div>
+          {waterfallData.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={waterfallData} barCategoryGap="20%">
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    formatter={(_: number, __: string, props: any) => [props.payload.label, props.payload.name]}
+                  />
+                  {/* Invisible base to position bar at correct height */}
+                  <Bar dataKey="base" stackId="wf" fill="transparent" />
+                  {/* Colored delta bar */}
+                  <Bar dataKey="amount" stackId="wf" radius={[3, 3, 0, 0]}>
+                    {waterfallData.map((entry, index) => (
+                      <Cell key={index} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+              <div className="flex gap-4 mt-2 text-[10px] flex-wrap">
+                {waterfallData.map((d) => (
+                  <div key={d.name} className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-sm inline-block" style={{ background: d.fill }} />
+                    <span className="text-gray-500">{d.name}:</span>
+                    <span className="font-semibold text-gray-700">{d.label}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="h-[220px] flex items-center justify-center text-gray-400 text-sm">
+              Need at least 2 data points
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Trade Efficiency vs Anchor ── */}
+      {tradeEfficiencyRows.length > 0 && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Trade Efficiency vs Anchor</h3>
+            <span className="text-xs text-gray-400">Did guardrails fire at the right moments?</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-[10px] text-gray-400 uppercase tracking-wider border-b border-gray-100">
+                  <th className="text-left py-2 pr-4">Date</th>
+                  <th className="text-left pr-4">Symbol</th>
+                  <th className="text-right pr-4">Side</th>
+                  <th className="text-right pr-4">Anchor $</th>
+                  <th className="text-right pr-4">Trade $</th>
+                  <th className="text-right pr-4">Spread</th>
+                  <th className="text-right">Direction</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {tradeEfficiencyRows.map((trade, i) => (
+                  <tr key={i} className="hover:bg-gray-50 text-gray-700">
+                    <td className="py-2 pr-4 text-gray-500">{trade.date}</td>
+                    <td className="pr-4 font-medium">{trade.asset_symbol || '—'}</td>
+                    <td className="pr-4 text-right">
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${trade.side === 'BUY' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {trade.side}
+                      </span>
+                    </td>
+                    <td className="pr-4 text-right font-mono">${trade.anchor_price!.toFixed(2)}</td>
+                    <td className="pr-4 text-right font-mono">${trade.price!.toFixed(2)}</td>
+                    <td className={`pr-4 text-right font-semibold ${trade.spread < 0 ? 'text-red-500' : 'text-green-600'}`}>
+                      {trade.spread >= 0 ? '+' : ''}{trade.spread.toFixed(1)}%
+                    </td>
+                    <td className="text-right">
+                      {trade.intendedDir ? (
+                        <span className="text-green-600 font-semibold">✓ On target</span>
+                      ) : (
+                        <span className="text-amber-500">↻ Off target</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[10px] text-gray-400 mt-3">
+            On target = BUY below anchor (stock discounted) or SELL above anchor (stock premium). Spread = (trade price − anchor) ÷ anchor.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
