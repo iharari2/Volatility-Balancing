@@ -19,7 +19,7 @@ class OptimizationApiService {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = `${API_BASE_URL}/optimization`;
+    this.baseUrl = `${API_BASE_URL}/v1/optimization`;
   }
 
   private getHeaders(extra: Record<string, string> = {}): Record<string, string> {
