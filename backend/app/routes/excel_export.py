@@ -673,10 +673,10 @@ async def export_dividend_data(
 
         # Build upcoming dividends
         upcoming_data = []
-        from datetime import datetime as dt_cls
-        now = dt_cls.now()
+        now = datetime.now(timezone.utc)
         for d in all_dividends:
-            if d.ex_date > now:
+            ex = d.ex_date if d.ex_date.tzinfo else d.ex_date.replace(tzinfo=timezone.utc)
+            if ex > now:
                 upcoming_data.append({
                     "ex_date": d.ex_date.strftime("%Y-%m-%d"),
                     "pay_date": d.pay_date.strftime("%Y-%m-%d"),
