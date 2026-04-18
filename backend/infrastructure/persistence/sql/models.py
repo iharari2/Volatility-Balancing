@@ -302,6 +302,11 @@ class PositionEvaluationTimelineModel(Base):
     """
 
     __tablename__ = "position_evaluation_timeline"
+    __table_args__ = (
+        # Composite indexes for the most common query patterns
+        Index("ix_eval_timeline_pos_mode_ts", "position_id", "mode", "timestamp"),
+        Index("ix_eval_timeline_portfolio_mode_ts", "tenant_id", "portfolio_id", "mode", "timestamp"),
+    )
 
     # ========== PRIMARY KEYS & IDENTIFICATION ==========
     id: Mapped[str] = mapped_column(String, primary_key=True)

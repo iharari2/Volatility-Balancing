@@ -28,6 +28,20 @@ class EvaluationTimelineRepoSQL(EvaluationTimelineRepo):
         self.session_factory = session_factory
         self._logger = logging.getLogger(__name__)
         self._timing_enabled = os.getenv("VB_TIMING", "").lower() in {"1", "true", "yes", "on"}
+        # Cache reflected table and column names — schema is stable at runtime
+        self._reflected_table: Optional[Table] = None
+        self._reflected_columns: Optional[set] = None
+
+    def _get_reflected_table(self, session) -> tuple:
+        """Return cached (reflected_table, column_set), reflecting once on first call."""
+        if self._reflected_table is None:
+            metadata = MetaData()
+            bind = session.get_bind()
+            self._reflected_table = Table(
+                "position_evaluation_timeline", metadata, autoload_with=bind
+            )
+            self._reflected_columns = {col.name for col in self._reflected_table.columns}
+        return self._reflected_table, self._reflected_columns
 
     def save(self, evaluation_data: Dict[str, Any]) -> str:
         """Save an evaluation timeline record - simplified and robust."""
@@ -37,13 +51,8 @@ class EvaluationTimelineRepoSQL(EvaluationTimelineRepo):
                 # Generate ID if not provided
                 evaluation_id = evaluation_data.get("id") or f"eval_{uuid4().hex[:16]}"
 
-                # Reflect actual database schema
-                metadata = MetaData()
-                bind = session.get_bind()
-                reflected_table = Table(
-                    "position_evaluation_timeline", metadata, autoload_with=bind
-                )
-                actual_db_columns = {col.name for col in reflected_table.columns}
+                # Use cached schema reflection (avoids per-call DB metadata roundtrip)
+                reflected_table, actual_db_columns = self._get_reflected_table(session)
                 if self._timing_enabled and reflection_start is not None:
                     self._logger.info(
                         "timeline_timing step=reflect_schema elapsed=%.4fs",
@@ -337,13 +346,10 @@ class EvaluationTimelineRepoSQL(EvaluationTimelineRepo):
                     print("⚠️  Attempting fallback save with minimal fields...")
                     # Try to save with minimal required fields only
                     try:
-                        # Re-reflect to get fresh column list
-                        metadata2 = MetaData()
-                        bind2 = session.get_bind()
-                        reflected_table2 = Table(
-                            "position_evaluation_timeline", metadata2, autoload_with=bind2
-                        )
-                        actual_db_columns2 = {col.name for col in reflected_table2.columns}
+                        # Use cached schema (invalidate so next call re-reflects)
+                        self._reflected_table = None
+                        self._reflected_columns = None
+                        reflected_table2, actual_db_columns2 = self._get_reflected_table(session)
 
                         # Get market_price_raw from effective_price if available
                         market_price_raw_minimal = (
@@ -469,13 +475,8 @@ class EvaluationTimelineRepoSQL(EvaluationTimelineRepo):
         try:
             with self.session_factory() as session:
                 reflection_start = time.perf_counter() if self._timing_enabled else None
-                # Use raw SQL to avoid ORM model column mismatches
-                metadata = MetaData()
-                bind = session.get_bind()
-                reflected_table = Table(
-                    "position_evaluation_timeline", metadata, autoload_with=bind
-                )
-                actual_db_columns = {col.name for col in reflected_table.columns}
+                # Use cached schema reflection
+                reflected_table, actual_db_columns = self._get_reflected_table(session)
                 if self._timing_enabled and reflection_start is not None:
                     self._logger.info(
                         "timeline_timing step=list_reflect_schema elapsed=%.4fs",
