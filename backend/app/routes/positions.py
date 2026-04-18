@@ -1202,8 +1202,6 @@ def get_position_config(
     user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Return the effective config for a position (per-position override or portfolio default)."""
-    from domain.value_objects.configs import TriggerConfig, GuardrailConfig, OrderPolicyConfig
-
     trigger = container.config.get_trigger_config(position_id)
     guardrail = container.config.get_guardrail_config(position_id)
     order_policy = container.config.get_order_policy_config(position_id)
