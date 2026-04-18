@@ -200,6 +200,41 @@ def list_positions_for_portfolio(
         except Exception:
             pass
 
+        # Batch-fetch trading status for all positions in one query
+        status_map: dict = {}
+        try:
+            if hasattr(portfolio_service._positions_repo, "_sf"):
+                from infrastructure.persistence.sql.models import PositionModel
+                from sqlalchemy import select as _select
+                with portfolio_service._positions_repo._sf() as session:
+                    rows = session.execute(
+                        _select(PositionModel.id, PositionModel.status).where(
+                            PositionModel.portfolio_id == portfolio_id
+                        )
+                    ).all()
+                    status_map = {r.id: r.status for r in rows if r.status}
+        except Exception:
+            pass
+
+        # Batch-fetch last BUY/SELL for all positions in one timeline query
+        last_action_map: dict = {}
+        try:
+            if hasattr(container, "evaluation_timeline"):
+                trade_rows = container.evaluation_timeline.list_by_portfolio(
+                    tenant_id=tenant_id,
+                    portfolio_id=portfolio_id,
+                    mode="LIVE",
+                    action_filter=["BUY", "SELL"],
+                    limit=max(len(positions) * 50, 200),
+                )
+                # Already ordered by timestamp desc — take first occurrence per position
+                for row in trade_rows:
+                    pid = row.get("position_id")
+                    if pid and pid not in last_action_map:
+                        last_action_map[pid] = row
+        except Exception:
+            pass
+
         results: List[PositionSummaryItem] = []
         for position in positions:
             # Use stored price — no yfinance calls on the list endpoint
@@ -214,51 +249,26 @@ def list_positions_for_portfolio(
             guardrail_max_pct: Optional[float] = None
             trigger_up_pct: Optional[float] = None
             trigger_down_pct: Optional[float] = None
-            try:
-                # Portfolio-level config is the canonical source (written by Strategy tab)
-                if cfg:
+            if cfg:
+                try:
                     guardrail_min_pct = cfg.min_stock_pct
                     guardrail_max_pct = cfg.max_stock_pct
                     trigger_up_pct = cfg.trigger_up_pct
                     trigger_down_pct = cfg.trigger_down_pct
-            except Exception:
-                pass
+                except Exception:
+                    pass
 
-            # Trading status from DB
-            status: Optional[str] = "RUNNING"
-            try:
-                if hasattr(portfolio_service._positions_repo, "_sf"):
-                    from infrastructure.persistence.sql.models import PositionModel
-                    with portfolio_service._positions_repo._sf() as session:
-                        model = session.get(PositionModel, position.id)
-                        if model and model.status:
-                            status = model.status
-            except Exception:
-                pass
+            status: Optional[str] = status_map.get(position.id, "RUNNING")
 
-            # Last robot action from evaluation timeline (1 row, DB-only)
-            last_action_obj: Optional[LastAction] = None
-            try:
-                if hasattr(container, "evaluation_timeline"):
-                    rows = container.evaluation_timeline.list_by_position(
-                        tenant_id=tenant_id,
-                        portfolio_id=portfolio_id,
-                        position_id=position.id,
-                        mode="LIVE",
-                        start_date=None,
-                        end_date=None,
-                        action_filter=["BUY", "SELL"],
-                        limit=1,
-                    )
-                    if rows:
-                        r = rows[0]
-                        last_action_obj = LastAction(
-                            action=r.get("action"),
-                            timestamp=_to_iso(r.get("timestamp")),
-                            reason=r.get("reason") or r.get("action_reason"),
-                        )
-            except Exception:
-                pass
+            r = last_action_map.get(position.id)
+            last_action_obj = (
+                LastAction(
+                    action=r.get("action"),
+                    timestamp=_to_iso(r.get("timestamp")),
+                    reason=r.get("reason") or r.get("action_reason"),
+                )
+                if r else None
+            )
 
             results.append(
                 PositionSummaryItem(

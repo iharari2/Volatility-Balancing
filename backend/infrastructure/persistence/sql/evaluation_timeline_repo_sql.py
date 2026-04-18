@@ -585,6 +585,7 @@ class EvaluationTimelineRepoSQL(EvaluationTimelineRepo):
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         limit: Optional[int] = None,
+        action_filter: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
         """List evaluation records for a portfolio."""
         with self.session_factory() as session:
@@ -603,6 +604,9 @@ class EvaluationTimelineRepoSQL(EvaluationTimelineRepo):
 
             if end_date:
                 query = query.where(PositionEvaluationTimelineModel.timestamp <= end_date)
+
+            if action_filter:
+                query = query.where(PositionEvaluationTimelineModel.action.in_(action_filter))
 
             query = query.order_by(PositionEvaluationTimelineModel.timestamp.desc())
 
