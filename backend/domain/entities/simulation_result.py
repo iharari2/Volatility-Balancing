@@ -59,6 +59,9 @@ class SimulationResult:
     # Debug info
     debug_info: Optional[List[Dict[str, Any]]] = None
 
+    # Raw data bag kept for backward-compat with excel_template_service
+    raw_data: Optional[Dict[str, Any]] = None
+
     created_at: datetime = None
 
     def __post_init__(self):
@@ -104,4 +107,5 @@ class SimulationResult:
             price_data=raw_data.get("price_data", []),
             trigger_analysis=raw_data.get("trigger_analysis", []),
             time_series_data=raw_data.get("time_series_data", []),
+            raw_data=raw_data,
         )

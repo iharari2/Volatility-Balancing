@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { Position } from '../../contexts/PortfolioContext';
+import MetricTooltip from '../../components/MetricTooltip';
 
 interface AnalyticsKPIsProps {
   positions: Position[];
@@ -34,19 +35,37 @@ export default function AnalyticsKPIs({ positions, analyticsData }: AnalyticsKPI
   const kpiCards = [
     {
       label: 'Return',
+      tooltip: 'Total percentage gain or loss on the portfolio over the selected period.',
       value: `${metrics.return >= 0 ? '+' : ''}${metrics.return.toFixed(2)}%`,
       color: metrics.return >= 0 ? 'text-green-600' : 'text-red-600',
     },
-    { label: 'Volatility', value: `${metrics.volatility.toFixed(2)}%`, color: 'text-gray-900' },
-    { label: 'Max Drawdown', value: `${metrics.maxDrawdown.toFixed(1)}%`, color: 'text-red-600' },
-    { label: 'Sharpe-like', value: metrics.sharpeLike.toFixed(2), color: 'text-gray-900' },
+    {
+      label: 'Volatility',
+      tooltip: 'Annualized standard deviation of daily returns. Higher values mean larger price swings.',
+      value: `${metrics.volatility.toFixed(2)}%`,
+      color: 'text-gray-900',
+    },
+    {
+      label: 'Max Drawdown',
+      tooltip: 'Largest peak-to-trough decline in portfolio value. Measures worst-case loss before recovery.',
+      value: `${metrics.maxDrawdown.toFixed(1)}%`,
+      color: 'text-red-600',
+    },
+    {
+      label: 'Sharpe-like',
+      tooltip: 'Risk-adjusted return: portfolio return divided by its volatility. Higher is better.',
+      value: metrics.sharpeLike.toFixed(2),
+      color: 'text-gray-900',
+    },
     {
       label: 'Commission Total',
+      tooltip: 'Total brokerage commissions paid across all trades in the selected period.',
       value: `$${metrics.commissionTotal.toFixed(2)}`,
       color: 'text-gray-900',
     },
     {
       label: 'Dividend Total',
+      tooltip: 'Total net dividend income received during the selected period, after withholding tax.',
       value: `$${metrics.dividendTotal.toFixed(2)}`,
       color: 'text-green-600',
     },
@@ -68,8 +87,9 @@ export default function AnalyticsKPIs({ positions, analyticsData }: AnalyticsKPI
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {kpiCards.map((kpi) => (
           <div key={kpi.label} className="card p-4 flex flex-col justify-between">
-            <dt className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+            <dt className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center">
               {kpi.label}
+              <MetricTooltip text={kpi.tooltip} />
             </dt>
             <dd className={`text-xl font-bold ${kpi.color}`}>{kpi.value}</dd>
           </div>
