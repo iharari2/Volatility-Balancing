@@ -1201,38 +1201,10 @@ def get_position_config(
     position_id: str,
     user: CurrentUser = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """Return the effective config for a position (per-position override or portfolio default)."""
+    """Return the per-position config, with hardcoded defaults when none is saved."""
     trigger = container.config.get_trigger_config(position_id)
     guardrail = container.config.get_guardrail_config(position_id)
     order_policy = container.config.get_order_policy_config(position_id)
-
-    is_position_specific = any(x is not None for x in [trigger, guardrail, order_policy])
-
-    # Fall back to portfolio config when no per-position config exists
-    if not is_position_specific:
-        try:
-            from infrastructure.persistence.sql.models import PortfolioConfigModel
-            from sqlalchemy import select as _sel
-            if hasattr(container.portfolio_config_repo, "_sf"):
-                with container.portfolio_config_repo._sf() as s:
-                    pcfg = s.execute(
-                        _sel(PortfolioConfigModel).where(
-                            PortfolioConfigModel.portfolio_id == portfolio_id
-                        )
-                    ).scalar_one_or_none()
-                    if pcfg:
-                        return {
-                            "trigger_threshold_up_pct": pcfg.trigger_up_pct,
-                            "trigger_threshold_down_pct": pcfg.trigger_down_pct,
-                            "min_stock_pct": pcfg.min_stock_pct,
-                            "max_stock_pct": pcfg.max_stock_pct,
-                            "max_trade_pct_of_position": pcfg.max_trade_pct_of_position or 50.0,
-                            "commission_rate": pcfg.commission_rate_pct or 0.1,
-                            "allow_after_hours": False,
-                            "is_position_specific": False,
-                        }
-        except Exception:
-            pass
 
     return {
         "trigger_threshold_up_pct": float(trigger.up_threshold_pct) if trigger else 3.0,
@@ -1242,7 +1214,7 @@ def get_position_config(
         "max_trade_pct_of_position": float(guardrail.max_trade_pct_of_position) * 100 if guardrail and guardrail.max_trade_pct_of_position else 50.0,
         "commission_rate": float(order_policy.commission_rate) if order_policy and order_policy.commission_rate else 0.1,
         "allow_after_hours": order_policy.allow_after_hours if order_policy else False,
-        "is_position_specific": is_position_specific,
+        "is_position_specific": any(x is not None for x in [trigger, guardrail, order_policy]),
     }
 
 

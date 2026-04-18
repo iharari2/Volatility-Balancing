@@ -191,19 +191,11 @@ def list_positions_for_portfolio(
             tenant_id=tenant_id, portfolio_id=portfolio_id
         )
 
-        # Fetch portfolio config once (used as fallback for positions without their own config)
-        cfg = None
-        try:
-            cfg = portfolio_service._portfolio_config_repo.get(
-                tenant_id=tenant_id, portfolio_id=portfolio_id
-            )
-        except Exception:
-            pass
-
-        # Batch-fetch per-position guardrail configs (one query for all positions)
+        # Batch-fetch per-position guardrail + trigger configs (one query each)
         pos_guardrail_map: dict = {}
+        pos_trigger_map: dict = {}
         try:
-            from infrastructure.persistence.sql.models import GuardrailConfigModel
+            from infrastructure.persistence.sql.models import GuardrailConfigModel, TriggerConfigModel
             from sqlalchemy import select as _gsel
             pos_ids = [p.id for p in positions]
             if pos_ids and hasattr(container.config, "_sf"):
@@ -213,6 +205,12 @@ def list_positions_for_portfolio(
                     ).scalars().all()
                     for r in _rows:
                         pos_guardrail_map[r.position_id] = r
+                with container.config._sf() as _ts:
+                    _trows = _ts.execute(
+                        _gsel(TriggerConfigModel).where(TriggerConfigModel.position_id.in_(pos_ids))
+                    ).scalars().all()
+                    for r in _trows:
+                        pos_trigger_map[r.position_id] = r
         except Exception:
             pass
 
@@ -260,7 +258,7 @@ def list_positions_for_portfolio(
             total_value = position.cash + stock_value
             stock_pct = (stock_value / total_value * 100) if total_value > 0 else None
 
-            # Guardrail / trigger config — per-position first, portfolio as fallback
+            # Guardrail / trigger config — per-position only, hardcoded defaults as fallback
             guardrail_min_pct: Optional[float] = None
             guardrail_max_pct: Optional[float] = None
             trigger_up_pct: Optional[float] = None
@@ -268,15 +266,18 @@ def list_positions_for_portfolio(
             try:
                 pg = pos_guardrail_map.get(position.id)
                 if pg:
-                    # GuardrailConfigModel stores as fraction (0.25 = 25%)
                     guardrail_min_pct = float(pg.min_stock_pct) * 100
                     guardrail_max_pct = float(pg.max_stock_pct) * 100
-                elif cfg:
-                    guardrail_min_pct = cfg.min_stock_pct
-                    guardrail_max_pct = cfg.max_stock_pct
-                if cfg:
-                    trigger_up_pct = cfg.trigger_up_pct
-                    trigger_down_pct = cfg.trigger_down_pct
+                else:
+                    guardrail_min_pct = 25.0
+                    guardrail_max_pct = 75.0
+                pt = pos_trigger_map.get(position.id)
+                if pt:
+                    trigger_up_pct = float(pt.up_threshold_pct)
+                    trigger_down_pct = float(pt.down_threshold_pct)
+                else:
+                    trigger_up_pct = 3.0
+                    trigger_down_pct = -3.0
             except Exception:
                 pass
 
@@ -462,29 +463,24 @@ def get_position_cockpit(
                 reverse=True,
             )
 
-        # Enrich rows: fill null trigger/guardrail thresholds from current portfolio config
-        # so the frontend can always compute dollar values from per-row anchor + total_value.
-        try:
-            cfg = portfolio_service._portfolio_config_repo.get(
-                tenant_id=tenant_id, portfolio_id=portfolio_id
-            )
-        except Exception:
-            cfg = None
-
-        if cfg and timeline_rows:
-            cfg_trigger_up = getattr(cfg, "trigger_up_pct", None)
-            cfg_trigger_dn = getattr(cfg, "trigger_down_pct", None)
-            cfg_min_pct = float(getattr(cfg, "min_stock_pct", None) or 0)
-            cfg_max_pct = float(getattr(cfg, "max_stock_pct", None) or 0)
+        # Enrich rows: fill null trigger/guardrail thresholds from per-position config.
+        if timeline_rows:
+            from app.di import container as _container
+            _trigger = _container.config.get_trigger_config(position_id)
+            _guardrail = _container.config.get_guardrail_config(position_id)
+            enrich_trigger_up = float(_trigger.up_threshold_pct) if _trigger else 3.0
+            enrich_trigger_dn = float(_trigger.down_threshold_pct) if _trigger else -3.0
+            enrich_min_pct = float(_guardrail.min_stock_pct) * 100 if _guardrail else 25.0
+            enrich_max_pct = float(_guardrail.max_stock_pct) * 100 if _guardrail else 75.0
             for row in timeline_rows:
-                if row.get("trigger_up_threshold") is None and cfg_trigger_up is not None:
-                    row["trigger_up_threshold"] = float(cfg_trigger_up)
-                if row.get("trigger_down_threshold") is None and cfg_trigger_dn is not None:
-                    row["trigger_down_threshold"] = float(cfg_trigger_dn)
-                if row.get("guardrail_min_stock_pct") is None and cfg_min_pct:
-                    row["guardrail_min_stock_pct"] = cfg_min_pct
-                if row.get("guardrail_max_stock_pct") is None and cfg_max_pct:
-                    row["guardrail_max_stock_pct"] = cfg_max_pct
+                if row.get("trigger_up_threshold") is None:
+                    row["trigger_up_threshold"] = enrich_trigger_up
+                if row.get("trigger_down_threshold") is None:
+                    row["trigger_down_threshold"] = enrich_trigger_dn
+                if row.get("guardrail_min_stock_pct") is None:
+                    row["guardrail_min_stock_pct"] = enrich_min_pct
+                if row.get("guardrail_max_stock_pct") is None:
+                    row["guardrail_max_stock_pct"] = enrich_max_pct
 
         return CockpitResponse(
             position_summary=position_summary,

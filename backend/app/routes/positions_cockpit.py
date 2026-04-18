@@ -276,73 +276,27 @@ def get_position_config(
         if not position:
             raise HTTPException(status_code=404, detail="Position not found")
 
-        # Try to get position-specific config from ConfigRepo
+        # Per-position config only
         config_repo = container.config
         trigger_config = config_repo.get_trigger_config(position_id)
         guardrail_config = config_repo.get_guardrail_config(position_id)
-
-        # Get portfolio config as fallback
-        portfolio_config = portfolio_service.get_portfolio_config(
-            tenant_id=tenant_id, portfolio_id=portfolio_id
-        )
-
-        # Return position config if exists, otherwise portfolio config
-        # TriggerConfig stores percentages as Decimal (e.g., 3.0 for 3%)
-        # PortfolioConfig stores as float (e.g., 3.0 for 3%)
-
-        # Get order policy config for allow_after_hours
         order_policy_config = config_repo.get_order_policy_config(position_id)
 
-        # Get portfolio to read trading_hours_policy as fallback for allow_after_hours
-        portfolio = portfolio_service.get_portfolio(tenant_id=tenant_id, portfolio_id=portfolio_id)
-        portfolio_allow_after_hours = (
-            portfolio.trading_hours_policy == "OPEN_PLUS_AFTER_HOURS"
-            if portfolio
-            else False  # Default to market hours only
-        )
-
         return {
-            "trigger_threshold_up_pct": (
-                float(trigger_config.up_threshold_pct)
-                if trigger_config
-                else (portfolio_config.trigger_up_pct if portfolio_config else 3.0)
-            ),
-            "trigger_threshold_down_pct": (
-                float(trigger_config.down_threshold_pct)
-                if trigger_config
-                else (portfolio_config.trigger_down_pct if portfolio_config else -3.0)
-            ),
-            # GuardrailConfig stores as decimal (0.25 for 25%), convert to percentage for frontend
-            "min_stock_pct": (
-                float(guardrail_config.min_stock_pct) * 100
-                if guardrail_config
-                else (portfolio_config.min_stock_pct if portfolio_config else 25.0)
-            ),
-            "max_stock_pct": (
-                float(guardrail_config.max_stock_pct) * 100
-                if guardrail_config
-                else (portfolio_config.max_stock_pct if portfolio_config else 75.0)
-            ),
+            "trigger_threshold_up_pct": float(trigger_config.up_threshold_pct) if trigger_config else 3.0,
+            "trigger_threshold_down_pct": float(trigger_config.down_threshold_pct) if trigger_config else -3.0,
+            "min_stock_pct": float(guardrail_config.min_stock_pct) * 100 if guardrail_config else 25.0,
+            "max_stock_pct": float(guardrail_config.max_stock_pct) * 100 if guardrail_config else 75.0,
             "max_trade_pct_of_position": (
                 float(guardrail_config.max_trade_pct_of_position) * 100
                 if guardrail_config and guardrail_config.max_trade_pct_of_position
-                else (
-                    portfolio_config.max_trade_pct_of_position
-                    if portfolio_config and portfolio_config.max_trade_pct_of_position
-                    else 50.0
-                )
+                else 50.0
             ),
             "commission_rate": (
-                config_repo.get_commission_rate(asset_id=position.asset_symbol)
-                if position
-                else (portfolio_config.commission_rate_pct if portfolio_config else 0.1)
+                config_repo.get_commission_rate(asset_id=position.asset_symbol) if position else 0.1
             ),
-            "allow_after_hours": (
-                order_policy_config.allow_after_hours
-                if order_policy_config
-                else portfolio_allow_after_hours  # Fall back to portfolio setting
-            ),
-            "is_position_specific": trigger_config is not None or guardrail_config is not None or order_policy_config is not None,
+            "allow_after_hours": order_policy_config.allow_after_hours if order_policy_config else False,
+            "is_position_specific": True,
         }
     except HTTPException:
         raise
@@ -375,15 +329,11 @@ def update_position_config(
             raise HTTPException(status_code=404, detail="Position not found")
 
         config_repo = container.config
+        from decimal import Decimal
 
-        # Get current configs (or create new ones)
+        # Get current per-position configs
         trigger_config = config_repo.get_trigger_config(position_id)
         guardrail_config = config_repo.get_guardrail_config(position_id)
-
-        # Get portfolio config as defaults
-        portfolio_config = portfolio_service.get_portfolio_config(
-            tenant_id=tenant_id, portfolio_id=portfolio_id
-        )
 
         # Update trigger config if provided
         if (
@@ -391,111 +341,47 @@ def update_position_config(
             or request.trigger_threshold_down_pct is not None
         ):
             from domain.value_objects.configs import TriggerConfig
-            from decimal import Decimal
 
-            if trigger_config:
-                # Update existing
-                new_trigger_config = TriggerConfig(
-                    up_threshold_pct=(
-                        Decimal(str(request.trigger_threshold_up_pct))
-                        if request.trigger_threshold_up_pct is not None
-                        else trigger_config.up_threshold_pct
-                    ),
-                    down_threshold_pct=(
-                        Decimal(str(request.trigger_threshold_down_pct))
-                        if request.trigger_threshold_down_pct is not None
-                        else trigger_config.down_threshold_pct
-                    ),
-                )
-            else:
-                # Create new with defaults from portfolio or system defaults
-                up_pct = (
+            new_trigger_config = TriggerConfig(
+                up_threshold_pct=(
                     Decimal(str(request.trigger_threshold_up_pct))
                     if request.trigger_threshold_up_pct is not None
-                    else Decimal(str(portfolio_config.trigger_up_pct if portfolio_config else 3.0))
-                )
-                down_pct = (
+                    else (trigger_config.up_threshold_pct if trigger_config else Decimal("3.0"))
+                ),
+                down_threshold_pct=(
                     Decimal(str(request.trigger_threshold_down_pct))
                     if request.trigger_threshold_down_pct is not None
-                    else Decimal(
-                        str(portfolio_config.trigger_down_pct if portfolio_config else -3.0)
-                    )
-                )
-                new_trigger_config = TriggerConfig(
-                    up_threshold_pct=up_pct,
-                    down_threshold_pct=down_pct,
-                )
+                    else (trigger_config.down_threshold_pct if trigger_config else Decimal("-3.0"))
+                ),
+            )
             config_repo.set_trigger_config(position_id, new_trigger_config)
 
         # Update guardrail config if provided
-        if any(
-            [
-                request.min_stock_pct is not None,
-                request.max_stock_pct is not None,
-                request.max_trade_pct_of_position is not None,
-            ]
-        ):
+        if any([
+            request.min_stock_pct is not None,
+            request.max_stock_pct is not None,
+            request.max_trade_pct_of_position is not None,
+        ]):
             from domain.value_objects.configs import GuardrailConfig
-            from decimal import Decimal
 
-            if guardrail_config:
-                # Update existing
-                new_guardrail_config = GuardrailConfig(
-                    min_stock_pct=(
-                        Decimal(str(request.min_stock_pct / 100))
-                        if request.min_stock_pct is not None
-                        else guardrail_config.min_stock_pct
-                    ),
-                    max_stock_pct=(
-                        Decimal(str(request.max_stock_pct / 100))
-                        if request.max_stock_pct is not None
-                        else guardrail_config.max_stock_pct
-                    ),
-                    max_trade_pct_of_position=(
-                        Decimal(str(request.max_trade_pct_of_position / 100))
-                        if request.max_trade_pct_of_position is not None
-                        else guardrail_config.max_trade_pct_of_position
-                    ),
-                    max_orders_per_day=guardrail_config.max_orders_per_day,
-                )
-            else:
-                # Create new with defaults from portfolio or system defaults
-                # GuardrailConfig stores as decimal (0.25 for 25%), but frontend sends as percentage (25.0)
-                new_guardrail_config = GuardrailConfig(
-                    min_stock_pct=(
-                        Decimal(str(request.min_stock_pct / 100))
-                        if request.min_stock_pct is not None
-                        else Decimal(
-                            str(
-                                (portfolio_config.min_stock_pct if portfolio_config else 25.0) / 100
-                            )
-                        )
-                    ),
-                    max_stock_pct=(
-                        Decimal(str(request.max_stock_pct / 100))
-                        if request.max_stock_pct is not None
-                        else Decimal(
-                            str(
-                                (portfolio_config.max_stock_pct if portfolio_config else 75.0) / 100
-                            )
-                        )
-                    ),
-                    max_trade_pct_of_position=(
-                        Decimal(str(request.max_trade_pct_of_position / 100))
-                        if request.max_trade_pct_of_position is not None
-                        else Decimal(
-                            str(
-                                (
-                                    portfolio_config.max_trade_pct_of_position
-                                    if portfolio_config
-                                    else 50.0
-                                )
-                                / 100
-                            )
-                        )
-                    ),
-                    max_orders_per_day=None,
-                )
+            new_guardrail_config = GuardrailConfig(
+                min_stock_pct=(
+                    Decimal(str(request.min_stock_pct / 100))
+                    if request.min_stock_pct is not None
+                    else (guardrail_config.min_stock_pct if guardrail_config else Decimal("0.25"))
+                ),
+                max_stock_pct=(
+                    Decimal(str(request.max_stock_pct / 100))
+                    if request.max_stock_pct is not None
+                    else (guardrail_config.max_stock_pct if guardrail_config else Decimal("0.75"))
+                ),
+                max_trade_pct_of_position=(
+                    Decimal(str(request.max_trade_pct_of_position / 100))
+                    if request.max_trade_pct_of_position is not None
+                    else (guardrail_config.max_trade_pct_of_position if guardrail_config else Decimal("0.5"))
+                ),
+                max_orders_per_day=guardrail_config.max_orders_per_day if guardrail_config else None,
+            )
             config_repo.set_guardrail_config(position_id, new_guardrail_config)
 
         # Update commission rate if provided

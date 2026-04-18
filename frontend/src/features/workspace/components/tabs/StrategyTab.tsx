@@ -129,7 +129,6 @@ export default function StrategyTab() {
   const { selectedTenantId } = useTenantPortfolio();
   const tenantId = selectedTenantId || 'default';
 
-  const [positionConfig, setPositionConfig] = useState<PositionConfig | null>(null);
   const [config, setConfig] = useState<PortfolioConfig | null>(null);
   const [marketStatus, setMarketStatus] = useState<MarketStatus>('CLOSED');
   const [loading, setLoading] = useState(true);
@@ -151,7 +150,6 @@ export default function StrategyTab() {
         setMarketStatus(marketState.status);
 
         const pc = await portfolioScopedApi.getPositionConfig(tenantId, portfolioId, positionId);
-        setPositionConfig(pc);
         setConfig({
           trigger_threshold_up_pct: pc.trigger_threshold_up_pct,
           trigger_threshold_down_pct: pc.trigger_threshold_down_pct,
@@ -238,7 +236,6 @@ export default function StrategyTab() {
       });
 
       const confirmed = await portfolioScopedApi.getPositionConfig(tenantId, portfolioId, positionId);
-      setPositionConfig(confirmed);
       setConfig({
         trigger_threshold_up_pct: confirmed.trigger_threshold_up_pct,
         trigger_threshold_down_pct: confirmed.trigger_threshold_down_pct,
@@ -257,21 +254,7 @@ export default function StrategyTab() {
     }
   };
 
-  const handleReset = () => {
-    if (!positionConfig) return;
-    if (!window.confirm('Reset to portfolio defaults?')) return;
-    setConfig({
-      trigger_threshold_up_pct: positionConfig.trigger_threshold_up_pct,
-      trigger_threshold_down_pct: positionConfig.trigger_threshold_down_pct,
-      min_stock_pct: positionConfig.min_stock_pct,
-      max_stock_pct: positionConfig.max_stock_pct,
-      max_trade_pct_of_position: positionConfig.max_trade_pct_of_position,
-      commission_rate: positionConfig.commission_rate,
-      market_hours_policy: positionConfig.allow_after_hours ? 'market-plus-after-hours' : 'market-open-only',
-    });
-  };
-
-  if (loading) {
+if (loading) {
     return (
       <div className="p-8">
         <LoadingSpinner message="Loading strategy configuration..." />
@@ -297,14 +280,6 @@ export default function StrategyTab() {
         <p className="text-sm text-gray-500">Configure trigger thresholds and guardrails</p>
       </div>
 
-      {/* Position-specific indicator */}
-      <div className="border rounded-lg p-4 bg-blue-50 border-blue-200">
-        <p className="text-sm text-blue-700">
-          {positionConfig?.is_position_specific
-            ? `These settings are specific to ${selectedPosition.asset_symbol} and override portfolio defaults.`
-            : `Using portfolio defaults. Saving will create a ${selectedPosition.asset_symbol}-specific override.`}
-        </p>
-      </div>
 
       {/* Editable Form */}
       <div className="bg-white border border-gray-200 rounded-lg p-5 space-y-6">
@@ -474,12 +449,6 @@ export default function StrategyTab() {
 
         {/* Actions */}
         <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-          <button
-            onClick={handleReset}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            Reset to Defaults
-          </button>
           <button
             onClick={handleSave}
             disabled={saving}

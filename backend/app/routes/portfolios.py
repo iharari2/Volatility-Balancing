@@ -332,8 +332,7 @@ def create_position_in_portfolio(
             starting_cash=request.starting_cash.amount,
         )
 
-        # Store sensible guardrail defaults in ConfigRepo so they're used
-        # by the evaluation engine and displayed in the UI.
+        # Seed per-position defaults so the evaluation engine has values immediately.
         if not container.config.get_guardrail_config(position.id):
             container.config.set_guardrail_config(
                 position.id,
@@ -342,6 +341,24 @@ def create_position_in_portfolio(
                     max_stock_pct=Decimal("0.75"),
                     max_trade_pct_of_position=Decimal("0.5"),
                     max_orders_per_day=5,
+                ),
+            )
+        if not container.config.get_trigger_config(position.id):
+            from domain.value_objects.configs import TriggerConfig
+            container.config.set_trigger_config(
+                position.id,
+                TriggerConfig(
+                    up_threshold_pct=Decimal("3.0"),
+                    down_threshold_pct=Decimal("-3.0"),
+                ),
+            )
+        if not container.config.get_order_policy_config(position.id):
+            from domain.value_objects.configs import OrderPolicyConfig
+            container.config.set_order_policy_config(
+                position.id,
+                OrderPolicyConfig(
+                    allow_after_hours=False,
+                    commission_rate=Decimal("0.1"),
                 ),
             )
 

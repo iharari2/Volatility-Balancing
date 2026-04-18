@@ -235,17 +235,15 @@ def get_position_performance(
             last_anchor = position.anchor_price or position.avg_cost
         if last_trigger_up_pct is None or last_trigger_down_pct is None:
             try:
-                cfg = portfolio_service._portfolio_config_repo.get(
-                    tenant_id=tenant_id, portfolio_id=portfolio_id
-                )
-                if cfg:
-                    last_trigger_up_pct = last_trigger_up_pct or cfg.trigger_up_pct
-                    last_trigger_down_pct = last_trigger_down_pct or cfg.trigger_down_pct
-                    # cfg stores min/max as percentage (25.0); timeline stores as fraction (0.25)
-                    if last_min_pct is None and cfg.min_stock_pct is not None:
-                        last_min_pct = float(cfg.min_stock_pct) / 100
-                    if last_max_pct is None and cfg.max_stock_pct is not None:
-                        last_max_pct = float(cfg.max_stock_pct) / 100
+                from app.di import container as _c
+                _trigger = _c.config.get_trigger_config(position_id)
+                _guardrail = _c.config.get_guardrail_config(position_id)
+                last_trigger_up_pct = last_trigger_up_pct or (float(_trigger.up_threshold_pct) if _trigger else 3.0)
+                last_trigger_down_pct = last_trigger_down_pct or (float(_trigger.down_threshold_pct) if _trigger else -3.0)
+                if last_min_pct is None:
+                    last_min_pct = float(_guardrail.min_stock_pct) if _guardrail else 0.25
+                if last_max_pct is None:
+                    last_max_pct = float(_guardrail.max_stock_pct) if _guardrail else 0.75
             except Exception:
                 pass
 

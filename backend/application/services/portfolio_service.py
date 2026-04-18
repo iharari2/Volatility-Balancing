@@ -1015,32 +1015,17 @@ class PortfolioService:
             import traceback
             traceback.print_exc()
 
-        # 7. Get guardrails - position-specific config first, then portfolio config
+        # 7. Get guardrails from per-position config
         guardrails: Optional[Dict[str, float]] = None
         try:
             from app.di import container
 
-            # If position_id is specified, check for position-specific guardrail config
             if position_id and len(positions) == 1:
                 guardrail_config = container.config.get_guardrail_config(position_id)
-                if guardrail_config:
-                    # GuardrailConfig stores values as decimals (0.25 = 25%), convert to percentage
-                    guardrails = {
-                        "min_stock_pct": float(guardrail_config.min_stock_pct) * 100,
-                        "max_stock_pct": float(guardrail_config.max_stock_pct) * 100,
-                    }
-
-            # Fall back to portfolio config if no position-specific config
-            if guardrails is None:
-                portfolio_config = self._portfolio_config_repo.get(
-                    tenant_id=tenant_id, portfolio_id=portfolio_id
-                )
-                if portfolio_config:
-                    # Portfolio config already stores as percentages
-                    guardrails = {
-                        "min_stock_pct": portfolio_config.min_stock_pct,
-                        "max_stock_pct": portfolio_config.max_stock_pct,
-                    }
+                guardrails = {
+                    "min_stock_pct": float(guardrail_config.min_stock_pct) * 100 if guardrail_config else 25.0,
+                    "max_stock_pct": float(guardrail_config.max_stock_pct) * 100 if guardrail_config else 75.0,
+                }
         except Exception as e:
             print(f"Warning: Failed to fetch guardrails for analytics: {e}")
 
@@ -1358,33 +1343,17 @@ class PortfolioService:
             if total_position_value > 0:
                 stock_allocation_pct = (stock_value / total_position_value) * 100
 
-        # Get guardrail configuration - position-specific first, then portfolio
+        # Get guardrail configuration from per-position config
         guardrail_config = None
         min_stock_pct = None
         max_stock_pct = None
         try:
             from app.di import container
 
-            # Check for position-specific guardrail config first
             pos_guardrail_config = container.config.get_guardrail_config(position_id)
-            if pos_guardrail_config:
-                # GuardrailConfig stores as decimal (0.25 = 25%), convert to percentage
-                min_stock_pct = float(pos_guardrail_config.min_stock_pct) * 100
-                max_stock_pct = float(pos_guardrail_config.max_stock_pct) * 100
-                guardrail_config = {
-                    "min_stock_pct": min_stock_pct,
-                    "max_stock_pct": max_stock_pct,
-                }
-            else:
-                # Fall back to portfolio config
-                config = self._portfolio_config_repo.get(tenant_id=tenant_id, portfolio_id=portfolio_id)
-                if config:
-                    min_stock_pct = config.min_stock_pct
-                    max_stock_pct = config.max_stock_pct
-                    guardrail_config = {
-                        "min_stock_pct": min_stock_pct,
-                        "max_stock_pct": max_stock_pct,
-                    }
+            min_stock_pct = float(pos_guardrail_config.min_stock_pct) * 100 if pos_guardrail_config else 25.0
+            max_stock_pct = float(pos_guardrail_config.max_stock_pct) * 100 if pos_guardrail_config else 75.0
+            guardrail_config = {"min_stock_pct": min_stock_pct, "max_stock_pct": max_stock_pct}
         except Exception:
             pass
 
