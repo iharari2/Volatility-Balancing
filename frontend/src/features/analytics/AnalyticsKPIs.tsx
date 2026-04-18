@@ -1,6 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { Info } from 'lucide-react';
 import { Position } from '../../contexts/PortfolioContext';
 import MetricTooltip from '../../components/MetricTooltip';
+import MetricsMethodologyModal from '../../components/MetricsMethodologyModal';
 
 interface AnalyticsKPIsProps {
   positions: Position[];
@@ -71,11 +73,14 @@ export default function AnalyticsKPIs({ positions, analyticsData }: AnalyticsKPI
     },
   ];
 
+  const [showMethodology, setShowMethodology] = useState(false);
+
   // Check if we have real analytics data
   const hasRealData = analyticsData?.time_series?.length > 0;
 
   return (
     <div className="space-y-2">
+      {showMethodology && <MetricsMethodologyModal onClose={() => setShowMethodology(false)} />}
       {!hasRealData && (
         <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-center gap-2">
           <svg className="h-4 w-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -84,6 +89,15 @@ export default function AnalyticsKPIs({ positions, analyticsData }: AnalyticsKPI
           <span>Limited data available. Run simulations or execute trades to see detailed analytics.</span>
         </div>
       )}
+      <div className="flex justify-end">
+        <button
+          onClick={() => setShowMethodology(true)}
+          className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <Info className="h-3.5 w-3.5" />
+          How are these calculated?
+        </button>
+      </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {kpiCards.map((kpi) => (
           <div key={kpi.label} className="card p-4 flex flex-col justify-between">

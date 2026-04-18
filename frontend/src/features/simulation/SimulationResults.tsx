@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Download, Play, Filter, Clock, TrendingUp, TrendingDown, DollarSign, RotateCcw, Trash2 } from 'lucide-react';
+import { Download, Play, Filter, Clock, TrendingUp, TrendingDown, DollarSign, RotateCcw, Trash2, Info } from 'lucide-react';
 import MetricTooltip from '../../components/MetricTooltip';
+import MetricsMethodologyModal from '../../components/MetricsMethodologyModal';
 import toast from 'react-hot-toast';
 import { exportToExcel } from '../../utils/exportExcel';
 import GuardrailBandChart from '../../components/charts/GuardrailBandChart';
@@ -106,6 +107,7 @@ interface SimulationResultsProps {
 export default function SimulationResults({ result, onRerun, onDelete }: SimulationResultsProps) {
   const [showTriggersOnly, setShowTriggersOnly] = useState(true);
   const [activeTab, setActiveTab] = useState<'trades' | 'timeline' | 'dividends'>('timeline');
+  const [showMethodology, setShowMethodology] = useState(false);
 
   if (!result) {
     return (
@@ -288,7 +290,18 @@ export default function SimulationResults({ result, onRerun, onDelete }: Simulat
         </div>
       </div>
 
+      {showMethodology && <MetricsMethodologyModal onClose={() => setShowMethodology(false)} />}
+
       {/* KPI Cards */}
+      <div className="flex justify-end -mt-2 mb-1">
+        <button
+          onClick={() => setShowMethodology(true)}
+          className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <Info className="h-3.5 w-3.5" />
+          How are these calculated?
+        </button>
+      </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1 flex items-center">
