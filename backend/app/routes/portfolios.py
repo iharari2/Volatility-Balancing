@@ -866,10 +866,25 @@ def deposit_cash(
         if not result:
             raise HTTPException(status_code=404, detail="Portfolio not found")
 
-        # Generate a trace_id for audit purposes
         from uuid import uuid4
+        from datetime import datetime, timezone
+        from app.di import container
 
         trace_id = f"trace_{uuid4().hex[:8]}"
+
+        try:
+            position_id = request.position_id or result.get("position_id")
+            if position_id and hasattr(container, "position_event"):
+                container.position_event.save({
+                    "position_id": position_id,
+                    "timestamp": datetime.now(timezone.utc),
+                    "event_type": "CASH_DEPOSIT",
+                    "action": "NONE",
+                    "action_reason": request.reason or "Cash deposit",
+                    "cash_delta": request.amount,
+                })
+        except Exception:
+            pass
 
         return {
             "data": None,
@@ -908,10 +923,25 @@ def withdraw_cash(
         if not result:
             raise HTTPException(status_code=404, detail="Portfolio not found")
 
-        # Generate a trace_id for audit purposes
         from uuid import uuid4
+        from datetime import datetime, timezone
+        from app.di import container
 
         trace_id = f"trace_{uuid4().hex[:8]}"
+
+        try:
+            position_id = request.position_id or result.get("position_id")
+            if position_id and hasattr(container, "position_event"):
+                container.position_event.save({
+                    "position_id": position_id,
+                    "timestamp": datetime.now(timezone.utc),
+                    "event_type": "CASH_WITHDRAWAL",
+                    "action": "NONE",
+                    "action_reason": request.reason or "Cash withdrawal",
+                    "cash_delta": -request.amount,
+                })
+        except Exception:
+            pass
 
         return {
             "data": None,

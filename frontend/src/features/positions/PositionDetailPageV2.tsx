@@ -4,19 +4,23 @@ import {
   ComposedChart, Line, Scatter, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, ReferenceLine, Brush,
 } from 'recharts';
-import { ArrowLeft, RefreshCw, Moon, Sun } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Moon, Sun, PlusCircle, MinusCircle, SlidersHorizontal, Anchor } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { WorkspaceProvider, useWorkspace } from '../workspace/WorkspaceContext';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import { getPositionPerformance, type PerformanceData } from '../../api/performance';
 import { getPositionCockpit, type CockpitResponse } from '../../api/cockpit';
-import { portfolioScopedApi, type PortfolioConfig } from '../../services/portfolioScopedApi';
+import { portfolioScopedApi, type PortfolioConfig, type PortfolioPosition } from '../../services/portfolioScopedApi';
 import AllocationNeedleBar from '../../components/shared/AllocationNeedleBar';
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
 import StrategyTab from '../workspace/components/tabs/StrategyTab';
 import EventsTab from '../workspace/components/tabs/EventsTab';
 import OrdersTab from '../workspace/components/tabs/OrdersTab';
 import DividendsTab from '../workspace/components/tabs/DividendsTab';
+import DepositModal from './modals/DepositModal';
+import WithdrawModal from './modals/WithdrawModal';
+import AdjustPositionModal from './modals/AdjustPositionModal';
+import SetAnchorModal from './modals/SetAnchorModal';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -453,12 +457,16 @@ function PerformanceChart({ data, window, onWindowChange }:
 
 // ── Position header ───────────────────────────────────────────────────────────
 
-function PositionHeader({ position, cockpit, afterHoursEnabled, onToggleAfterHours, toggling }: {
+function PositionHeader({ position, cockpit, afterHoursEnabled, onToggleAfterHours, toggling, onDeposit, onWithdraw, onAdjust, onAnchor }: {
   position: ReturnType<typeof useWorkspace>['selectedPosition'];
   cockpit: CockpitResponse | null;
   afterHoursEnabled: boolean;
   onToggleAfterHours: () => void;
   toggling: boolean;
+  onDeposit: () => void;
+  onWithdraw: () => void;
+  onAdjust: () => void;
+  onAnchor: () => void;
 }) {
   if (!position) return null;
   return (
@@ -467,6 +475,15 @@ function PositionHeader({ position, cockpit, afterHoursEnabled, onToggleAfterHou
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-black text-slate-900">{position.asset_symbol}</h1>
+            <a
+              href={`https://finance.yahoo.com/quote/${position.asset_symbol}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-slate-400 hover:text-indigo-600 transition-colors"
+              title="View on Yahoo Finance"
+            >
+              Yahoo ↗
+            </a>
             <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
               position.status === 'RUNNING' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
             }`}>
@@ -474,17 +491,33 @@ function PositionHeader({ position, cockpit, afterHoursEnabled, onToggleAfterHou
             </span>
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-2xl font-black text-slate-900">
-            {position.last_price != null ? `$${position.last_price.toFixed(2)}` : '—'}
+        <div className="flex items-start gap-4">
+          <div className="flex items-center gap-1.5">
+            <button onClick={onDeposit} title="Deposit cash" className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-md bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 transition-colors">
+              <PlusCircle className="w-3.5 h-3.5" /> Deposit
+            </button>
+            <button onClick={onWithdraw} title="Withdraw cash" className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-md bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200 transition-colors">
+              <MinusCircle className="w-3.5 h-3.5" /> Withdraw
+            </button>
+            <button onClick={onAdjust} title="Adjust shares" className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-colors">
+              <SlidersHorizontal className="w-3.5 h-3.5" /> Shares
+            </button>
+            <button onClick={onAnchor} title="Set anchor price" className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-md bg-violet-50 text-violet-700 hover:bg-violet-100 border border-violet-200 transition-colors">
+              <Anchor className="w-3.5 h-3.5" /> Anchor
+            </button>
           </div>
-          {position.pct_from_anchor != null && (
-            <div className={`text-sm font-semibold ${position.pct_from_anchor >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-              {fmtPct(position.pct_from_anchor)} from anchor
+          <div className="text-right">
+            <div className="text-2xl font-black text-slate-900">
+              {position.last_price != null ? `$${position.last_price.toFixed(2)}` : '—'}
             </div>
-          )}
-          <div className="text-xs text-gray-400 mt-1">
-            anchor {position.anchor_price != null ? `$${position.anchor_price.toFixed(2)}` : '—'}
+            {position.pct_from_anchor != null && (
+              <div className={`text-sm font-semibold ${position.pct_from_anchor >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                {fmtPct(position.pct_from_anchor)} from anchor
+              </div>
+            )}
+            <div className="text-xs text-gray-400 mt-1">
+              anchor {position.anchor_price != null ? `$${position.anchor_price.toFixed(2)}` : '—'}
+            </div>
           </div>
         </div>
       </div>
@@ -591,6 +624,7 @@ function PositionDetailInner() {
   const [afterHoursEnabled, setAfterHoursEnabled] = useState(false);
   const [currentConfig, setCurrentConfig] = useState<PortfolioConfig | null>(null);
   const [toggling, setToggling] = useState(false);
+  const [activeModal, setActiveModal] = useState<'deposit' | 'withdraw' | 'adjust' | 'anchor' | null>(null);
 
   // Sync selected position from URL
   useEffect(() => {
@@ -649,6 +683,73 @@ function PositionDetailInner() {
       toast.error('Failed to update after-hours setting');
     } finally {
       setToggling(false);
+    }
+  };
+
+  const asPortfolioPosition = selectedPosition ? {
+    id: selectedPosition.position_id,
+    ticker: selectedPosition.asset_symbol,
+    asset: selectedPosition.asset_symbol,
+    qty: selectedPosition.qty,
+    cash: selectedPosition.cash,
+    anchor_price: selectedPosition.anchor_price,
+  } as PortfolioPosition : null;
+
+  const currentPrice = selectedPosition?.last_price ?? 0;
+
+  const handleDeposit = async (amount: number, reason: string) => {
+    if (!selectedTenantId || !ctxPortfolioId || !selectedPosition) return;
+    try {
+      await portfolioScopedApi.depositCash(selectedTenantId, ctxPortfolioId, {
+        amount, reason, position_id: selectedPosition.position_id,
+      });
+      toast.success(`Deposited $${amount.toLocaleString()}`);
+      setActiveModal(null);
+      loadPerf();
+    } catch {
+      toast.error('Failed to deposit cash');
+    }
+  };
+
+  const handleWithdraw = async (amount: number, reason: string) => {
+    if (!selectedTenantId || !ctxPortfolioId || !selectedPosition) return;
+    try {
+      await portfolioScopedApi.withdrawCash(selectedTenantId, ctxPortfolioId, {
+        amount, reason, position_id: selectedPosition.position_id,
+      });
+      toast.success(`Withdrew $${amount.toLocaleString()}`);
+      setActiveModal(null);
+      loadPerf();
+    } catch {
+      toast.error('Failed to withdraw cash');
+    }
+  };
+
+  const handleAdjust = async (data: { operation: 'BUY' | 'SELL' | 'SET_QTY'; qty: number; price?: number; reason: string }) => {
+    if (!selectedTenantId || !ctxPortfolioId || !selectedPosition) return;
+    try {
+      await portfolioScopedApi.adjustPosition(selectedTenantId, ctxPortfolioId, selectedPosition.asset_symbol, {
+        operation: data.operation,
+        qty: data.qty,
+        reason: data.reason,
+      });
+      toast.success('Position adjusted');
+      setActiveModal(null);
+      loadPerf();
+    } catch {
+      toast.error('Failed to adjust position');
+    }
+  };
+
+  const handleSetAnchor = async (anchorPrice: number) => {
+    if (!selectedTenantId || !ctxPortfolioId || !selectedPosition) return;
+    try {
+      await portfolioScopedApi.setAnchor(selectedTenantId, ctxPortfolioId, selectedPosition.asset_symbol, anchorPrice);
+      toast.success(`Anchor set to $${anchorPrice.toFixed(2)}`);
+      setActiveModal(null);
+      loadPerf();
+    } catch {
+      toast.error('Failed to set anchor price');
     }
   };
 
@@ -738,6 +839,10 @@ function PositionDetailInner() {
                 afterHoursEnabled={afterHoursEnabled}
                 onToggleAfterHours={handleToggleAfterHours}
                 toggling={toggling}
+                onDeposit={() => setActiveModal('deposit')}
+                onWithdraw={() => setActiveModal('withdraw')}
+                onAdjust={() => setActiveModal('adjust')}
+                onAnchor={() => setActiveModal('anchor')}
               />
 
               {/* Two-column: chart+tabs | right column */}
@@ -813,6 +918,39 @@ function PositionDetailInner() {
           )}
         </div>
       </div>
+
+      {/* Management modals */}
+      {activeModal === 'deposit' && asPortfolioPosition && (
+        <DepositModal
+          position={asPortfolioPosition}
+          onClose={() => setActiveModal(null)}
+          onSave={handleDeposit}
+        />
+      )}
+      {activeModal === 'withdraw' && asPortfolioPosition && (
+        <WithdrawModal
+          position={asPortfolioPosition}
+          availableCash={selectedPosition?.cash ?? 0}
+          onClose={() => setActiveModal(null)}
+          onSave={handleWithdraw}
+        />
+      )}
+      {activeModal === 'adjust' && asPortfolioPosition && (
+        <AdjustPositionModal
+          position={asPortfolioPosition}
+          currentPrice={currentPrice}
+          onClose={() => setActiveModal(null)}
+          onSave={handleAdjust}
+        />
+      )}
+      {activeModal === 'anchor' && asPortfolioPosition && (
+        <SetAnchorModal
+          position={asPortfolioPosition}
+          currentPrice={currentPrice}
+          onClose={() => setActiveModal(null)}
+          onSave={handleSetAnchor}
+        />
+      )}
     </div>
   );
 }
