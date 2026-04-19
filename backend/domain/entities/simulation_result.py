@@ -65,9 +65,31 @@ class SimulationResult:
     created_at: datetime = None
 
     def __post_init__(self):
-        """Initialize timestamps."""
         if self.created_at is None:
             self.created_at = datetime.now(timezone.utc)
+
+    @property
+    def metrics(self) -> Dict[str, Any]:
+        return {
+            "algorithm_pnl": self.algorithm_pnl,
+            "total_return": self.algorithm_return_pct,
+            "algorithm_return_pct": self.algorithm_return_pct,
+            "volatility": self.algorithm_volatility,
+            "algorithm_volatility": self.algorithm_volatility,
+            "sharpe_ratio": self.algorithm_sharpe_ratio,
+            "algorithm_sharpe_ratio": self.algorithm_sharpe_ratio,
+            "max_drawdown": self.algorithm_max_drawdown,
+            "algorithm_max_drawdown": self.algorithm_max_drawdown,
+            "buy_hold_pnl": self.buy_hold_pnl,
+            "buy_hold_return_pct": self.buy_hold_return_pct,
+            "buy_hold_volatility": self.buy_hold_volatility,
+            "buy_hold_sharpe_ratio": self.buy_hold_sharpe_ratio,
+            "buy_hold_max_drawdown": self.buy_hold_max_drawdown,
+            "excess_return": self.excess_return,
+            "alpha": self.alpha,
+            "beta": self.beta,
+            "information_ratio": self.information_ratio,
+        }
 
     @classmethod
     def create(

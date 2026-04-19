@@ -90,6 +90,7 @@ class ExcelTemplateService:
         self._create_comprehensive_time_series(simulation_result)
         self._create_simulation_performance_analysis(simulation_result)
         self._create_detailed_trade_log(simulation_result)
+        self._create_event_log(simulation_result)
         self._create_dividend_events(simulation_result)
         self._create_trigger_analysis(simulation_result)
         self._create_daily_returns(simulation_result)
@@ -1024,6 +1025,110 @@ class ExcelTemplateService:
 
         # Auto-adjust column widths safely
         self._safe_auto_fit_columns(ws)
+
+    def _create_event_log(self, simulation_result: SimulationResult):
+        """Create Event Log sheet — significant ticks only (triggered, executed, or dividend)."""
+        ws = self.workbook.create_sheet("Event Log")
+
+        ws["A1"] = "Simulation Event Log"
+        ws["A1"].font = Font(size=16, bold=True, color="2F5597")
+        ws.merge_cells("A1:R1")
+        ws["A2"] = (
+            f"Ticker: {simulation_result.ticker} | "
+            "Significant events: trades executed, triggers fired, guardrail blocks, dividends"
+        )
+        ws["A2"].font = Font(size=11, italic=True, color="666666")
+        ws.merge_cells("A2:R2")
+
+        time_series = (
+            simulation_result.time_series_data
+            or (simulation_result.raw_data.get("time_series_data", []) if simulation_result.raw_data else [])
+        )
+
+        significant = [
+            row for row in time_series
+            if row.get("triggered") or row.get("executed") or row.get("dividend_event")
+        ]
+
+        headers = [
+            "Date", "Time", "Price ($)", "Anchor ($)", "Δ vs Anchor %", "Threshold %",
+            "Side", "Qty", "Commission ($)", "Cash ($)", "Shares",
+            "Stock Value ($)", "Portfolio Value ($)", "Stock %",
+            "Buy & Hold Value ($)", "Guardrail Hit",
+            "Dividend Net ($)", "Reason",
+        ]
+        header_fill = PatternFill(start_color="1E3A5F", end_color="1E3A5F", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF", size=10)
+        thin = Border(
+            left=Side(style="thin"), right=Side(style="thin"),
+            top=Side(style="thin"), bottom=Side(style="thin"),
+        )
+
+        for col, h in enumerate(headers, 1):
+            cell = ws.cell(row=4, column=col, value=h)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center")
+            cell.border = thin
+            ws.column_dimensions[get_column_letter(col)].width = max(14, len(h) + 2)
+
+        # Row fills: BUY=green, SELL=red, guardrail=orange, dividend=blue
+        buy_fill   = PatternFill(start_color="D4EDDA", end_color="D4EDDA", fill_type="solid")
+        sell_fill  = PatternFill(start_color="F8D7DA", end_color="F8D7DA", fill_type="solid")
+        grail_fill = PatternFill(start_color="FFF3CD", end_color="FFF3CD", fill_type="solid")
+        div_fill   = PatternFill(start_color="CCE5FF", end_color="CCE5FF", fill_type="solid")
+        alt_fill   = PatternFill(start_color="F8F9FA", end_color="F8F9FA", fill_type="solid")
+
+        if not significant:
+            ws.cell(row=5, column=1, value="No significant events found in simulation data")
+            return
+
+        for i, row in enumerate(significant, 5):
+            side = (row.get("side") or "").upper()
+            guardrail_hit = row.get("guardrail_hit", False)
+            dividend = row.get("dividend_event", False)
+
+            if guardrail_hit:
+                row_fill = grail_fill
+            elif dividend and not side:
+                row_fill = div_fill
+            elif side == "BUY":
+                row_fill = buy_fill
+            elif side == "SELL":
+                row_fill = sell_fill
+            else:
+                row_fill = alt_fill if i % 2 == 0 else None
+
+            values = [
+                row.get("date", ""),
+                row.get("time", ""),
+                round(row.get("price", 0), 4),
+                round(row.get("anchor_price", 0), 4),
+                round(row.get("price_change_pct", 0), 4),
+                round(row.get("trigger_threshold_pct", 0), 2),
+                side or ("DIV" if dividend else "HOLD"),
+                round(row.get("trade_qty", 0), 4),
+                round(row.get("commission", 0), 4),
+                round(row.get("cash", 0), 2),
+                round(row.get("shares", 0), 4),
+                round(row.get("asset_value", 0), 2),
+                round(row.get("total_value", 0), 2),
+                round(row.get("asset_allocation_pct", 0), 2),
+                round(row.get("buy_hold_value", 0), 2),
+                "YES" if guardrail_hit else "",
+                round(row.get("dividend_net", 0), 4),
+                (row.get("reason") or "")[:120],
+            ]
+
+            for col, val in enumerate(values, 1):
+                cell = ws.cell(row=i, column=col, value=val)
+                cell.border = thin
+                if row_fill:
+                    cell.fill = row_fill
+                if col in (3, 4, 8, 9, 10, 12, 13, 15, 17):
+                    cell.number_format = '#,##0.00'
+                elif col in (5, 6, 14):
+                    cell.number_format = '0.00'
 
     def _create_daily_returns(self, simulation_result: SimulationResult):
         """Create daily returns sheet with portfolio performance."""

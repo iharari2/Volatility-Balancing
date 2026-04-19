@@ -646,6 +646,10 @@ class SimulationUnifiedUC:
         debug_info = []  # Track debug information
         time_series_data = []  # Track comprehensive time-series data
 
+        # Buy & Hold reference for per-tick comparison
+        _bh_first_price = sim_data.price_data[0].price if sim_data.price_data else 1.0
+        _bh_shares = initial_cash / _bh_first_price if _bh_first_price > 0 else 0.0
+
         safe_report_progress("Starting simulation loop...", 20.0)
         total_data_points = len(sim_data.price_data)
         processed_points = 0
@@ -1091,8 +1095,15 @@ class SimulationUnifiedUC:
                     "dividend_withholding": 0.0,
                     "execution_error": trigger_info.get("execution_error"),
                     "reason": evaluation.get("reasoning", trigger_info.get("reason", "No trigger")) if evaluation else "No evaluation",
-                    # Show new anchor price if it changed (i.e., a trade executed)
                     "new_anchor_price": position.anchor_price if position.anchor_price != pre_eval_anchor else None,
+                    "buy_hold_value": _bh_shares * current_price,
+                    "guardrail_hit": (
+                        trigger_info.get("triggered", False)
+                        and not trigger_info.get("executed", False)
+                        and (trigger_info.get("execution_error") or "").startswith("Order blocked by guardrails")
+                    ),
+                    "low_guardrail_pct": guardrails.min_stock_alloc_pct if guardrails else None,
+                    "high_guardrail_pct": guardrails.max_stock_alloc_pct if guardrails else None,
                 }
             )
 
