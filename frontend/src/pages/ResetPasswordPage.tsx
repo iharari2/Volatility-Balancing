@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { authApi } from '../lib/api';
+import PasswordInput from '../components/PasswordInput';
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
@@ -75,18 +76,17 @@ export default function ResetPasswordPage() {
               <label style={{ display: 'block', color: '#cbd5e1', fontSize: 13, marginBottom: 4 }}>
                 New Password
               </label>
-              <input
-                type="password"
+              <PasswordInput
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
                 minLength={6}
-                style={{
+                placeholder="Min 6 characters"
+                inputStyle={{
                   width: '100%', padding: '10px 12px', borderRadius: 6,
                   border: '1px solid #334155', background: '#0f172a',
                   color: '#f1f5f9', fontSize: 14, boxSizing: 'border-box',
                 }}
-                placeholder="Min 6 characters"
               />
             </div>
 
@@ -94,17 +94,16 @@ export default function ResetPasswordPage() {
               <label style={{ display: 'block', color: '#cbd5e1', fontSize: 13, marginBottom: 4 }}>
                 Confirm Password
               </label>
-              <input
-                type="password"
+              <PasswordInput
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                style={{
+                placeholder="Repeat password"
+                inputStyle={{
                   width: '100%', padding: '10px 12px', borderRadius: 6,
                   border: '1px solid #334155', background: '#0f172a',
                   color: '#f1f5f9', fontSize: 14, boxSizing: 'border-box',
                 }}
-                placeholder="Repeat password"
               />
             </div>
 

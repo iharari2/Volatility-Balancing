@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check, AlertCircle } from 'lucide-react';
+import PasswordInput from '../../components/PasswordInput';
 import { useTenantPortfolio } from '../../contexts/TenantPortfolioContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { authApi, notificationApi, type NotificationPrefs } from '../../lib/api';
@@ -205,22 +206,19 @@ export default function SettingsPage() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Change Password</label>
             <div className="space-y-3 max-w-sm">
-              <input
-                type="password"
+              <PasswordInput
                 placeholder="Current password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
               />
-              <input
-                type="password"
+              <PasswordInput
                 placeholder="New password (min 6 characters)"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
               />
-              <input
-                type="password"
+              <PasswordInput
                 placeholder="Confirm new password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}

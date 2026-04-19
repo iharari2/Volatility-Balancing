@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import PasswordInput from '../components/PasswordInput';
 
 export default function LoginPage() {
   const [isRegister, setIsRegister] = useState(false);
@@ -123,13 +124,13 @@ export default function LoginPage() {
             <label style={{ display: 'block', color: '#cbd5e1', fontSize: 13, marginBottom: 4 }}>
               Password
             </label>
-            <input
-              type="password"
+            <PasswordInput
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
-              style={{
+              placeholder="Min 6 characters"
+              inputStyle={{
                 width: '100%',
                 padding: '10px 12px',
                 borderRadius: 6,
@@ -139,7 +140,6 @@ export default function LoginPage() {
                 fontSize: 14,
                 boxSizing: 'border-box',
               }}
-              placeholder="Min 6 characters"
             />
           </div>
 
