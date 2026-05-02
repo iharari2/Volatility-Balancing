@@ -1140,46 +1140,62 @@ class PortfolioService:
                 last_date_str = time_series[-1].get("date")
 
                 if first_date_str and last_date_str:
-                    # Buy & Hold benchmark — fetch actual ticker prices via yfinance
-                    # so the curve matches Yahoo Finance rather than relying on snapshot data
+                    from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
+
+                    position_tickers: list = []
+
                     if "buy_hold" in active_benchmarks:
-                        # Determine which ticker(s) to use for buy-hold
                         position_tickers = list({
                             p.asset_symbol for p in positions
                             if p.asset_symbol and p.asset_symbol != "CASH"
                         })
-                        if len(position_tickers) == 1:
-                            bh_result = _fetch_ticker_series(position_tickers[0], first_date_str[:10], last_date_str[:10])
-                            if bh_result:
-                                benchmarks_result["buy_hold"] = {**bh_result, "ticker": position_tickers[0]}
-                                performance["benchmark_return_pct"] = bh_result["return_pct"]
-                                performance["alpha"] = round(
-                                    performance["portfolio_return_pct"] - bh_result["return_pct"], 2
-                                )
-                                print(f"📊 Buy & Hold ({position_tickers[0]}): return={bh_result['return_pct']:.2f}%")
 
-                    # SPY benchmark
+                    # Build task map: key → (ticker, label)
+                    task_defs: Dict[str, tuple] = {}
+                    if "buy_hold" in active_benchmarks and len(position_tickers) == 1:
+                        task_defs["buy_hold"] = (position_tickers[0], first_date_str[:10], last_date_str[:10])
                     if "spy" in active_benchmarks:
-                        spy_result = _fetch_ticker_series("SPY", first_date_str[:10], last_date_str[:10])
-                        if spy_result:
-                            performance["spy_return_pct"] = spy_result["return_pct"]
-                            performance["spy_alpha"] = round(
-                                performance["portfolio_return_pct"] - spy_result["return_pct"], 2
-                            )
-                            benchmarks_result["spy"] = spy_result
-                            print(
-                                f"📊 SPY benchmark: return={spy_result['return_pct']:.2f}%, "
-                                f"alpha={performance['spy_alpha']:.2f}%"
-                            )
-                        else:
-                            print(f"⚠️ No SPY data for period {first_date_str} to {last_date_str}")
-
-                    # Custom ticker benchmark
+                        task_defs["spy"] = ("SPY", first_date_str[:10], last_date_str[:10])
                     if "custom" in active_benchmarks and custom_ticker:
-                        custom_result = _fetch_ticker_series(custom_ticker.upper(), first_date_str[:10], last_date_str[:10])
-                        if custom_result:
-                            benchmarks_result["custom"] = {**custom_result, "ticker": custom_ticker.upper()}
-                            print(f"📊 Custom benchmark {custom_ticker}: return={custom_result['return_pct']:.2f}%")
+                        task_defs["custom"] = (custom_ticker.upper(), first_date_str[:10], last_date_str[:10])
+
+                    if task_defs:
+                        with ThreadPoolExecutor(max_workers=len(task_defs)) as pool:
+                            futures = {
+                                pool.submit(_fetch_ticker_series, *args): key
+                                for key, args in task_defs.items()
+                            }
+                            try:
+                                for fut in as_completed(futures, timeout=15):
+                                    key = futures[fut]
+                                    try:
+                                        result = fut.result(timeout=0)
+                                    except Exception as _fe:
+                                        print(f"⚠️ Benchmark fetch failed for {key}: {_fe}")
+                                        continue
+                                    if not result:
+                                        continue
+                                    if key == "buy_hold":
+                                        ticker_sym = task_defs["buy_hold"][0]
+                                        benchmarks_result["buy_hold"] = {**result, "ticker": ticker_sym}
+                                        performance["benchmark_return_pct"] = result["return_pct"]
+                                        performance["alpha"] = round(
+                                            performance["portfolio_return_pct"] - result["return_pct"], 2
+                                        )
+                                        print(f"📊 Buy & Hold ({ticker_sym}): return={result['return_pct']:.2f}%")
+                                    elif key == "spy":
+                                        performance["spy_return_pct"] = result["return_pct"]
+                                        performance["spy_alpha"] = round(
+                                            performance["portfolio_return_pct"] - result["return_pct"], 2
+                                        )
+                                        benchmarks_result["spy"] = result
+                                        print(f"📊 SPY benchmark: return={result['return_pct']:.2f}%, alpha={performance['spy_alpha']:.2f}%")
+                                    elif key == "custom":
+                                        ticker_sym = task_defs["custom"][0]
+                                        benchmarks_result["custom"] = {**result, "ticker": ticker_sym}
+                                        print(f"📊 Custom benchmark {ticker_sym}: return={result['return_pct']:.2f}%")
+                            except FuturesTimeoutError:
+                                print("⚠️ Benchmark fetches timed out after 15s — continuing without some benchmarks")
 
         except Exception as e:
             print(f"⚠️ Failed to fetch benchmark data: {e}")
