@@ -151,7 +151,6 @@ export default function AnalyticsCharts({
 
     const timeSeries = analyticsData.time_series;
     const initialPoint = timeSeries[0];
-    const initialStockValue = initialPoint.stock || 0;
     const initialValue = initialPoint.value || 0;
 
     if (initialValue === 0) return [];
@@ -542,10 +541,12 @@ export default function AnalyticsCharts({
           </h3>
           {performance && (
             <div className="flex items-center gap-3 text-xs flex-wrap">
-              <span className={performance.alpha >= 0 ? 'text-green-600' : 'text-red-600'}>
-                Alpha: {performance.alpha >= 0 ? '+' : ''}
-                {performance.alpha.toFixed(2)}%
-              </span>
+              {buyHoldByDate.size > 0 && (
+                <span className={performance.alpha >= 0 ? 'text-green-600' : 'text-red-600'}>
+                  Alpha: {performance.alpha >= 0 ? '+' : ''}
+                  {performance.alpha.toFixed(2)}%
+                </span>
+              )}
               {performance.spy_alpha !== undefined && (
                 <span
                   className={performance.spy_alpha >= 0 ? 'text-green-600' : 'text-red-600'}

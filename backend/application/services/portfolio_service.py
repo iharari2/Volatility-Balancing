@@ -698,6 +698,13 @@ class PortfolioService:
                     if isinstance(dt, str):
                         dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
 
+                    # Skip weekend entries for daily resolution. The market is closed
+                    # on Sat/Sun; prices are stale repeats of Friday's close, and
+                    # including them dilutes rolling volatility/Sharpe calculations
+                    # (extra ~0-return days in the 30-day window).
+                    if resolution == "daily" and dt.weekday() >= 5:  # Sat=5, Sun=6
+                        continue
+
                     if resolution == "weekly":
                         # ISO week key: "2024-W03"
                         bucket_key = f"{dt.year}-W{dt.strftime('%W')}"
@@ -802,8 +809,10 @@ class PortfolioService:
                     # Sharpe-like ratio (simplified: return / volatility)
                     # Use total return from first to last value
                     total_return = (values[-1] - values[0]) / values[0] if values[0] > 0 else 0.0
+                    n = len(daily_returns)
+                    # Geometric (compound) annualization: (1+R)^(252/n) - 1
                     annualized_return = (
-                        total_return * (252 / len(daily_returns)) if len(daily_returns) > 0 else 0.0
+                        (1 + total_return) ** (252 / n) - 1 if n > 0 and total_return > -1 else 0.0
                     )
                     kpis["sharpe_like"] = (
                         annualized_return / (std_dev * (252**0.5)) if std_dev > 0 else 0.0
@@ -820,7 +829,7 @@ class PortfolioService:
                         max_drawdown = drawdown
                 kpis["max_drawdown"] = -max_drawdown * 100  # Negative percentage
 
-        # 4. Placeholders — filled in after the events list is built with date-filtered amounts
+        # 4. Totals filled in after events are collected below
         total_commission_paid = 0.0
         total_dividends_received = 0.0
 
@@ -837,8 +846,7 @@ class PortfolioService:
         kpis.setdefault("max_drawdown", 0.0)
         kpis.setdefault("sharpe_like", 0.0)
         kpis["pnl_pct"] = pnl_pct
-        kpis["commission_total"] = total_commission_paid
-        kpis["dividend_total"] = total_dividends_received
+        # commission_total and dividend_total are set after event collection below
 
         # 6. Fetch events (trades and dividends) for the period
         events: List[Dict[str, Any]] = []
@@ -977,6 +985,9 @@ class PortfolioService:
             total_dividends_received = sum(
                 e.get("net_amount", 0.0) or 0.0 for e in events if e["type"] == "DIVIDEND"
             )
+            # Update KPI totals now that events are collected
+            kpis["commission_total"] = total_commission_paid
+            kpis["dividend_total"] = total_dividends_received
 
             # Compute trade stats
             trade_events_only = [e for e in events if e["type"] == "TRADE"]
@@ -1016,6 +1027,10 @@ class PortfolioService:
             print(f"Warning: Failed to fetch events for analytics: {e}")
             import traceback
             traceback.print_exc()
+
+        # Ensure commission/dividend KPIs are always set (even when events block throws)
+        kpis.setdefault("commission_total", total_commission_paid)
+        kpis.setdefault("dividend_total", total_dividends_received)
 
         # 7. Get guardrails from per-position config
         guardrails: Optional[Dict[str, float]] = None
