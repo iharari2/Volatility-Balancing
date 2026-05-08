@@ -15,6 +15,8 @@ export default function AnalyticsKPIs({ positions, analyticsData }: AnalyticsKPI
     if (analyticsData?.kpis) {
       return {
         return: analyticsData.kpis.pnl_pct || 0,
+        annualizedReturn: analyticsData.kpis.annualized_return_pct ?? null,
+        netPnlUsd: analyticsData.kpis.net_pnl_usd ?? null,
         volatility: analyticsData.kpis.volatility || 0,
         maxDrawdown: analyticsData.kpis.max_drawdown || 0,
         sharpeLike: analyticsData.kpis.sharpe_like || 0,
@@ -26,6 +28,8 @@ export default function AnalyticsKPIs({ positions, analyticsData }: AnalyticsKPI
     // If no backend data, return zeros (no mock data)
     return {
       return: 0,
+      annualizedReturn: null,
+      netPnlUsd: null,
       volatility: 0,
       maxDrawdown: 0,
       sharpeLike: 0,
@@ -43,6 +47,26 @@ export default function AnalyticsKPIs({ positions, analyticsData }: AnalyticsKPI
       tooltip: 'Total percentage gain or loss on the portfolio over the selected period.',
       value: `${metrics.return >= 0 ? '+' : ''}${metrics.return.toFixed(2)}%`,
       color: metrics.return >= 0 ? 'text-green-600' : 'text-red-600',
+    },
+    {
+      label: 'Annualized',
+      tooltip: 'Period return scaled to a full year using geometric compounding: (1+R)^(252/n)−1. Allows fair comparison across periods of different lengths.',
+      value: metrics.annualizedReturn !== null
+        ? `${metrics.annualizedReturn >= 0 ? '+' : ''}${metrics.annualizedReturn.toFixed(2)}%`
+        : '—',
+      color: metrics.annualizedReturn !== null
+        ? (metrics.annualizedReturn >= 0 ? 'text-green-600' : 'text-red-600')
+        : 'text-gray-400',
+    },
+    {
+      label: 'Net P&L ($)',
+      tooltip: 'Absolute dollar gain or loss for the period: end portfolio value minus start portfolio value. Includes trading gains, dividends received, and commissions paid.',
+      value: metrics.netPnlUsd !== null
+        ? `${metrics.netPnlUsd >= 0 ? '+' : ''}$${Math.abs(metrics.netPnlUsd).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+        : '—',
+      color: metrics.netPnlUsd !== null
+        ? (metrics.netPnlUsd >= 0 ? 'text-green-600' : 'text-red-600')
+        : 'text-gray-400',
     },
     {
       label: 'Volatility',
@@ -114,7 +138,7 @@ export default function AnalyticsKPIs({ positions, analyticsData }: AnalyticsKPI
           How are these calculated?
         </button>
       </div>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-8">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-10">
         {kpiCards.map((kpi) => (
           <div key={kpi.label} className="card p-4 flex flex-col justify-between">
             <dt className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center">

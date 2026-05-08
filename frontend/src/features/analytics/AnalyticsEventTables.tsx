@@ -9,7 +9,7 @@ interface AnalyticsEventTablesProps {
 }
 
 type SortDirection = 'asc' | 'desc';
-type TradesSortField = 'date' | 'asset_symbol' | 'side' | 'qty' | 'price' | 'total' | 'commission';
+type TradesSortField = 'date' | 'asset_symbol' | 'side' | 'qty' | 'price' | 'total' | 'commission' | 'net_cash';
 type DividendsSortField = 'date' | 'asset_symbol' | 'shares_held' | 'dps' | 'gross_amount' | 'net_amount';
 
 export default function AnalyticsEventTables({ events }: AnalyticsEventTablesProps) {
@@ -61,6 +61,12 @@ export default function AnalyticsEventTables({ events }: AnalyticsEventTablesPro
           aVal = a.commission || 0;
           bVal = b.commission || 0;
           break;
+        case 'net_cash': {
+          const sign = (e: AnalyticsEvent) => e.side === 'BUY' ? -1 : 1;
+          aVal = sign(a) * (a.qty || 0) * (a.price || 0) - (a.commission || 0);
+          bVal = sign(b) * (b.qty || 0) * (b.price || 0) - (b.commission || 0);
+          break;
+        }
         default:
           aVal = a.date;
           bVal = b.date;
@@ -134,16 +140,22 @@ export default function AnalyticsEventTables({ events }: AnalyticsEventTablesPro
 
   // Export trades to CSV
   const exportTradesToCsv = () => {
-    const headers = ['Date', 'Symbol', 'Action', 'Quantity', 'Price', 'Total Value', 'Commission'];
-    const rows = sortedTrades.map((t) => [
-      t.date,
-      t.asset_symbol || '',
-      t.side || '',
-      t.qty?.toString() || '0',
-      t.price?.toFixed(2) || '0.00',
-      ((t.qty || 0) * (t.price || 0)).toFixed(2),
-      t.commission?.toFixed(2) || '0.00',
-    ]);
+    const headers = ['Date', 'Symbol', 'Action', 'Quantity', 'Price', 'Total Value', 'Commission', 'Net Cash Impact'];
+    const rows = sortedTrades.map((t) => {
+      const total = (t.qty || 0) * (t.price || 0);
+      const sign = t.side === 'BUY' ? -1 : 1;
+      const netCash = sign * total - (t.commission || 0);
+      return [
+        t.date,
+        t.asset_symbol || '',
+        t.side || '',
+        t.qty?.toString() || '0',
+        t.price?.toFixed(2) || '0.00',
+        total.toFixed(2),
+        t.commission?.toFixed(2) || '0.00',
+        netCash.toFixed(2),
+      ];
+    });
 
     const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
     downloadCsv(csvContent, 'trades.csv');
@@ -366,11 +378,21 @@ export default function AnalyticsEventTables({ events }: AnalyticsEventTablesPro
                       currentDir={tradesSortDir}
                       onClick={() => handleTradesSort('commission')}
                     />
+                    <SortableHeader
+                      label="Net Cash Impact"
+                      field="net_cash"
+                      currentField={tradesSortField}
+                      currentDir={tradesSortDir}
+                      onClick={() => handleTradesSort('net_cash')}
+                    />
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {sortedTrades.map((trade, index) => {
                     const total = (trade.qty || 0) * (trade.price || 0);
+                    // Net cash impact: BUY = cash out (negative), SELL = cash in (positive)
+                    const sign = trade.side === 'BUY' ? -1 : 1;
+                    const netCash = sign * total - (trade.commission || 0);
                     return (
                       <tr key={`${trade.date}-${trade.asset_symbol}-${index}`} className="hover:bg-gray-50">
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
@@ -401,6 +423,9 @@ export default function AnalyticsEventTables({ events }: AnalyticsEventTablesPro
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
                           ${trade.commission?.toFixed(2) || '0.00'}
+                        </td>
+                        <td className={`px-4 py-3 whitespace-nowrap text-sm font-medium text-right ${netCash >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {netCash >= 0 ? '+' : ''}${Math.abs(netCash).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                       </tr>
                     );

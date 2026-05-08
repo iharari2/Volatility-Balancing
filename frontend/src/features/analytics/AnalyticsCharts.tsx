@@ -324,6 +324,24 @@ export default function AnalyticsCharts({
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [events]);
 
+  // Stock price chart: raw yfinance prices with BUY/SELL trade markers at execution prices
+  const stockPriceData = useMemo(() => {
+    const rawSeries = analyticsData?.benchmarks?.buy_hold?.raw_series;
+    if (!rawSeries?.length || !isSinglePosition) return [];
+    const buyPriceByDate = new Map<string, number>();
+    const sellPriceByDate = new Map<string, number>();
+    events.filter((e: AnalyticsEvent) => e.type === 'TRADE').forEach((e: AnalyticsEvent) => {
+      if (e.side === 'BUY' && e.price) buyPriceByDate.set(e.date, e.price);
+      else if (e.side === 'SELL' && e.price) sellPriceByDate.set(e.date, e.price);
+    });
+    return rawSeries.map((p: { date: string; price: number }) => ({
+      date: p.date,
+      price: p.price,
+      buyMarker: buyPriceByDate.get(p.date) ?? null,
+      sellMarker: sellPriceByDate.get(p.date) ?? null,
+    }));
+  }, [analyticsData, events, isSinglePosition]);
+
   const hasData = portfolioValueData.length > 0;
 
   // Determine whether to show chart brush (only useful with > 20 data points)
@@ -354,6 +372,110 @@ export default function AnalyticsCharts({
   return (
     <div className="space-y-6">
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+      {/* Stock Price Chart — Yahoo Finance style, single-position only, requires buy_hold benchmark */}
+      {stockPriceData.length > 0 && (
+        <div className="card lg:col-span-2">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+              {positions[0].ticker} Stock Price
+            </h3>
+            <div className="flex items-center gap-3 text-xs text-gray-500">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                BUY
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
+                SELL
+              </span>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={280}>
+            <ComposedChart data={stockPriceData} syncId="analytics">
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 10, fill: '#9ca3af' }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fontSize: 10, fill: '#9ca3af' }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v) => `$${v.toFixed(2)}`}
+                domain={['auto', 'auto']}
+              />
+              <Tooltip
+                contentStyle={{
+                  borderRadius: '8px',
+                  border: 'none',
+                  boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                }}
+                formatter={(value: number, name: string) => {
+                  if (name === 'buyMarker') return [`$${value.toFixed(2)}`, 'BUY'];
+                  if (name === 'sellMarker') return [`$${value.toFixed(2)}`, 'SELL'];
+                  return [`$${value.toFixed(2)}`, 'Price'];
+                }}
+              />
+              {/* Anchor price reference line */}
+              {positions[0]?.anchorPrice > 0 && (
+                <ReferenceLine
+                  y={positions[0].anchorPrice}
+                  stroke="#f59e0b"
+                  strokeDasharray="4 3"
+                  strokeWidth={1.5}
+                  label={{
+                    value: `Anchor $${positions[0].anchorPrice.toFixed(2)}`,
+                    position: 'right',
+                    fill: '#f59e0b',
+                    fontSize: 9,
+                  }}
+                />
+              )}
+              {/* Price line */}
+              <Line
+                type="monotone"
+                dataKey="price"
+                stroke="#2563eb"
+                strokeWidth={2}
+                dot={false}
+                name="Price"
+                connectNulls
+              />
+              {/* BUY markers */}
+              <Scatter dataKey="buyMarker" fill="#22c55e" name="buyMarker">
+                {stockPriceData.map((entry, index) => (
+                  <Cell
+                    key={`buy-${index}`}
+                    fill={entry.buyMarker !== null ? '#22c55e' : 'transparent'}
+                  />
+                ))}
+              </Scatter>
+              {/* SELL markers */}
+              <Scatter dataKey="sellMarker" fill="#ef4444" name="sellMarker">
+                {stockPriceData.map((entry, index) => (
+                  <Cell
+                    key={`sell-${index}`}
+                    fill={entry.sellMarker !== null ? '#ef4444' : 'transparent'}
+                  />
+                ))}
+              </Scatter>
+              {showBrush && (
+                <Brush
+                  dataKey="date"
+                  height={24}
+                  stroke="#d1d5db"
+                  fill="#f9fafb"
+                  travellerWidth={8}
+                />
+              )}
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
       {/* ANA-2: Portfolio Value Over Time - Stacked Areas + Event Markers + Brush */}
       <div className="card lg:col-span-2">
         <h3 className="text-sm font-bold text-gray-900 mb-6 uppercase tracking-wider">

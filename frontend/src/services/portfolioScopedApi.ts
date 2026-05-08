@@ -144,6 +144,7 @@ export interface BenchmarkSeries {
   last_price?: number;
   ticker?: string;
   series?: { date: string; value: number }[];
+  raw_series?: { date: string; price: number }[];
 }
 
 export interface AnalyticsGuardrails {

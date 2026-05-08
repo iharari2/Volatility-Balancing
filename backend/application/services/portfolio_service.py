@@ -817,6 +817,7 @@ class PortfolioService:
                     kpis["sharpe_like"] = (
                         annualized_return / (std_dev * (252**0.5)) if std_dev > 0 else 0.0
                     )
+                    kpis["annualized_return_pct"] = round(annualized_return * 100, 2)
 
                 # Max Drawdown
                 peak = values[0]
@@ -846,6 +847,7 @@ class PortfolioService:
         kpis.setdefault("max_drawdown", 0.0)
         kpis.setdefault("sharpe_like", 0.0)
         kpis["pnl_pct"] = pnl_pct
+        kpis.setdefault("annualized_return_pct", 0.0)
         # commission_total and dividend_total are set after event collection below
 
         # 6. Fetch events (trades and dividends) for the period
@@ -1120,6 +1122,7 @@ class PortfolioService:
                 "dividend_income": round(dividend_income, 2),
                 "commission_cost": round(commission_cost, 2),
             }
+            kpis["net_pnl_usd"] = round(total_return_raw, 2)
 
         # 9. Fetch benchmark data (SPY and/or custom ticker) – conditional on selection
         benchmarks_result: Dict[str, Any] = {}
@@ -1140,10 +1143,18 @@ class PortfolioService:
                 if not first_price or first_price == 0:
                     return None
                 ret = ((last_price - first_price) / first_price) * 100
-                # Build time series of normalised returns (100-based)
                 sorted_dates = sorted(by_date.keys())
+                # Normalised series (100-based) for benchmark % comparison
                 series = [{"date": d, "value": (by_date[d] / first_price) * 100} for d in sorted_dates]
-                return {"return_pct": round(ret, 2), "first_price": first_price, "last_price": last_price, "series": series}
+                # Raw price series for the stock price chart (Yahoo Finance style)
+                raw_series = [{"date": d, "price": round(by_date[d], 4)} for d in sorted_dates]
+                return {
+                    "return_pct": round(ret, 2),
+                    "first_price": first_price,
+                    "last_price": last_price,
+                    "series": series,
+                    "raw_series": raw_series,
+                }
             except Exception as _e:
                 print(f"⚠️ Failed to fetch benchmark data for {ticker_sym}: {_e}")
                 return None
