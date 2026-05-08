@@ -1438,7 +1438,10 @@ class YFinanceAdapter(MarketDataRepo):
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                hist = stock.history(start=start_str, end=end_str, interval="1d")
+                # auto_adjust=False: return actual closing prices, matching what Yahoo Finance
+                # displays on its web charts. Dividend-adjusted prices (the default) shift
+                # historical values downward and diverge from the web chart display.
+                hist = stock.history(start=start_str, end=end_str, interval="1d", auto_adjust=False)
                 if not hist.empty:
                     break
                 if attempt < max_retries - 1:
@@ -1463,7 +1466,7 @@ class YFinanceAdapter(MarketDataRepo):
             print(f"Retrying {ticker} with period={period} fallback (start/end fetch returned empty)...")
             try:
                 stock2 = self._ticker(ticker)
-                hist = stock2.history(period=period, interval="1d")
+                hist = stock2.history(period=period, interval="1d", auto_adjust=False)
                 if not hist.empty:
                     # Trim to requested range
                     if hist.index.tzinfo is None:
