@@ -136,6 +136,14 @@ export default function AnalyticsCharts({
     return map;
   }, [analyticsData]);
 
+  const spyBenchmarkByDate = useMemo(() => {
+    const data = analyticsData?.benchmarks?.spy;
+    if (!data?.series) return new Map<string, number>();
+    const map = new Map<string, number>();
+    data.series.forEach((p: { date: string; value: number }) => map.set(p.date, p.value));
+    return map;
+  }, [analyticsData]);
+
   const buyHoldData = useMemo(() => {
     if (!analyticsData?.time_series?.length || portfolioValueData.length === 0) {
       return [];
@@ -183,11 +191,16 @@ export default function AnalyticsCharts({
         const customReturn =
           customBmValue !== undefined ? customBmValue - 100 : null;
 
+        // SPY time series – normalised to 100 at start, converted to % change
+        const spyBmValue = spyBenchmarkByDate.get(point.date);
+        const spyReturn = spyBmValue !== undefined ? spyBmValue - 100 : null;
+
         return {
           date: point.date,
           portfolioReturn: Math.round(portfolioReturn * 100) / 100,
           stockReturn: Math.round(stockReturn * 100) / 100,
           customReturn: customReturn !== null ? Math.round(customReturn * 100) / 100 : null,
+          spyReturn: spyReturn !== null ? Math.round(spyReturn * 100) / 100 : null,
           buyMarker:
             point.buyMarker !== null ? Math.round(portfolioReturn * 100) / 100 : null,
           sellMarker:
@@ -197,7 +210,7 @@ export default function AnalyticsCharts({
         };
       },
     );
-  }, [portfolioValueData, analyticsData, customBenchmarkByDate]);
+  }, [portfolioValueData, analyticsData, customBenchmarkByDate, spyBenchmarkByDate]);
 
   // ANA-5: 30-day rolling volatility (annualized)
   const rollingVolatilityData = useMemo(() => {
@@ -593,8 +606,21 @@ export default function AnalyticsCharts({
               }}
             />
             <Legend verticalAlign="top" align="right" height={36} />
-            {/* S&P 500 horizontal reference line (scalar return) */}
-            {showSpy && performance?.spy_return_pct !== undefined && (
+            {/* S&P 500 time series line */}
+            {showSpy && spyBenchmarkByDate.size > 0 && (
+              <Line
+                type="monotone"
+                dataKey="spyReturn"
+                stroke="#6b7280"
+                strokeWidth={1.5}
+                strokeDasharray="3 3"
+                dot={false}
+                name="S&P 500"
+                connectNulls
+              />
+            )}
+            {/* S&P 500 scalar reference line fallback (no time series) */}
+            {showSpy && spyBenchmarkByDate.size === 0 && performance?.spy_return_pct !== undefined && (
               <ReferenceLine
                 y={performance.spy_return_pct}
                 stroke="#6b7280"

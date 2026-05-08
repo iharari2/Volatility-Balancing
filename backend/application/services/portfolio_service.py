@@ -820,13 +820,9 @@ class PortfolioService:
                         max_drawdown = drawdown
                 kpis["max_drawdown"] = -max_drawdown * 100  # Negative percentage
 
-        # 4. Calculate total commissions and dividends from positions
-        total_commission_paid = sum(
-            getattr(p, "total_commission_paid", 0.0) or 0.0 for p in positions
-        )
-        total_dividends_received = sum(
-            getattr(p, "total_dividends_received", 0.0) or 0.0 for p in positions
-        )
+        # 4. Placeholders — filled in after the events list is built with date-filtered amounts
+        total_commission_paid = 0.0
+        total_dividends_received = 0.0
 
         # 5. Calculate return percentage from time_series if available
         pnl_pct = 0.0
@@ -895,6 +891,9 @@ class PortfolioService:
                             portfolio_id=portfolio_id,
                             position_id=pos.id,
                             mode="LIVE",
+                            start_date=effective_start,
+                            end_date=effective_end,
+                            action_filter=["BUY", "SELL"],
                             limit=500,
                         )
                     except Exception as tle:
@@ -932,10 +931,10 @@ class PortfolioService:
                                 "side": action_upper,
                                 "qty": qty_change if qty_change > 0 else row.get("qty") or 0,
                                 "price": row.get("effective_price") or row.get("close") or row.get("market_price_raw") or 0.0,
-                                "commission": row.get("commission") or 0.0,
+                                "commission": row.get("execution_commission") or row.get("commission") or 0.0,
                                 "position_id": pos.id,
                                 "asset_symbol": pos.asset_symbol,
-                                "anchor_price": getattr(pos, "anchor_price", None),
+                                "anchor_price": row.get("anchor_price") or getattr(pos, "anchor_price", None),
                             })
 
             # Fetch dividends for each position
@@ -970,6 +969,14 @@ class PortfolioService:
 
             # Sort events by date
             events.sort(key=lambda e: e["date"])
+
+            # Compute date-filtered commission and dividend totals from the events list
+            total_commission_paid = sum(
+                e.get("commission", 0.0) or 0.0 for e in events if e["type"] == "TRADE"
+            )
+            total_dividends_received = sum(
+                e.get("net_amount", 0.0) or 0.0 for e in events if e["type"] == "DIVIDEND"
+            )
 
             # Compute trade stats
             trade_events_only = [e for e in events if e["type"] == "TRADE"]
