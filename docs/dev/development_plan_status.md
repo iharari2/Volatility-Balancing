@@ -1,6 +1,6 @@
 # Development Plan Status
 
-**Last Updated**: 2026-04-19 (Fix: extended-hours price in live trading)
+**Last Updated**: 2026-05-08 (Fix: analytics DISTINCT ON query)
 
 > Iteration details are summarized in [`unified_development_plan.md`](unified_development_plan.md).
 > This file tracks per-commit specifics for reference.
@@ -48,4 +48,5 @@
 | 30 | Password Reset + Email Notifications | — | `POST /v1/auth/forgot-password` + `POST /v1/auth/reset-password` (time-limited token, 1h TTL); `NotificationService` (SMTP stdlib); `PasswordResetService`; `GET|PUT /v1/settings/notifications`; ForgotPasswordPage + ResetPasswordPage; Settings Notifications card; email alerts wired into trading worker; CI test fix for async simulation endpoint |
 | — | Bug Fixes (Iteration 29) | `e215e81` | Blank onboarding page (removed useTenantPortfolio dep); Orders 404 (route prefix → `/v1/`); onboarding field names + error array display; admin impersonation escape hatch; simulation end_date capped at now; daily data fetch retries (3x); TopBar user menu with logout |
 | 31 | Events Tab: Anchor + Guardrail Columns | `46bf9df` | Add Anchor price column (table + timeline); change Guardrail to ##/## format; Strategy config disconnect fix (di.py reads portfolio_config_repo first); curl_cffi added to requirements; user_repo.clear() in container.reset() |
-| — | Fix: Extended-hours price for live trading | pending | `yfinance_adapter.py`: use `postMarketPrice`/`preMarketPrice` from fast_info/info when outside regular session; all 3 price-fetch paths fixed; simulation after-hours gap added to backlog |
+| — | Fix: Extended-hours price for live trading | `c44ea58` | `yfinance_adapter.py`: use `postMarketPrice`/`preMarketPrice` from fast_info/info when outside regular session; all 3 price-fetch paths fixed; simulation after-hours gap added to backlog |
+| — | Fix: Analytics chart flat for 30d | `925b5de` | `list_snapshots_by_resolution()` with PostgreSQL DISTINCT ON; returns at most (N_days × N_positions) rows vs 5000 raw rows; 30-day chart now shows full history |
