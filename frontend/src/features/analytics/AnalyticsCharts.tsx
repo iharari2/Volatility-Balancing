@@ -171,19 +171,21 @@ export default function AnalyticsCharts({
         i: number,
       ) => {
         const currentPoint = timeSeries[i];
-        if (!currentPoint) return { date: point.date, portfolioReturn: 0, stockReturn: 0 };
+        if (!currentPoint) return { date: point.date, portfolioReturn: 0, stockReturn: null };
 
         const portfolioReturn = ((point.value - initialValue) / initialValue) * 100;
 
-        // Buy & Hold: prefer yfinance series (value is normalised to 100 at start)
-        let stockReturn: number;
+        // Buy & Hold: only use the yfinance price series — it is the only reliable source.
+        // The snapshot fallback (stock value change) is wrong for a rebalancing strategy
+        // because the strategy buys/sells shares, changing qty independently of price.
+        // Return null for dates not in the yfinance series (weekends, holidays) so the
+        // chart line connects over gaps rather than snapping to baseline.
+        let stockReturn: number | null;
         if (useYfinanceBuyHold) {
           const bhValue = buyHoldByDate.get(point.date);
-          stockReturn = bhValue !== undefined ? bhValue - 100 : 0;
+          stockReturn = bhValue !== undefined ? bhValue - 100 : null;
         } else {
-          stockReturn = initialStockValue > 0
-            ? ((currentPoint.stock - initialStockValue) / initialStockValue) * 100
-            : 0;
+          stockReturn = null; // No reliable Buy & Hold without yfinance price series
         }
 
         // Custom benchmark – normalised to 100 at start, converted to % change
@@ -198,7 +200,7 @@ export default function AnalyticsCharts({
         return {
           date: point.date,
           portfolioReturn: Math.round(portfolioReturn * 100) / 100,
-          stockReturn: Math.round(stockReturn * 100) / 100,
+          stockReturn: stockReturn !== null ? Math.round(stockReturn * 100) / 100 : null,
           customReturn: customReturn !== null ? Math.round(customReturn * 100) / 100 : null,
           spyReturn: spyReturn !== null ? Math.round(spyReturn * 100) / 100 : null,
           buyMarker:
@@ -556,7 +558,7 @@ export default function AnalyticsCharts({
                 Portfolio: {performance.portfolio_return_pct >= 0 ? '+' : ''}
                 {performance.portfolio_return_pct.toFixed(1)}%
               </span>
-              {showBuyHold && (
+              {showBuyHold && buyHoldByDate.size > 0 && (
                 <span className="text-gray-500">
                   Buy&Hold: {performance.benchmark_return_pct >= 0 ? '+' : ''}
                   {performance.benchmark_return_pct.toFixed(1)}%
@@ -643,8 +645,8 @@ export default function AnalyticsCharts({
               dot={false}
               name={isSinglePosition ? 'Managed Strategy' : 'Portfolio'}
             />
-            {/* Buy & Hold line */}
-            {showBuyHold && (
+            {/* Buy & Hold line — only rendered when yfinance price series is available */}
+            {showBuyHold && buyHoldByDate.size > 0 && (
               <Line
                 type="monotone"
                 dataKey="stockReturn"
@@ -653,6 +655,7 @@ export default function AnalyticsCharts({
                 strokeDasharray="5 5"
                 dot={false}
                 name="Buy & Hold"
+                connectNulls
               />
             )}
             {/* Custom ticker time-series line */}

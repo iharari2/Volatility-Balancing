@@ -1077,15 +1077,12 @@ class PortfolioService:
                 portfolio_return = ((last_value - first_value) / first_value) * 100
                 performance["portfolio_return_pct"] = round(portfolio_return, 2)
 
-            # Benchmark return (stock-only / buy-hold)
-            # This represents what would have happened if we held stock without rebalancing
-            first_stock = first_point.get("stock", 0)
-            last_stock = last_point.get("stock", 0)
-            if first_stock > 0:
-                benchmark_return = ((last_stock - first_stock) / first_stock) * 100
-                performance["benchmark_return_pct"] = round(benchmark_return, 2)
+            # Benchmark return: leave as 0.0 — will be overridden by the yfinance
+            # fetch below. Do NOT use stock-value change as a fallback: for a
+            # rebalancing strategy that buys/sells shares, stock value changes
+            # due to trades as well as price moves, making the "benchmark" misleading.
 
-            # Alpha = portfolio return - benchmark return
+            # Alpha = portfolio return - benchmark return (updated again after yfinance fetch)
             performance["alpha"] = round(
                 performance["portfolio_return_pct"] - performance["benchmark_return_pct"], 2
             )
