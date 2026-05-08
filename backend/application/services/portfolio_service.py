@@ -674,6 +674,7 @@ class PortfolioService:
                     start_date=effective_start,
                     end_date=effective_end,
                     position_id=position_id or None,
+                    mode="LIVE",
                 )
 
                 date_range_desc = (
