@@ -85,3 +85,30 @@ class EvaluationTimelineRepo(ABC):
     ) -> List[Dict[str, Any]]:
         """List evaluation records for a simulation run."""
         ...
+
+    def list_snapshots_by_resolution(
+        self,
+        tenant_id: str,
+        portfolio_id: str,
+        resolution: str,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        position_id: Optional[str] = None,
+        mode: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Return the latest evaluation per (time-bucket, position) pair.
+
+        Default implementation falls back to list_by_portfolio with a high limit.
+        Subclasses should override with an efficient DB-level aggregation.
+        """
+        rows = self.list_by_portfolio(
+            tenant_id=tenant_id,
+            portfolio_id=portfolio_id,
+            mode=mode,
+            start_date=start_date,
+            end_date=end_date,
+            limit=None,
+        )
+        if position_id:
+            rows = [r for r in rows if r.get("position_id") == position_id]
+        return rows

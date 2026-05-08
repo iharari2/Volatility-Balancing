@@ -617,6 +617,67 @@ class EvaluationTimelineRepoSQL(EvaluationTimelineRepo):
             records = session.execute(query).scalars().all()
             return [self._model_to_dict(r) for r in records]
 
+    def list_snapshots_by_resolution(
+        self,
+        tenant_id: str,
+        portfolio_id: str,
+        resolution: str,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        position_id: Optional[str] = None,
+        mode: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Return the latest evaluation per (time-bucket, position) pair.
+
+        Uses PostgreSQL DISTINCT ON to return at most (buckets × positions) rows
+        instead of fetching all raw rows and aggregating in Python.
+        """
+        if resolution == "weekly":
+            trunc_expr = "DATE_TRUNC('week', timestamp)"
+        elif resolution == "hourly":
+            trunc_expr = "DATE_TRUNC('hour', timestamp)"
+        else:
+            trunc_expr = "DATE_TRUNC('day', timestamp)"
+
+        conditions = ["tenant_id = :tenant_id", "portfolio_id = :portfolio_id"]
+        params: Dict[str, Any] = {"tenant_id": tenant_id, "portfolio_id": portfolio_id}
+
+        if mode:
+            conditions.append("mode = :mode")
+            params["mode"] = mode
+        if start_date:
+            conditions.append("timestamp >= :start_date")
+            params["start_date"] = start_date
+        if end_date:
+            conditions.append("timestamp <= :end_date")
+            params["end_date"] = end_date
+        if position_id:
+            conditions.append("position_id = :position_id")
+            params["position_id"] = position_id
+
+        where_clause = " AND ".join(conditions)
+        sql_text = (
+            f"SELECT DISTINCT ON ({trunc_expr}, position_id) * "
+            f"FROM position_evaluation_timeline "
+            f"WHERE {where_clause} "
+            f"ORDER BY {trunc_expr}, position_id, timestamp DESC"
+        )
+
+        with self.session_factory() as session:
+            result = session.execute(text(sql_text), params)
+            columns = list(result.keys())
+            rows: List[Dict[str, Any]] = []
+            for raw_row in result.fetchall():
+                d: Dict[str, Any] = dict(zip(columns, raw_row))
+                for k, v in d.items():
+                    if isinstance(v, str) and v and v[:1] in ("{", "["):
+                        try:
+                            d[k] = json.loads(v)
+                        except Exception:
+                            pass
+                rows.append(d)
+            return rows
+
     def list_by_trace_id(self, trace_id: str) -> List[Dict[str, Any]]:
         """List all evaluation records for a trace_id."""
         with self.session_factory() as session:

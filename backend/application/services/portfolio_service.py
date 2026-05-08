@@ -667,20 +667,14 @@ class PortfolioService:
             from collections import defaultdict
 
             if hasattr(container, "evaluation_timeline"):
-                # Larger limit when fetching full history; daily limit is fine for small ranges
-                row_limit = 50000 if effective_start is None else 5000
-
-                rows = container.evaluation_timeline.list_by_portfolio(
+                rows = container.evaluation_timeline.list_snapshots_by_resolution(
                     tenant_id=tenant_id,
                     portfolio_id=portfolio_id,
+                    resolution=resolution,
                     start_date=effective_start,
                     end_date=effective_end,
-                    limit=row_limit,
+                    position_id=position_id or None,
                 )
-
-                # Filter rows by position_id if specified
-                if position_id:
-                    rows = [r for r in rows if r.get("position_id") == position_id]
 
                 date_range_desc = (
                     "all time" if effective_start is None
