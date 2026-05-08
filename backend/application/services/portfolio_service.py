@@ -811,13 +811,17 @@ class PortfolioService:
                     total_return = (values[-1] - values[0]) / values[0] if values[0] > 0 else 0.0
                     n = len(daily_returns)
                     # Geometric (compound) annualization: (1+R)^(252/n) - 1
-                    annualized_return = (
-                        (1 + total_return) ** (252 / n) - 1 if n > 0 and total_return > -1 else 0.0
-                    )
+                    # Require at least 20 intervals: below that the exponent (252/n) is too large
+                    # and a single daily move extrapolates to nonsensical yearly rates.
+                    if n >= 20 and total_return > -1:
+                        annualized_return = (1 + total_return) ** (252 / n) - 1
+                        kpis["annualized_return_pct"] = round(annualized_return * 100, 2)
+                    else:
+                        annualized_return = 0.0
+                        kpis["annualized_return_pct"] = None  # Not enough data
                     kpis["sharpe_like"] = (
                         annualized_return / (std_dev * (252**0.5)) if std_dev > 0 else 0.0
                     )
-                    kpis["annualized_return_pct"] = round(annualized_return * 100, 2)
 
                 # Max Drawdown
                 peak = values[0]
@@ -847,7 +851,7 @@ class PortfolioService:
         kpis.setdefault("max_drawdown", 0.0)
         kpis.setdefault("sharpe_like", 0.0)
         kpis["pnl_pct"] = pnl_pct
-        kpis.setdefault("annualized_return_pct", 0.0)
+        kpis.setdefault("annualized_return_pct", None)  # None = not enough data to annualize
         # commission_total and dividend_total are set after event collection below
 
         # 6. Fetch events (trades and dividends) for the period
@@ -1128,25 +1132,44 @@ class PortfolioService:
         benchmarks_result: Dict[str, Any] = {}
         active_benchmarks = benchmarks or ["buy_hold", "spy"]  # defaults for backward compat
 
-        def _fetch_ticker_series(ticker_sym: str, first_date_str: str, last_date_str: str) -> Optional[Dict[str, Any]]:
-            """Fetch historical price series for a ticker and compute scalar return."""
+        def _fetch_ticker_series(
+            ticker_sym: str,
+            fetch_start_str: str,
+            fetch_end_str: str,
+            normalize_from_str: str,
+        ) -> Optional[Dict[str, Any]]:
+            """Fetch historical price series for a ticker and compute scalar return.
+
+            fetch_start_str / fetch_end_str – full date window to request from yfinance
+              (should equal the user-requested analytics range so raw_series covers the
+              whole period the user is looking at).
+            normalize_from_str – date used to anchor the normalised benchmark series to
+              100; should be the first date in the evaluation timeline so the % comparison
+              chart stays aligned with the portfolio chart.
+            """
             try:
                 from app.di import container as _ct
-                ts_start = datetime.strptime(first_date_str[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
-                ts_end = datetime.strptime(last_date_str[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
+                ts_start = datetime.strptime(fetch_start_str[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                ts_end = datetime.strptime(fetch_end_str[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
                 hist = _ct.market_data.fetch_historical_data(ticker_sym, ts_start, ts_end, intraday_interval_minutes=1440)
                 if not hist or len(hist) < 2:
                     return None
                 by_date: Dict[str, float] = {p.timestamp.strftime("%Y-%m-%d"): (p.close or p.price) for p in hist}
-                first_price = by_date.get(first_date_str) or (hist[0].close or hist[0].price)
-                last_price = by_date.get(last_date_str) or (hist[-1].close or hist[-1].price)
+                # Normalise from the evaluation-timeline start; fall back to earliest fetched price
+                first_price = by_date.get(normalize_from_str) or (hist[0].close or hist[0].price)
+                last_price = by_date.get(fetch_end_str) or (hist[-1].close or hist[-1].price)
                 if not first_price or first_price == 0:
                     return None
                 ret = ((last_price - first_price) / first_price) * 100
                 sorted_dates = sorted(by_date.keys())
-                # Normalised series (100-based) for benchmark % comparison
-                series = [{"date": d, "value": (by_date[d] / first_price) * 100} for d in sorted_dates]
-                # Raw price series for the stock price chart (Yahoo Finance style)
+                # Normalised series: only dates at or after normalize_from_str so it
+                # aligns with the portfolio time-series on the comparison chart
+                series = [
+                    {"date": d, "value": (by_date[d] / first_price) * 100}
+                    for d in sorted_dates
+                    if d >= normalize_from_str
+                ]
+                # Raw price series: full fetched range for the stock price chart
                 raw_series = [{"date": d, "price": round(by_date[d], 4)} for d in sorted_dates]
                 return {
                     "return_pct": round(ret, 2),
@@ -1175,14 +1198,27 @@ class PortfolioService:
                             if p.asset_symbol and p.asset_symbol != "CASH"
                         })
 
-                    # Build task map: key → (ticker, label)
+                    # Fetch date range: use the full user-requested window so raw_series
+                    # covers the entire period visible on the analytics page.
+                    # effective_start may be None for "all history" — fall back to timeline start.
+                    fetch_start_str = (
+                        effective_start.strftime("%Y-%m-%d")
+                        if effective_start is not None
+                        else first_date_str[:10]
+                    )
+                    fetch_end_str = effective_end.strftime("%Y-%m-%d")
+                    # Normalise the benchmark % comparison from the evaluation timeline start
+                    # so both series share the same x-axis anchor on the comparison chart.
+                    normalize_from_str = first_date_str[:10]
+
+                    # Build task map: key → (fetch_start, fetch_end, normalize_from)
                     task_defs: Dict[str, tuple] = {}
                     if "buy_hold" in active_benchmarks and len(position_tickers) == 1:
-                        task_defs["buy_hold"] = (position_tickers[0], first_date_str[:10], last_date_str[:10])
+                        task_defs["buy_hold"] = (position_tickers[0], fetch_start_str, fetch_end_str, normalize_from_str)
                     if "spy" in active_benchmarks:
-                        task_defs["spy"] = ("SPY", first_date_str[:10], last_date_str[:10])
+                        task_defs["spy"] = ("SPY", fetch_start_str, fetch_end_str, normalize_from_str)
                     if "custom" in active_benchmarks and custom_ticker:
-                        task_defs["custom"] = (custom_ticker.upper(), first_date_str[:10], last_date_str[:10])
+                        task_defs["custom"] = (custom_ticker.upper(), fetch_start_str, fetch_end_str, normalize_from_str)
 
                     if task_defs:
                         with ThreadPoolExecutor(max_workers=len(task_defs)) as pool:
