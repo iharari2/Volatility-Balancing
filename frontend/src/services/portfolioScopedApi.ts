@@ -266,28 +266,6 @@ class PortfolioScopedApi {
   }
 
   /**
-   * Get per-position config (falls back to portfolio config when no override set)
-   */
-  async getPositionConfig(tenantId: string, portfolioId: string, positionId: string): Promise<PositionConfig> {
-    return request<PositionConfig>(`/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/config`);
-  }
-
-  /**
-   * Save per-position config (independent of other positions)
-   */
-  async updatePositionConfig(
-    tenantId: string,
-    portfolioId: string,
-    positionId: string,
-    config: Omit<PositionConfig, 'is_position_specific'>,
-  ): Promise<ApiResponse<void>> {
-    return request<ApiResponse<void>>(
-      `/tenants/${tenantId}/portfolios/${portfolioId}/positions/${positionId}/config`,
-      { method: 'PUT', body: JSON.stringify(config) },
-    );
-  }
-
-  /**
    * Add a position to portfolio
    */
   async addPosition(
@@ -421,6 +399,7 @@ class PortfolioScopedApi {
       max_stock_pct?: number;
       max_trade_pct_of_position?: number;
       commission_rate?: number;
+      allow_after_hours?: boolean;
     },
   ): Promise<ApiResponse<void>> {
     return request(
