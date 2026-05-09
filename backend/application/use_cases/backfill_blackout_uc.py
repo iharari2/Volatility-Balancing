@@ -362,7 +362,7 @@ class BackfillBlackoutUC:
             action = "HOLD"
             guardrail_note = ""
             if trigger_dec.fired and guardrail_cfg:
-                pos_state = PositionState(qty=qty, cash=cash, dividend_receivable=Decimal("0"))
+                pos_state = PositionState(ticker=ticker, qty=qty, cash=cash, dividend_receivable=Decimal("0"))
                 gd = GuardrailEvaluator.evaluate(
                     position_state=pos_state,
                     trigger_decision=trigger_dec,
@@ -392,6 +392,15 @@ class BackfillBlackoutUC:
             elif trigger_dec.fired:
                 action = "WOULD_BUY" if trigger_dec.direction == "buy" else "WOULD_SELL"
 
+            # Map trigger direction to DB enum values (UP/DOWN/NONE)
+            trigger_dir_db = None
+            if trigger_dec.direction == "buy":
+                trigger_dir_db = "DOWN"
+            elif trigger_dec.direction == "sell":
+                trigger_dir_db = "UP"
+            else:
+                trigger_dir_db = "NONE"
+
             # Write timeline entry
             entry: Dict[str, Any] = {
                 "id": f"bfill_{uuid4().hex[:12]}",
@@ -400,8 +409,8 @@ class BackfillBlackoutUC:
                 "position_id": pid,
                 "symbol": ticker,
                 "timestamp": ts.isoformat(),
-                "mode": "BACKFILL",
-                "evaluation_type": "BACKFILL",
+                "mode": "LIVE",           # must match ck_eval_timeline_mode
+                "evaluation_type": "DAILY_CHECK",  # must match ck_eval_timeline_evaluation_type
                 "close_price": float(price),
                 "open_price": bar["open"],
                 "high_price": bar["high"],
@@ -411,13 +420,26 @@ class BackfillBlackoutUC:
                 "pct_change_from_anchor": float(
                     (price - anchor) / anchor * 100
                 ) if anchor else None,
+                "is_market_hours": True,
+                "allow_after_hours": True,
+                "is_fresh": True,
+                "is_inline": True,
+                "position_qty_before": float(qty),
+                "position_cash_before": float(cash),
+                "position_stock_value_before": float(qty * price),
+                "position_total_value_before": float(qty * price + cash),
+                "position_dividend_receivable_before": 0.0,
                 "trigger_fired": trigger_dec.fired,
-                "trigger_direction": trigger_dec.direction,
+                "trigger_direction": trigger_dir_db,
                 "trigger_reason": trigger_dec.reason,
                 "guardrail_notes": guardrail_note,
-                "action": action,
+                "action": "HOLD",         # always HOLD — we do not execute during backfill
+                "action_taken": "NO_ACTION",
                 "action_reason": "backfill_replay",
-                "evaluation_notes": f"Backfilled for blackout {period.start.date()} – {period.end.date()}",
+                "dividend_declared": False,
+                "dividend_applied": False,
+                "anchor_updated": False,
+                "evaluation_notes": f"Backfilled for blackout {period.start.date()} to {period.end.date()}",
                 "source": "backfill",
             }
             try:
@@ -499,9 +521,22 @@ class BackfillBlackoutUC:
                 "position_id": pid,
                 "symbol": ticker,
                 "timestamp": ts.isoformat(),
-                "mode": "BACKFILL",
-                "evaluation_type": "BACKFILL_DIVIDEND",
-                "action": "DIVIDEND",
+                "mode": "LIVE",
+                "evaluation_type": "DIVIDEND",
+                "is_market_hours": True,
+                "allow_after_hours": True,
+                "is_fresh": True,
+                "is_inline": True,
+                "position_qty_before": float(qty),
+                "position_cash_before": float(cash),
+                "position_stock_value_before": 0.0,
+                "position_total_value_before": float(cash),
+                "position_dividend_receivable_before": 0.0,
+                "trigger_fired": False,
+                "trigger_direction": "NONE",
+                "anchor_updated": False,
+                "action": "HOLD",
+                "action_taken": "NO_ACTION",
                 "action_reason": "backfill_dividend",
                 "dividend_declared": True,
                 "dividend_ex_date": div.ex_date.isoformat(),
@@ -510,7 +545,7 @@ class BackfillBlackoutUC:
                 "dividend_gross_value": float(gross),
                 "dividend_net_value": float(net),
                 "dividend_applied": missed.applied,
-                "evaluation_notes": f"Backfilled dividend — missed during blackout {period.start.date()} – {period.end.date()}",
+                "evaluation_notes": f"Backfilled dividend - missed during blackout {period.start.date()} to {period.end.date()}",
                 "source": "backfill",
             }
             try:
