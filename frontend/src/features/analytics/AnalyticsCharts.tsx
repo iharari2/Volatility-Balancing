@@ -284,58 +284,41 @@ export default function AnalyticsCharts({
     return result;
   }, [analyticsData]);
 
-  // P&L attribution walk chart — all bars are P&L deltas on the same scale.
-  // Start/End absolute values are shown as header text, not as bars, so the
-  // delta bars (Trading, Dividends, Fees) remain readable and additive.
+  // P&L attribution — each component as a signed value so bars render correctly.
+  // Positive bars go above zero, negative (Fees) go below. All on the same scale
+  // and additive: Trading P&L + Dividends − Fees = Net Return.
   const waterfallData = useMemo(() => {
     const attr = analyticsData?.pnl_attribution;
     if (!attr || !attr.start_value) return [];
     const { start_value, trading_pnl, dividend_income, commission_cost, end_value } = attr;
     const fmtAbs = (v: number) =>
       `$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-
-    // Each bar: base = invisible offset (cumulative P&L before this step),
-    // amount = visible bar height. For negative steps the base is the lower
-    // endpoint so the bar still renders upward but is coloured red.
-    let running = 0;
-
-    const tradingBase = trading_pnl >= 0 ? running : running + trading_pnl;
-    running += trading_pnl;
-
-    const divBase = running;
-    running += dividend_income;
-
-    const feeBase = running - commission_cost;
-    running -= commission_cost;
-
     const net = end_value - start_value;
-
     return [
       {
         name: 'Trading P&L',
-        base: tradingBase,
-        amount: Math.abs(trading_pnl),
+        value: trading_pnl,
         fill: trading_pnl >= 0 ? '#10b981' : '#ef4444',
         label: `${trading_pnl >= 0 ? '+' : '−'}${fmtAbs(trading_pnl)}`,
+        isTotal: false,
       },
       {
         name: 'Dividends',
-        base: divBase,
-        amount: dividend_income,
+        value: dividend_income,
         fill: '#10b981',
         label: `+${fmtAbs(dividend_income)}`,
+        isTotal: false,
       },
       {
         name: 'Fees',
-        base: feeBase,
-        amount: commission_cost,
+        value: -commission_cost,
         fill: '#ef4444',
         label: `−${fmtAbs(commission_cost)}`,
+        isTotal: false,
       },
       {
         name: 'Net Return',
-        base: net >= 0 ? 0 : net,
-        amount: Math.abs(net),
+        value: net,
         fill: net >= 0 ? '#2563eb' : '#dc2626',
         label: `${net >= 0 ? '+' : '−'}${fmtAbs(net)}`,
         isTotal: true,
@@ -882,16 +865,15 @@ export default function AnalyticsCharts({
         </ResponsiveContainer>
       </div>
 
-      {/* ANA-5: 30-Day Rolling Volatility */}
-      <div className="card lg:col-span-2">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center">
-            20-Day Rolling Volatility
-            <MetricTooltip text="Annualized standard deviation of daily returns over a trailing 20-trading-day window. Measures how much the portfolio value fluctuates. Higher = larger swings. Annualized using √252 (trading days per year)." />
-          </h3>
-          <span className="text-xs text-gray-500">Annualized</span>
-        </div>
-        {rollingVolatilityData.length > 0 ? (
+      {rollingVolatilityData.length > 0 && (
+        <div className="card lg:col-span-2">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center">
+              20-Day Rolling Volatility
+              <MetricTooltip text="Annualized standard deviation of daily returns over a trailing 20-trading-day window. Measures how much the portfolio value fluctuates. Higher = larger swings. Annualized using √252 (trading days per year)." />
+            </h3>
+            <span className="text-xs text-gray-500">Annualized</span>
+          </div>
           <ResponsiveContainer width="100%" height={250}>
             <LineChart data={rollingVolatilityData} syncId="analytics">
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
@@ -926,12 +908,8 @@ export default function AnalyticsCharts({
               />
             </LineChart>
           </ResponsiveContainer>
-        ) : (
-          <div className="h-[250px] flex items-center justify-center text-gray-400 text-sm">
-            Need at least 21 trading days of data
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
 
       {/* ── Drawdown Curve + Rolling Sharpe ── */}
@@ -1137,10 +1115,7 @@ export default function AnalyticsCharts({
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                     formatter={(_: number, __: string, props: any) => [props.payload.label, props.payload.name]}
                   />
-                  {/* Invisible base lifts the bar to the correct cumulative position */}
-                  <Bar dataKey="base" stackId="wf" fill="transparent" legendType="none" />
-                  {/* Visible delta bar */}
-                  <Bar dataKey="amount" stackId="wf" radius={[3, 3, 0, 0]} legendType="none">
+                  <Bar dataKey="value" radius={[3, 3, 0, 0]} legendType="none" maxBarSize={80}>
                     {waterfallData.map((entry, index) => (
                       <Cell key={index} fill={entry.fill} opacity={entry.isTotal ? 0.85 : 1} />
                     ))}
