@@ -1043,8 +1043,8 @@ class PortfolioService:
         try:
             from app.di import container
 
-            if position_id and len(positions) == 1:
-                guardrail_config = container.config.get_guardrail_config(position_id)
+            if len(positions) == 1:
+                guardrail_config = container.config.get_guardrail_config(position_id or positions[0].id)
                 guardrails = {
                     "min_stock_pct": float(guardrail_config.min_stock_pct) * 100 if guardrail_config else 25.0,
                     "max_stock_pct": float(guardrail_config.max_stock_pct) * 100 if guardrail_config else 75.0,
