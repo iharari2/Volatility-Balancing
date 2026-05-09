@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -113,3 +114,76 @@ def update_user(
         is_active=updated.is_active,
         created_at=updated.created_at.isoformat() if updated.created_at else "",
     )
+
+
+# ── Blackout detection & backfill ────────────────────────────────────────────
+
+@router.get("/blackouts/report")
+def blackout_report(
+    current_user: CurrentUser = Depends(_require_owner),
+) -> List[Dict[str, Any]]:
+    """Return blackout periods found across all live positions (read-only, no backfill)."""
+    from app.di import container
+
+    results = []
+    try:
+        positions = container.positions.list_all()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not list positions: {exc}")
+
+    uc = container.backfill_blackout_uc
+    for position in positions:
+        if getattr(position, "asset_symbol", None) in (None, "CASH"):
+            continue
+        try:
+            blackouts = uc._find_blackouts(position.id, position.asset_symbol)
+            results.append(
+                {
+                    "position_id": position.id,
+                    "ticker": position.asset_symbol,
+                    "blackouts": [
+                        {
+                            "start": b.start.isoformat(),
+                            "end": b.end.isoformat(),
+                            "calendar_days": b.calendar_days,
+                            "duration_hours": round(b.duration_hours, 1),
+                        }
+                        for b in blackouts
+                    ],
+                }
+            )
+        except Exception as exc:
+            results.append(
+                {"position_id": position.id, "ticker": position.asset_symbol, "error": str(exc)}
+            )
+    return results
+
+
+@router.post("/blackouts/backfill")
+def trigger_backfill(
+    position_id: str | None = None,
+    current_user: CurrentUser = Depends(_require_owner),
+) -> List[Dict[str, Any]]:
+    """
+    Trigger blackout backfill immediately.
+
+    Pass ?position_id=<id> to backfill a single position, or omit to backfill all.
+    Applies missed dividends to position cash and replays evaluations in the timeline.
+    """
+    from app.di import container
+
+    uc = container.backfill_blackout_uc
+    try:
+        if position_id:
+            position = container.positions.get(position_id)
+            if not position:
+                raise HTTPException(status_code=404, detail="Position not found")
+            results = [uc.backfill_position(position)]
+        else:
+            results = uc.backfill_all_positions()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Backfill failed: {exc}")
+
+    return [r.to_dict() for r in results]

@@ -13,7 +13,7 @@ Core principle: Trading must run even if no user is logged in and the GUI is dow
 from __future__ import annotations
 import time
 import threading
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional, Dict, Any
 import logging
 import json
@@ -53,6 +53,7 @@ class TradingWorker:
         self._stop_event = threading.Event()
         self._lock = threading.Lock()
         self.last_cycle_time: Optional[datetime] = None
+        self._last_backfill_date: Optional[date] = None
 
     def start(self) -> None:
         """Start the trading worker in a background thread."""
@@ -134,6 +135,7 @@ class TradingWorker:
             try:
                 if self.enabled:
                     self._run_cycle()
+                    self._maybe_run_backfill()
 
                 # Wait for next interval (or until stop event)
                 self._stop_event.wait(self.interval_seconds)
@@ -144,6 +146,27 @@ class TradingWorker:
                 time.sleep(min(5, self.interval_seconds))  # Brief pause before retry
 
         logger.info("🛑 Trading worker loop stopped")
+
+    def _maybe_run_backfill(self) -> None:
+        """Run blackout backfill once per calendar day."""
+        today = datetime.now(timezone.utc).date()
+        if self._last_backfill_date == today:
+            return
+        self._last_backfill_date = today
+        logger.info("🔍 BackfillBlackout: starting daily blackout check")
+        try:
+            results = container.backfill_blackout_uc.backfill_all_positions()
+            total_divs = sum(len(r.dividends_applied) for r in results)
+            total_ticks = sum(r.ticks_replayed for r in results)
+            total_trades = sum(len(r.trades_noted) for r in results)
+            total_blackouts = sum(len(r.blackouts) for r in results)
+            logger.info(
+                "✅ BackfillBlackout complete: %d blackout(s), %d div(s) applied, "
+                "%d tick(s) replayed, %d trade(s) noted",
+                total_blackouts, total_divs, total_ticks, total_trades,
+            )
+        except Exception as exc:
+            logger.error("BackfillBlackout: daily check failed: %s", exc, exc_info=True)
 
     def _run_cycle(self) -> None:
         """

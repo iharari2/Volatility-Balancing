@@ -77,6 +77,7 @@ from infrastructure.persistence.memory.user_repo_mem import InMemoryUserRepo
 from application.use_cases.parameter_optimization_uc import ParameterOptimizationUC
 from application.use_cases.submit_order_uc import SubmitOrderUC
 from application.use_cases.evaluate_position_uc import EvaluatePositionUC
+from application.use_cases.backfill_blackout_uc import BackfillBlackoutUC
 
 # New clean architecture: Adapters
 from infrastructure.adapters.position_repo_adapter import PositionRepoAdapter
@@ -580,6 +581,15 @@ class _Container:
             order_policy_config_provider=self.order_policy_config_provider,
             config_repo=self.config,
             orders_repo=self.orders,
+        )
+
+    @property
+    def backfill_blackout_uc(self) -> BackfillBlackoutUC:
+        return BackfillBlackoutUC(
+            positions_repo=self.positions,
+            evaluation_timeline_repo=self.evaluation_timeline_repo,
+            dividend_market_data=self.dividend_market_data,
+            config_repo=self.config,
         )
 
     def reset(self) -> None:
