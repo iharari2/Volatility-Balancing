@@ -182,8 +182,7 @@ export default function PositionCockpitPage() {
     };
 
     loadMarketData();
-    // Poll market data every 5 seconds for real-time updates
-    const interval = setInterval(loadMarketData, 5000);
+    const interval = setInterval(loadMarketData, 30000);
     return () => clearInterval(interval);
   }, [tenantId, portfolioId, positionId]);
 
