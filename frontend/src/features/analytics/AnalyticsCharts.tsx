@@ -648,6 +648,25 @@ export default function AnalyticsCharts({
               fillOpacity={0.6}
               name="Stock %"
             />
+            {/* Guardrail boundary lines rendered after the area so they always show on top */}
+            {guardrails && (
+              <ReferenceLine
+                y={guardrails.min_stock_pct}
+                stroke="#ef4444"
+                strokeDasharray="4 3"
+                strokeWidth={1.5}
+                label={{ value: `Min ${guardrails.min_stock_pct.toFixed(0)}%`, position: 'insideTopRight', fill: '#ef4444', fontSize: 9 }}
+              />
+            )}
+            {guardrails && (
+              <ReferenceLine
+                y={guardrails.max_stock_pct}
+                stroke="#f59e0b"
+                strokeDasharray="4 3"
+                strokeWidth={1.5}
+                label={{ value: `Max ${guardrails.max_stock_pct.toFixed(0)}%`, position: 'insideBottomRight', fill: '#f59e0b', fontSize: 9 }}
+              />
+            )}
           </AreaChart>
         </ResponsiveContainer>
       </div>
