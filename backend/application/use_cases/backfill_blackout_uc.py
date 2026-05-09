@@ -193,10 +193,7 @@ class BackfillBlackoutUC:
         gaps: List[BlackoutPeriod] = []
 
         try:
-            from infrastructure.persistence.sql.models import (
-                PositionEvaluationTimelineModel,
-                get_engine,
-            )
+            from infrastructure.persistence.sql.models import get_engine
             from sqlalchemy import text
             import os
 
@@ -478,6 +475,7 @@ class BackfillBlackoutUC:
             return
 
         qty = Decimal(str(position.qty or 0))
+        cash = Decimal(str(position.cash or 0))
         withholding = Decimal(str(getattr(position, "withholding_tax_rate", 0.25) or 0.25))
 
         for div in dividends:
@@ -571,7 +569,6 @@ class BackfillBlackoutUC:
         """Fetch all positions across all tenants/portfolios via raw SQL fallback."""
         import os
         from infrastructure.persistence.sql.models import get_engine
-        from infrastructure.persistence.sql.positions_repo_sql import SQLPositionsRepo
         from sqlalchemy import text
 
         sql_url = os.getenv("SQL_URL", "sqlite:///./vb.sqlite")
