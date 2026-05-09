@@ -213,9 +213,13 @@ export default function AnalyticsCharts({
     );
   }, [portfolioValueData, analyticsData, buyHoldByDate, customBenchmarkByDate, spyBenchmarkByDate]);
 
-  // ANA-5: 30-day rolling volatility (annualized)
+  // Rolling volatility (annualized). Window = 20 trading days (one trading month).
+  // 30 calendar days ≈ 22 trading days after weekend filtering, so a 30-day window
+  // would require ~43 calendar days of data before showing anything. 20 is the
+  // standard "monthly" window in practice and needs only 21 trading-day points.
+  const ROLLING_WINDOW = 20;
   const rollingVolatilityData = useMemo(() => {
-    if (!analyticsData?.time_series?.length || analyticsData.time_series.length < 31) {
+    if (!analyticsData?.time_series?.length || analyticsData.time_series.length <= ROLLING_WINDOW) {
       return [];
     }
 
@@ -226,29 +230,19 @@ export default function AnalyticsCharts({
     for (let i = 1; i < timeSeries.length; i++) {
       const prevValue = timeSeries[i - 1].value;
       const currValue = timeSeries[i].value;
-      if (prevValue > 0) {
-        dailyReturns.push((currValue - prevValue) / prevValue);
-      } else {
-        dailyReturns.push(0);
-      }
+      dailyReturns.push(prevValue > 0 ? (currValue - prevValue) / prevValue : 0);
     }
 
-    const WINDOW = 30;
-    for (let i = WINDOW; i < timeSeries.length; i++) {
-      const windowReturns = dailyReturns.slice(i - WINDOW, i);
-
-      if (windowReturns.length === WINDOW) {
-        const mean = windowReturns.reduce((a, b) => a + b, 0) / WINDOW;
-        const variance =
-          windowReturns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / (WINDOW - 1);
-        const stdDev = Math.sqrt(variance);
-        const annualizedVol = stdDev * Math.sqrt(252) * 100;
-
-        result.push({
-          date: timeSeries[i].date,
-          volatility: Math.round(annualizedVol * 100) / 100,
-        });
-      }
+    for (let i = ROLLING_WINDOW; i < timeSeries.length; i++) {
+      const windowReturns = dailyReturns.slice(i - ROLLING_WINDOW, i);
+      const mean = windowReturns.reduce((a, b) => a + b, 0) / ROLLING_WINDOW;
+      const variance =
+        windowReturns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / (ROLLING_WINDOW - 1);
+      const annualizedVol = Math.sqrt(variance) * Math.sqrt(252) * 100;
+      result.push({
+        date: timeSeries[i].date,
+        volatility: Math.round(annualizedVol * 100) / 100,
+      });
     }
 
     return result;
@@ -266,11 +260,10 @@ export default function AnalyticsCharts({
     });
   }, [analyticsData]);
 
-  // 30-day rolling Sharpe
+  // Rolling Sharpe — same 20-day window as rolling volatility
   const rollingSharpData = useMemo(() => {
-    if (!analyticsData?.time_series?.length || analyticsData.time_series.length < 31) return [];
+    if (!analyticsData?.time_series?.length || analyticsData.time_series.length <= ROLLING_WINDOW) return [];
     const ts = analyticsData.time_series;
-    const WINDOW = 30;
     const dailyReturns: number[] = [];
     for (let i = 1; i < ts.length; i++) {
       const prev = ts[i - 1].value;
@@ -278,10 +271,10 @@ export default function AnalyticsCharts({
       dailyReturns.push(prev > 0 ? (curr - prev) / prev : 0);
     }
     const result: Array<{ date: string; sharpe: number }> = [];
-    for (let i = WINDOW; i < ts.length; i++) {
-      const window = dailyReturns.slice(i - WINDOW, i);
-      const mean = window.reduce((a, b) => a + b, 0) / WINDOW;
-      const variance = window.reduce((s, r) => s + (r - mean) ** 2, 0) / (WINDOW - 1);
+    for (let i = ROLLING_WINDOW; i < ts.length; i++) {
+      const w = dailyReturns.slice(i - ROLLING_WINDOW, i);
+      const mean = w.reduce((a, b) => a + b, 0) / ROLLING_WINDOW;
+      const variance = w.reduce((s, r) => s + (r - mean) ** 2, 0) / (ROLLING_WINDOW - 1);
       const std = Math.sqrt(variance);
       const annReturn = mean * 252;
       const annVol = std * Math.sqrt(252);
@@ -832,7 +825,7 @@ export default function AnalyticsCharts({
       <div className="card lg:col-span-2">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
-            30-Day Rolling Volatility
+            20-Day Rolling Volatility
           </h3>
           <span className="text-xs text-gray-500">Annualized</span>
         </div>
@@ -867,13 +860,13 @@ export default function AnalyticsCharts({
                 stroke="#8b5cf6"
                 strokeWidth={3}
                 dot={false}
-                name="30-Day Rolling Volatility"
+                name="20-Day Rolling Volatility"
               />
             </LineChart>
           </ResponsiveContainer>
         ) : (
           <div className="h-[250px] flex items-center justify-center text-gray-400 text-sm">
-            Need at least 31 days of data to calculate rolling volatility
+            Need at least 21 trading days of data
           </div>
         )}
       </div>
@@ -928,7 +921,7 @@ export default function AnalyticsCharts({
         {/* Rolling Sharpe */}
         <div className="card">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">30-Day Rolling Sharpe</h3>
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">20-Day Rolling Sharpe</h3>
             {rollingSharpData.length > 0 && (
               <span className="text-xs font-semibold text-gray-900">
                 Current: {rollingSharpData[rollingSharpData.length - 1]?.sharpe.toFixed(2)}
@@ -952,10 +945,10 @@ export default function AnalyticsCharts({
             </ResponsiveContainer>
           ) : (
             <div className="h-[240px] flex items-center justify-center text-gray-400 text-sm">
-              Need at least 31 days of data
+              Need at least 21 trading days of data
             </div>
           )}
-          <p className="text-[10px] text-gray-400 mt-2">Annualized return ÷ annualized volatility over trailing 30 days. Green dashed = Sharpe 1.0 target.</p>
+          <p className="text-[10px] text-gray-400 mt-2">Annualized return ÷ annualized volatility over trailing 20 trading days. Green dashed = Sharpe 1.0 target.</p>
         </div>
       </div>
 
