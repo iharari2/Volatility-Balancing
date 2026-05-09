@@ -24,6 +24,7 @@ import {
 import { BarChart3 } from 'lucide-react';
 import { Position } from '../../contexts/PortfolioContext';
 import type { AnalyticsData, AnalyticsEvent } from '../../services/portfolioScopedApi';
+import MetricTooltip from '../../components/MetricTooltip';
 
 interface AnalyticsChartsProps {
   positions: Position[];
@@ -370,8 +371,9 @@ export default function AnalyticsCharts({
       {stockPriceData.length > 0 && (
         <div className="card lg:col-span-2">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center">
               {positions[0].ticker} Stock Price
+              <MetricTooltip text="Raw market price from Yahoo Finance. Green dots mark BUY executions; red dots mark SELL executions. The dashed amber line shows the current anchor price used by the guardrail logic." />
             </h3>
             <div className="flex items-center gap-3 text-xs text-gray-500">
               <span className="flex items-center gap-1">
@@ -471,8 +473,9 @@ export default function AnalyticsCharts({
 
       {/* ANA-2: Portfolio Value Over Time - Stacked Areas + Event Markers + Brush */}
       <div className="card lg:col-span-2">
-        <h3 className="text-sm font-bold text-gray-900 mb-6 uppercase tracking-wider">
+        <h3 className="text-sm font-bold text-gray-900 mb-6 uppercase tracking-wider flex items-center">
           {mainLabel} Over Time
+          <MetricTooltip text="Total portfolio value over time, split into stock holdings (green) and cash (blue). Event markers show guardrail trades (green = BUY, red = SELL) and dividends (purple diamonds)." />
         </h3>
         <ResponsiveContainer width="100%" height={320}>
           <ComposedChart data={portfolioValueData} syncId="analytics">
@@ -573,8 +576,9 @@ export default function AnalyticsCharts({
       {/* ANA-3: Stock Allocation Over Time with Guardrail Bands */}
       <div className="card">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center">
             {isSinglePosition ? 'Asset Allocation' : 'Portfolio Allocation'} Trend
+            <MetricTooltip text="Percentage of total portfolio value held in the stock position over time. The green band is the guardrail target range; red zones above and below indicate over- or under-exposure." />
           </h3>
           {guardrails && (
             <div className="text-xs text-gray-500">
@@ -651,8 +655,9 @@ export default function AnalyticsCharts({
       {/* ANA-4: Benchmark Comparison with Alpha Metrics and Event Markers */}
       <div className="card">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center">
             {isSinglePosition ? 'Stock' : 'Benchmark'} Comparison
+            <MetricTooltip text="Cumulative return since period start, normalized so all series begin at 0%. Compares the managed strategy against buy-and-hold and market index benchmarks. Alpha = strategy return minus buy-and-hold return over the same period." />
           </h3>
           {performance && (
             <div className="flex items-center gap-3 text-xs flex-wrap">
@@ -824,8 +829,9 @@ export default function AnalyticsCharts({
       {/* ANA-5: 30-Day Rolling Volatility */}
       <div className="card lg:col-span-2">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center">
             20-Day Rolling Volatility
+            <MetricTooltip text="Annualized standard deviation of daily returns over a trailing 20-trading-day window. Measures how much the portfolio value fluctuates. Higher = larger swings. Annualized using √252 (trading days per year)." />
           </h3>
           <span className="text-xs text-gray-500">Annualized</span>
         </div>
@@ -878,7 +884,10 @@ export default function AnalyticsCharts({
         {/* Drawdown Curve */}
         <div className="card">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Drawdown Curve</h3>
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center">
+              Drawdown Curve
+              <MetricTooltip text="Percentage decline from the portfolio's most recent peak at each point in time. A value of −10% means the portfolio is 10% below its all-time high for the period. Returns to 0% when a new peak is reached." />
+            </h3>
             {drawdownData.length > 0 && (
               <div className="flex gap-3 text-xs">
                 <span className="text-red-600 font-semibold">
@@ -921,7 +930,10 @@ export default function AnalyticsCharts({
         {/* Rolling Sharpe */}
         <div className="card">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">20-Day Rolling Sharpe</h3>
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center">
+              20-Day Rolling Sharpe
+              <MetricTooltip text="Risk-adjusted return: annualized return divided by annualized volatility, over a trailing 20-trading-day window. Values above 1.0 (green dashed line) indicate strong risk-adjusted performance. Negative = losing period." />
+            </h3>
             {rollingSharpData.length > 0 && (
               <span className="text-xs font-semibold text-gray-900">
                 Current: {rollingSharpData[rollingSharpData.length - 1]?.sharpe.toFixed(2)}
@@ -961,7 +973,10 @@ export default function AnalyticsCharts({
           const hasZone = !!zoneTime && analyticsData?.time_series?.length > 0;
           return (
             <div className="card">
-              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">Guardrail Zone Analysis</h3>
+              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4 flex items-center">
+                Guardrail Zone Analysis
+                <MetricTooltip text="How many trading days the stock allocation spent inside the target band, over-exposed (above max %), or under-exposed (below min %). The dot grid below shows the daily zone for each period." />
+              </h3>
               {hasZone ? (
                 <>
                   <div className="flex items-center gap-6 mb-5">
@@ -1027,7 +1042,10 @@ export default function AnalyticsCharts({
         {/* P&L Attribution Waterfall */}
         <div className="card">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">P&L Attribution</h3>
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center">
+              P&L Attribution
+              <MetricTooltip text="Waterfall breakdown of total return: starting value, then gains from price appreciation (Trading P&L), dividends received, commissions paid, and final portfolio value. Shows exactly where gains and losses originated." />
+            </h3>
             <span className="text-xs text-gray-400">Where did the return come from?</span>
           </div>
           {waterfallData.length > 0 ? (
@@ -1073,7 +1091,10 @@ export default function AnalyticsCharts({
       {tradeEfficiencyRows.length > 0 && (
         <div className="card">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Trade Efficiency vs Anchor</h3>
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center">
+              Trade Efficiency vs Anchor
+              <MetricTooltip text="For each guardrail trade, compares the execution price to the anchor price at the time. On target = BUY below anchor (stock discounted) or SELL above anchor (stock at premium). Spread = (trade price − anchor) ÷ anchor." />
+            </h3>
             <span className="text-xs text-gray-400">Did guardrails fire at the right moments?</span>
           </div>
           <div className="overflow-x-auto">
