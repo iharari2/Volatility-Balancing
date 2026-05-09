@@ -284,26 +284,63 @@ export default function AnalyticsCharts({
     return result;
   }, [analyticsData]);
 
-  // P&L attribution waterfall (invisible base + colored delta stacked bars)
+  // P&L attribution walk chart — all bars are P&L deltas on the same scale.
+  // Start/End absolute values are shown as header text, not as bars, so the
+  // delta bars (Trading, Dividends, Fees) remain readable and additive.
   const waterfallData = useMemo(() => {
     const attr = analyticsData?.pnl_attribution;
     if (!attr || !attr.start_value) return [];
     const { start_value, trading_pnl, dividend_income, commission_cost, end_value } = attr;
+    const fmtAbs = (v: number) =>
+      `$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+
+    // Each bar: base = invisible offset (cumulative P&L before this step),
+    // amount = visible bar height. For negative steps the base is the lower
+    // endpoint so the bar still renders upward but is coloured red.
     let running = 0;
-    const fmt = (v: number) => `$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-    const points = [
-      { name: 'Start', base: 0, amount: start_value, fill: '#3b82f6', label: fmt(start_value) },
-    ];
-    running = start_value;
+
     const tradingBase = trading_pnl >= 0 ? running : running + trading_pnl;
-    points.push({ name: 'Trading P&L', base: tradingBase, amount: Math.abs(trading_pnl), fill: trading_pnl >= 0 ? '#10b981' : '#ef4444', label: `${trading_pnl >= 0 ? '+' : '-'}${fmt(trading_pnl)}` });
     running += trading_pnl;
-    points.push({ name: 'Dividends', base: running, amount: dividend_income, fill: '#10b981', label: `+${fmt(dividend_income)}` });
+
+    const divBase = running;
     running += dividend_income;
-    points.push({ name: 'Fees', base: running - commission_cost, amount: commission_cost, fill: '#ef4444', label: `-${fmt(commission_cost)}` });
+
+    const feeBase = running - commission_cost;
     running -= commission_cost;
-    points.push({ name: 'End', base: 0, amount: end_value, fill: '#1f2937', label: fmt(end_value) });
-    return points;
+
+    const net = end_value - start_value;
+
+    return [
+      {
+        name: 'Trading P&L',
+        base: tradingBase,
+        amount: Math.abs(trading_pnl),
+        fill: trading_pnl >= 0 ? '#10b981' : '#ef4444',
+        label: `${trading_pnl >= 0 ? '+' : '−'}${fmtAbs(trading_pnl)}`,
+      },
+      {
+        name: 'Dividends',
+        base: divBase,
+        amount: dividend_income,
+        fill: '#10b981',
+        label: `+${fmtAbs(dividend_income)}`,
+      },
+      {
+        name: 'Fees',
+        base: feeBase,
+        amount: commission_cost,
+        fill: '#ef4444',
+        label: `−${fmtAbs(commission_cost)}`,
+      },
+      {
+        name: 'Net Return',
+        base: net >= 0 ? 0 : net,
+        amount: Math.abs(net),
+        fill: net >= 0 ? '#2563eb' : '#dc2626',
+        label: `${net >= 0 ? '+' : '−'}${fmtAbs(net)}`,
+        isTotal: true,
+      },
+    ];
   }, [analyticsData]);
 
   // Trade efficiency data (trades with anchor price)
@@ -1067,23 +1104,45 @@ export default function AnalyticsCharts({
             </h3>
             <span className="text-xs text-gray-400">Where did the return come from?</span>
           </div>
-          {waterfallData.length > 0 ? (
+          {waterfallData.length > 0 && analyticsData?.pnl_attribution ? (
             <>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={waterfallData} barCategoryGap="20%">
+              {/* Start → End header */}
+              <div className="flex items-center gap-2 mb-4 text-xs">
+                <span className="text-gray-500">Start:</span>
+                <span className="font-semibold text-gray-700">
+                  ${analyticsData.pnl_attribution.start_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </span>
+                <span className="text-gray-300 mx-1">→</span>
+                <span className="text-gray-500">End:</span>
+                <span className={`font-semibold ${analyticsData.pnl_attribution.end_value >= analyticsData.pnl_attribution.start_value ? 'text-green-600' : 'text-red-600'}`}>
+                  ${analyticsData.pnl_attribution.end_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </span>
+              </div>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={waterfallData} barCategoryGap="30%">
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                   <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                  <YAxis
+                    tick={{ fontSize: 10, fill: '#9ca3af' }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => {
+                      const abs = Math.abs(v);
+                      if (abs >= 1000) return `${v < 0 ? '−' : ''}$${(abs / 1000).toFixed(1)}k`;
+                      return `${v < 0 ? '−' : ''}$${abs.toFixed(0)}`;
+                    }}
+                  />
+                  <ReferenceLine y={0} stroke="#d1d5db" strokeWidth={1} />
                   <Tooltip
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                     formatter={(_: number, __: string, props: any) => [props.payload.label, props.payload.name]}
                   />
-                  {/* Invisible base to position bar at correct height */}
-                  <Bar dataKey="base" stackId="wf" fill="transparent" />
-                  {/* Colored delta bar */}
-                  <Bar dataKey="amount" stackId="wf" radius={[3, 3, 0, 0]}>
+                  {/* Invisible base lifts the bar to the correct cumulative position */}
+                  <Bar dataKey="base" stackId="wf" fill="transparent" legendType="none" />
+                  {/* Visible delta bar */}
+                  <Bar dataKey="amount" stackId="wf" radius={[3, 3, 0, 0]} legendType="none">
                     {waterfallData.map((entry, index) => (
-                      <Cell key={index} fill={entry.fill} />
+                      <Cell key={index} fill={entry.fill} opacity={entry.isTotal ? 0.85 : 1} />
                     ))}
                   </Bar>
                 </BarChart>
