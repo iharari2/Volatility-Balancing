@@ -174,6 +174,9 @@ class ContinuousTradingService:
             events=container.events,
             market_data=container.market_data,
             clock=container.clock,
+            trigger_config_provider=container.trigger_config_provider,
+            guardrail_config_provider=container.guardrail_config_provider,
+            order_policy_config_provider=container.order_policy_config_provider,
             config_repo=container.config,
             portfolio_repo=container.portfolio_repo,
             evaluation_timeline_repo=container.evaluation_timeline,
@@ -239,37 +242,23 @@ class ContinuousTradingService:
                     print(f"⚠️  Position {position_id} not found, stopping monitoring")
                     break
 
-                # Fetch current market price
+                # Evaluate position (fetches market data + writes timeline row)
                 try:
-                    price_data = container.market_data.get_price(
-                        position.asset_symbol,
-                        force_refresh=True,  # Use asset_symbol instead of ticker
+                    evaluation = eval_uc.evaluate_with_market_data(
+                        tenant_id, portfolio_id, position_id, source="live/continuous"
                     )
-                    if not price_data or not price_data.price:
+
+                    current_price = evaluation.get("current_price")
+                    if current_price is None:
                         print(
                             f"⚠️  Could not fetch price for {position.asset_symbol}, skipping check"
-                        )  # Use asset_symbol
+                        )
                         status.total_errors += 1
                         status.last_error = "Market data unavailable"
                         time.sleep(interval_seconds)
                         continue
 
-                    current_price = price_data.price
-
-                except Exception as e:
-                    print(f"⚠️  Error fetching market data: {e}")
-                    status.total_errors += 1
-                    status.last_error = str(e)
-                    time.sleep(interval_seconds)
-                    continue
-
-                # Evaluate position for triggers
-                try:
                     print(f"🔍 Evaluating position {position_id} at price ${current_price:.2f}")
-
-                    evaluation = eval_uc.evaluate(
-                        tenant_id, portfolio_id, position_id, current_price
-                    )
 
                     trigger_detected = evaluation.get("trigger_detected", False)
                     order_proposal = evaluation.get("order_proposal")
