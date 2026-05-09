@@ -174,7 +174,10 @@ class ContinuousTradingService:
             events=container.events,
             market_data=container.market_data,
             clock=container.clock,
+            config_repo=container.config,
             portfolio_repo=container.portfolio_repo,
+            evaluation_timeline_repo=container.evaluation_timeline,
+            orders_repo=container.orders,
         )
 
         submit_uc = SubmitOrderUC(

@@ -633,14 +633,13 @@ class PortfolioService:
         for position in positions:
             asset_symbol = position.asset_symbol
             price = position.anchor_price or position.avg_cost
-            position_value = (
-                position.get_total_value(price) if price else position.get_total_value()
-            )
+            # Stock-only value (cash is already in the CASH bucket above)
+            stock_value = position.qty * price if price else 0.0
 
             if asset_symbol not in allocation:
                 allocation[asset_symbol] = {"value": 0.0, "percentage": 0.0}
 
-            allocation[asset_symbol]["value"] += position_value
+            allocation[asset_symbol]["value"] += stock_value
             if total_value > 0:
                 allocation[asset_symbol]["percentage"] = (
                     allocation[asset_symbol]["value"] / total_value
@@ -893,7 +892,7 @@ class PortfolioService:
                             "commission": trade.commission,
                             "position_id": pos.id,
                             "asset_symbol": pos.asset_symbol,
-                            "anchor_price": getattr(pos, "anchor_price", None),
+                            "anchor_price": getattr(trade, "anchor_price_before", None) or getattr(pos, "anchor_price", None),
                         })
 
             # Also fetch BUY/SELL actions from evaluation_timeline to catch trades not yet in trades table

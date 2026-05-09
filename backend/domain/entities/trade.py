@@ -18,9 +18,8 @@ class Trade:
     qty: float
     price: float
     commission: float
-    commission_rate_effective: Optional[float] = (
-        None  # Actual rate applied by broker (may differ from order snapshot)
-    )
+    commission_rate_effective: Optional[float] = None
+    anchor_price_before: Optional[float] = None  # Anchor at the moment the trade was evaluated
     status: str = "executed"  # executed, partially_executed, cancelled, expired
     executed_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 

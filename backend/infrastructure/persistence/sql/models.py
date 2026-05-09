@@ -141,9 +141,8 @@ class TradeModel(Base):
     qty: Mapped[float] = mapped_column(Float, nullable=False)
     price: Mapped[float] = mapped_column(Float, nullable=False)
     commission: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    commission_rate_effective: Mapped[float | None] = mapped_column(
-        Float, nullable=True
-    )  # Actual rate applied
+    commission_rate_effective: Mapped[float | None] = mapped_column(Float, nullable=True)
+    anchor_price_before: Mapped[float | None] = mapped_column(Float, nullable=True)
     status: Mapped[str] = mapped_column(String, nullable=False, default="executed")
     executed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
@@ -649,6 +648,8 @@ def _migrate_add_missing_columns(engine: Engine) -> None:
          "ALTER TABLE optimization_configs ADD COLUMN intraday_interval_minutes INTEGER NOT NULL DEFAULT 30"),
         ("optimization_configs", "include_after_hours",
          "ALTER TABLE optimization_configs ADD COLUMN include_after_hours BOOLEAN NOT NULL DEFAULT 0"),
+        ("trades", "anchor_price_before",
+         "ALTER TABLE trades ADD COLUMN anchor_price_before FLOAT"),
     ]
     for table, column, ddl in migrations:
         if table not in inspector.get_table_names():

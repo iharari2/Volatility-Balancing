@@ -232,6 +232,9 @@ class ExecuteOrderUC:
         # Update commission aggregate (per spec)
         pos.total_commission_paid += commission
 
+        # Capture anchor before updating it
+        old_anchor = pos.anchor_price
+
         # Create and persist trade record
         from domain.entities.trade import Trade
 
@@ -241,11 +244,12 @@ class ExecuteOrderUC:
             portfolio_id=order.portfolio_id,
             order_id=order.id,
             position_id=order.position_id,
-            side=order.side,  # OrderSide is a Literal type, so we can use the string directly
+            side=order.side,
             qty=q_req,
             price=request.price,
             commission=commission,
             commission_rate_effective=commission_rate_effective,
+            anchor_price_before=float(old_anchor) if old_anchor is not None else None,
             status="executed",
             executed_at=now,
         )
@@ -267,8 +271,7 @@ class ExecuteOrderUC:
             else 0
         )
 
-        # Update anchor price BEFORE saving position (so it gets persisted)
-        old_anchor = pos.anchor_price
+        # Update anchor price and save position
         pos.set_anchor_price(request.price)
 
         # Save position with updated anchor price

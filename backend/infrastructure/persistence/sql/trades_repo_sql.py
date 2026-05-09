@@ -27,6 +27,7 @@ def _to_entity(row: TradeModel) -> Trade:
         price=row.price,
         commission=row.commission,
         commission_rate_effective=getattr(row, "commission_rate_effective", None),
+        anchor_price_before=getattr(row, "anchor_price_before", None),
         status=getattr(row, "status", "executed"),
         executed_at=row.executed_at,
     )
@@ -45,6 +46,7 @@ def _new_row_from_entity(trade: Trade) -> TradeModel:
         price=trade.price,
         commission=trade.commission,
         commission_rate_effective=trade.commission_rate_effective,
+        anchor_price_before=trade.anchor_price_before,
         status=trade.status,
         executed_at=trade.executed_at,
     )
@@ -71,6 +73,7 @@ class SQLTradesRepo(TradesRepo):
                 row.price = trade.price
                 row.commission = trade.commission
                 row.commission_rate_effective = trade.commission_rate_effective
+                row.anchor_price_before = trade.anchor_price_before
                 row.status = trade.status
                 row.executed_at = trade.executed_at
             s.commit()
