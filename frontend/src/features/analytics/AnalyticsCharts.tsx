@@ -1103,9 +1103,35 @@ export default function AnalyticsCharts({
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                     formatter={(_: number, __: string, props: any) => [props.payload.label, props.payload.name]}
                   />
-                  <Bar dataKey="value" radius={[3, 3, 0, 0]} legendType="none" maxBarSize={80}>
+                  <Bar
+                    dataKey="value"
+                    legendType="none"
+                    maxBarSize={80}
+                    shape={(props: any) => {
+                      const { x, y, width, height, fill, value } = props;
+                      if (!value) return <g />;
+                      const MIN_H = 5;
+                      const absH = Math.abs(height ?? 0);
+                      const h = Math.max(absH, MIN_H);
+                      // Positive bars grow up (anchor bottom at zero), negative grow down
+                      const yAdj = (value ?? 0) > 0 ? (y ?? 0) + absH - h : (y ?? 0);
+                      const isTotal = waterfallData.find((d) => d.value === value)?.isTotal;
+                      return (
+                        <rect
+                          x={(x ?? 0) + 1}
+                          y={yAdj}
+                          width={Math.max((width ?? 0) - 2, 4)}
+                          height={h}
+                          fill={fill}
+                          opacity={isTotal ? 0.85 : 1}
+                          rx={2}
+                          ry={2}
+                        />
+                      );
+                    }}
+                  >
                     {waterfallData.map((entry, index) => (
-                      <Cell key={index} fill={entry.fill} opacity={entry.isTotal ? 0.85 : 1} />
+                      <Cell key={index} fill={entry.fill} />
                     ))}
                   </Bar>
                 </BarChart>
