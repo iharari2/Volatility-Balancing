@@ -23,7 +23,7 @@ import {
 } from 'recharts';
 import { BarChart3 } from 'lucide-react';
 import { Position } from '../../contexts/PortfolioContext';
-import type { AnalyticsData, AnalyticsEvent } from '../../services/portfolioScopedApi';
+import type { AnalyticsData, AnalyticsEvent, AnchorHistory } from '../../services/portfolioScopedApi';
 import MetricTooltip from '../../components/MetricTooltip';
 
 interface AnalyticsChartsProps {
@@ -31,6 +31,7 @@ interface AnalyticsChartsProps {
   analyticsData?: AnalyticsData;
   activeBenchmarks?: string[];
   customTicker?: string;
+  anchorHistory?: AnchorHistory | null;
 }
 
 export default function AnalyticsCharts({
@@ -38,6 +39,7 @@ export default function AnalyticsCharts({
   analyticsData,
   activeBenchmarks = ['buy_hold', 'spy'],
   customTicker,
+  anchorHistory,
 }: AnalyticsChartsProps) {
   const isSinglePosition = positions.length === 1;
   const mainLabel = isSinglePosition
@@ -338,7 +340,7 @@ export default function AnalyticsCharts({
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [events]);
 
-  // Stock price chart: raw yfinance prices with BUY/SELL trade markers at execution prices
+  // Stock price chart: raw yfinance prices with BUY/SELL trade markers and anchor step line
   const stockPriceData = useMemo(() => {
     const rawSeries = analyticsData?.benchmarks?.buy_hold?.raw_series;
     if (!rawSeries?.length || !isSinglePosition) return [];
@@ -348,13 +350,29 @@ export default function AnalyticsCharts({
       if (e.side === 'BUY' && e.price) buyPriceByDate.set(e.date, e.price);
       else if (e.side === 'SELL' && e.price) sellPriceByDate.set(e.date, e.price);
     });
-    return rawSeries.map((p: { date: string; price: number }) => ({
-      date: p.date,
-      price: p.price,
-      buyMarker: buyPriceByDate.get(p.date) ?? null,
-      sellMarker: sellPriceByDate.get(p.date) ?? null,
-    }));
-  }, [analyticsData, events, isSinglePosition]);
+    // Build sorted anchor change-points for step-function interpolation
+    const anchorChanges = anchorHistory?.changes
+      ?.map((c) => ({ date: c.timestamp.slice(0, 10), anchor: c.anchor_price }))
+      .sort((a, b) => a.date.localeCompare(b.date)) ?? [];
+    const initialAnchor = anchorHistory?.initial_anchor ?? null;
+    return rawSeries.map((p: { date: string; price: number }) => {
+      let anchor: number | null = null;
+      if (initialAnchor !== null) {
+        anchor = initialAnchor;
+        for (const change of anchorChanges) {
+          if (change.date <= p.date) anchor = change.anchor;
+          else break;
+        }
+      }
+      return {
+        date: p.date,
+        price: p.price,
+        buyMarker: buyPriceByDate.get(p.date) ?? null,
+        sellMarker: sellPriceByDate.get(p.date) ?? null,
+        anchor,
+      };
+    });
+  }, [analyticsData, events, isSinglePosition, anchorHistory]);
 
   const hasData = portfolioValueData.length > 0;
 
@@ -393,7 +411,7 @@ export default function AnalyticsCharts({
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center">
               {positions[0].ticker} Stock Price
-              <MetricTooltip text="Raw market price from Yahoo Finance. Green dots mark BUY executions; red dots mark SELL executions. The dashed amber line shows the current anchor price used by the guardrail logic." />
+              <MetricTooltip text="Raw market price from Yahoo Finance. Green dots mark BUY executions; red dots mark SELL executions. The dashed amber line shows the historical anchor price used by the guardrail logic." />
             </h3>
             <div className="flex items-center gap-3 text-xs text-gray-500">
               <span className="flex items-center gap-1">
@@ -403,6 +421,10 @@ export default function AnalyticsCharts({
               <span className="flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
                 SELL
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-5 border-t-2 border-dashed border-amber-400" />
+                Anchor
               </span>
             </div>
           </div>
@@ -431,11 +453,23 @@ export default function AnalyticsCharts({
                 formatter={(value: number, name: string) => {
                   if (name === 'buyMarker') return [`$${value.toFixed(2)}`, 'BUY'];
                   if (name === 'sellMarker') return [`$${value.toFixed(2)}`, 'SELL'];
+                  if (name === 'Anchor') return [`$${value.toFixed(2)}`, 'Anchor'];
                   return [`$${value.toFixed(2)}`, 'Price'];
                 }}
               />
-              {/* Anchor price reference line */}
-              {positions[0]?.anchorPrice > 0 && (
+              {/* Anchor price: historical step line when data is available, else static reference */}
+              {anchorHistory ? (
+                <Line
+                  type="stepAfter"
+                  dataKey="anchor"
+                  stroke="#f59e0b"
+                  strokeDasharray="4 3"
+                  strokeWidth={1.5}
+                  dot={false}
+                  name="Anchor"
+                  connectNulls
+                />
+              ) : positions[0]?.anchorPrice > 0 ? (
                 <ReferenceLine
                   y={positions[0].anchorPrice}
                   stroke="#f59e0b"
@@ -448,7 +482,7 @@ export default function AnalyticsCharts({
                     fontSize: 9,
                   }}
                 />
-              )}
+              ) : null}
               {/* Price line */}
               <Line
                 type="monotone"

@@ -46,6 +46,7 @@ export default function AnalyticsPage() {
   const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const [anchorHistory, setAnchorHistory] = useState<any>(null);
 
   // ── derived dates ────────────────────────────────────────────────────────────
 
@@ -119,6 +120,20 @@ export default function AnalyticsPage() {
     };
     fetch();
   }, [selectedTenantId, selectedPortfolioId, selectedPositionId, effectiveStartDate, effectiveEndDate, effectiveResolution, benchmarks, customTicker]);
+
+  useEffect(() => {
+    if (selectedPositionId === 'all') { setAnchorHistory(null); return; }
+    const fetch = async () => {
+      try {
+        const { portfolioScopedApi } = await import('../../services/portfolioScopedApi');
+        const data = await portfolioScopedApi.getAnchorHistory(selectedPositionId);
+        setAnchorHistory(data);
+      } catch {
+        setAnchorHistory(null);
+      }
+    };
+    fetch();
+  }, [selectedPositionId]);
 
   const filteredPositions = useMemo(
     () => selectedPositionId === 'all' ? positions : positions.filter((p) => p.id === selectedPositionId),
@@ -293,6 +308,7 @@ export default function AnalyticsPage() {
               analyticsData={analyticsData}
               activeBenchmarks={benchmarks}
               customTicker={customTicker}
+              anchorHistory={anchorHistory}
             />
             <AnalyticsEventTables events={analyticsData?.events || []} />
           </>

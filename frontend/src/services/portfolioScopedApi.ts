@@ -41,6 +41,19 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   return response.json();
 }
 
+export interface AnchorHistoryChange {
+  timestamp: string;
+  anchor_price: number;
+  side: string;
+}
+
+export interface AnchorHistory {
+  position_id: string;
+  current_anchor: number | null;
+  initial_anchor: number | null;
+  changes: AnchorHistoryChange[];
+}
+
 export interface PortfolioPosition {
   id: string;
   ticker?: string; // Legacy field name
@@ -458,6 +471,10 @@ class PortfolioScopedApi {
     if (endDate) params.set('end_date', endDate);
     if (resolution) params.set('resolution', resolution);
     return `/api/v1/excel/analytics/export?${params.toString()}`;
+  }
+
+  async getAnchorHistory(positionId: string): Promise<AnchorHistory> {
+    return request<AnchorHistory>(`/positions/${positionId}/anchor-history`);
   }
 
   /**
