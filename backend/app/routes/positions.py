@@ -1253,3 +1253,48 @@ def update_position_config(
         ),
     )
     return {"message": "Config saved"}
+
+
+@router.get("/positions/{position_id}/anchor-history")
+def get_position_anchor_history(
+    position_id: str,
+    user: CurrentUser = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Return the anchor price change history as a step-function trail for charting."""
+    position, _tenant_id, _portfolio_id = _find_position_legacy(position_id)
+    if position is None:
+        raise HTTPException(status_code=404, detail="Position not found")
+
+    trades = sorted(
+        container.trades.list_for_position(position_id, limit=10000),
+        key=lambda t: t.executed_at,
+    )
+
+    # Build change-points: each trade that has anchor_price_before resets the anchor
+    # to its fill price.  Reconstruct the step function from oldest to newest.
+    changes = []
+    for trade in trades:
+        if trade.anchor_price_before is not None:
+            changes.append({
+                "timestamp": trade.executed_at.isoformat(),
+                "anchor_price": trade.price,
+                "side": str(trade.side.value if hasattr(trade.side, "value") else trade.side),
+            })
+
+    # Derive the initial anchor from the first trade's anchor_price_before
+    initial_anchor = None
+    if trades:
+        first_with_anchor = next((t for t in trades if t.anchor_price_before is not None), None)
+        if first_with_anchor:
+            initial_anchor = first_with_anchor.anchor_price_before
+
+    # Fall back to current anchor when no trades exist or all pre-P1 trades lack the field
+    if initial_anchor is None:
+        initial_anchor = float(position.anchor_price) if position.anchor_price else None
+
+    return {
+        "position_id": position_id,
+        "current_anchor": float(position.anchor_price) if position.anchor_price else None,
+        "initial_anchor": initial_anchor,
+        "changes": changes,
+    }

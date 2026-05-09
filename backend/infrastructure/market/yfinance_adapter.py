@@ -52,7 +52,11 @@ class YFinanceAdapter(MarketDataRepo):
             url = f"https://{host}/v8/finance/chart/{ticker}"
             params = {"interval": "1d", "range": "5d", "includePrePost": "false"}
             try:
-                resp = __import__('requests').get(url, params=params, timeout=10)
+                try:
+                    from curl_cffi import requests as _cffi_req
+                    resp = _cffi_req.get(url, params=params, timeout=10, impersonate="chrome110")
+                except Exception:
+                    resp = __import__('requests').get(url, params=params, timeout=10)
                 resp.raise_for_status()
                 data = resp.json()
                 result = data.get("chart", {}).get("result")
