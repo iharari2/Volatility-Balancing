@@ -913,90 +913,78 @@ export default function AnalyticsCharts({
     </div>
 
       {/* ── Drawdown Curve + Rolling Sharpe ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {(drawdownData.length > 0 || rollingSharpData.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-        {/* Drawdown Curve */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center">
-              Drawdown Curve
-              <MetricTooltip text="Percentage decline from the portfolio's most recent peak at each point in time. A value of −10% means the portfolio is 10% below its all-time high for the period. Returns to 0% when a new peak is reached." />
-            </h3>
-            {drawdownData.length > 0 && (
-              <div className="flex gap-3 text-xs">
-                <span className="text-red-600 font-semibold">
-                  Max: {Math.min(...drawdownData.map((d) => d.drawdown)).toFixed(1)}%
-                </span>
-                <span className="text-gray-400">
-                  {drawdownData.filter((d) => d.drawdown < -1).length}d underwater
+          {drawdownData.length > 0 && (
+            <div className="card">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center">
+                  Drawdown Curve
+                  <MetricTooltip text="Percentage decline from the portfolio's most recent peak at each point in time. A value of −10% means the portfolio is 10% below its all-time high for the period. Returns to 0% when a new peak is reached." />
+                </h3>
+                <div className="flex gap-3 text-xs">
+                  <span className="text-red-600 font-semibold">
+                    Max: {Math.min(...drawdownData.map((d) => d.drawdown)).toFixed(1)}%
+                  </span>
+                  <span className="text-gray-400">
+                    {drawdownData.filter((d) => d.drawdown < -1).length}d underwater
+                  </span>
+                </div>
+              </div>
+              <ResponsiveContainer width="100%" height={240}>
+                <AreaChart data={drawdownData} syncId="analytics">
+                  <defs>
+                    <linearGradient id="ddGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
+                  <ReferenceLine y={0} stroke="#e5e7eb" strokeWidth={1} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    formatter={(v: number) => [`${v.toFixed(2)}%`, 'Drawdown']}
+                  />
+                  <Area type="monotone" dataKey="drawdown" stroke="#ef4444" strokeWidth={2} fill="url(#ddGrad)" name="Drawdown" />
+                </AreaChart>
+              </ResponsiveContainer>
+              <p className="text-[10px] text-gray-400 mt-2">How far below its peak the portfolio sat at each point in time.</p>
+            </div>
+          )}
+
+          {rollingSharpData.length > 0 && (
+            <div className="card">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center">
+                  20-Day Rolling Sharpe
+                  <MetricTooltip text="Risk-adjusted return: annualized return divided by annualized volatility, over a trailing 20-trading-day window. Values above 1.0 (green dashed line) indicate strong risk-adjusted performance. Negative = losing period." />
+                </h3>
+                <span className="text-xs font-semibold text-gray-900">
+                  Current: {rollingSharpData[rollingSharpData.length - 1]?.sharpe.toFixed(2)}
                 </span>
               </div>
-            )}
-          </div>
-          {drawdownData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={240}>
-              <AreaChart data={drawdownData} syncId="analytics">
-                <defs>
-                  <linearGradient id="ddGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
-                <ReferenceLine y={0} stroke="#e5e7eb" strokeWidth={1} />
-                <Tooltip
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  formatter={(v: number) => [`${v.toFixed(2)}%`, 'Drawdown']}
-                />
-                <Area type="monotone" dataKey="drawdown" stroke="#ef4444" strokeWidth={2} fill="url(#ddGrad)" name="Drawdown" />
-              </AreaChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[240px] flex items-center justify-center text-gray-400 text-sm">
-              Need at least 2 data points
+              <ResponsiveContainer width="100%" height={240}>
+                <ComposedChart data={rollingSharpData} syncId="analytics">
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                  <ReferenceLine y={0} stroke="#e5e7eb" strokeWidth={1} />
+                  <ReferenceLine y={1} stroke="#10b981" strokeDasharray="4 3" strokeWidth={1} label={{ value: 'Sharpe 1.0', position: 'right', fill: '#10b981', fontSize: 9 }} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    formatter={(v: number) => [v.toFixed(2), 'Rolling Sharpe']}
+                  />
+                  <Line type="monotone" dataKey="sharpe" stroke="#f59e0b" strokeWidth={2.5} dot={false} name="Rolling Sharpe" />
+                </ComposedChart>
+              </ResponsiveContainer>
+              <p className="text-[10px] text-gray-400 mt-2">Annualized return ÷ annualized volatility over trailing 20 trading days. Green dashed = Sharpe 1.0 target.</p>
             </div>
           )}
-          <p className="text-[10px] text-gray-400 mt-2">How far below its peak the portfolio sat at each point in time.</p>
         </div>
-
-        {/* Rolling Sharpe */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center">
-              20-Day Rolling Sharpe
-              <MetricTooltip text="Risk-adjusted return: annualized return divided by annualized volatility, over a trailing 20-trading-day window. Values above 1.0 (green dashed line) indicate strong risk-adjusted performance. Negative = losing period." />
-            </h3>
-            {rollingSharpData.length > 0 && (
-              <span className="text-xs font-semibold text-gray-900">
-                Current: {rollingSharpData[rollingSharpData.length - 1]?.sharpe.toFixed(2)}
-              </span>
-            )}
-          </div>
-          {rollingSharpData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={240}>
-              <ComposedChart data={rollingSharpData} syncId="analytics">
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                <ReferenceLine y={0} stroke="#e5e7eb" strokeWidth={1} />
-                <ReferenceLine y={1} stroke="#10b981" strokeDasharray="4 3" strokeWidth={1} label={{ value: 'Sharpe 1.0', position: 'right', fill: '#10b981', fontSize: 9 }} />
-                <Tooltip
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  formatter={(v: number) => [v.toFixed(2), 'Rolling Sharpe']}
-                />
-                <Line type="monotone" dataKey="sharpe" stroke="#f59e0b" strokeWidth={2.5} dot={false} name="Rolling Sharpe" />
-              </ComposedChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[240px] flex items-center justify-center text-gray-400 text-sm">
-              Need at least 21 trading days of data
-            </div>
-          )}
-          <p className="text-[10px] text-gray-400 mt-2">Annualized return ÷ annualized volatility over trailing 20 trading days. Green dashed = Sharpe 1.0 target.</p>
-        </div>
-      </div>
+      )}
 
       {/* ── Guardrail Zone Analysis + P&L Attribution ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
