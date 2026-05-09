@@ -1153,24 +1153,42 @@ class PortfolioService:
                 ts_end = datetime.strptime(fetch_end_str[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
                 hist = _ct.market_data.fetch_historical_data(ticker_sym, ts_start, ts_end, intraday_interval_minutes=1440)
                 if not hist or len(hist) < 2:
+                    print(f"⚠️ B&H fetch for {ticker_sym}: got {len(hist) if hist else 0} bars (need ≥2), skipping")
                     return None
                 by_date: Dict[str, float] = {p.timestamp.strftime("%Y-%m-%d"): (p.close or p.price) for p in hist}
+                sorted_dates = sorted(by_date.keys())
+                # Clamp normalize_from_str to the closest available trading day when
+                # yfinance hasn't published today's close yet (pre-market or holiday).
+                effective_normalize_from = normalize_from_str
+                if normalize_from_str not in by_date:
+                    candidates = [d for d in sorted_dates if d <= normalize_from_str]
+                    effective_normalize_from = candidates[-1] if candidates else sorted_dates[0]
+                    print(f"📊 {ticker_sym}: normalize date {normalize_from_str} not in yfinance data, clamped to {effective_normalize_from}")
                 # Normalise from the evaluation-timeline start; fall back to earliest fetched price
-                first_price = by_date.get(normalize_from_str) or (hist[0].close or hist[0].price)
+                first_price = by_date.get(effective_normalize_from) or (hist[0].close or hist[0].price)
                 last_price = by_date.get(fetch_end_str) or (hist[-1].close or hist[-1].price)
                 if not first_price or first_price == 0:
                     return None
                 ret = ((last_price - first_price) / first_price) * 100
-                sorted_dates = sorted(by_date.keys())
-                # Normalised series: only dates at or after normalize_from_str so it
-                # aligns with the portfolio time-series on the comparison chart
+                # Normalised series: only dates at or after effective_normalize_from so it
+                # aligns with the portfolio time-series on the comparison chart.
+                # Forward-fill today's price with the last known close when the market hasn't
+                # published today's data yet (pre-market, intraday, or holiday gap).
+                working_by_date = dict(by_date)
+                last_yf_date = sorted_dates[-1]
+                if normalize_from_str > last_yf_date:
+                    # Portfolio has an evaluation today but yfinance doesn't have today yet —
+                    # carry forward the last close so the B&H line extends to the chart edge.
+                    working_by_date[normalize_from_str] = by_date[last_yf_date]
+                    sorted_dates = sorted(working_by_date.keys())
                 series = [
-                    {"date": d, "value": (by_date[d] / first_price) * 100}
+                    {"date": d, "value": (working_by_date[d] / first_price) * 100}
                     for d in sorted_dates
-                    if d >= normalize_from_str
+                    if d >= effective_normalize_from
                 ]
                 # Raw price series: full fetched range for the stock price chart
-                raw_series = [{"date": d, "price": round(by_date[d], 4)} for d in sorted_dates]
+                raw_series = [{"date": d, "price": round(by_date[d], 4)} for d in sorted_dates if d in by_date]
+                print(f"📊 {ticker_sym}: {len(series)} normalized points, {len(raw_series)} raw points, normalize_from={effective_normalize_from}")
                 return {
                     "return_pct": round(ret, 2),
                     "first_price": first_price,
@@ -1180,6 +1198,8 @@ class PortfolioService:
                 }
             except Exception as _e:
                 print(f"⚠️ Failed to fetch benchmark data for {ticker_sym}: {_e}")
+                import traceback
+                traceback.print_exc()
                 return None
 
         try:

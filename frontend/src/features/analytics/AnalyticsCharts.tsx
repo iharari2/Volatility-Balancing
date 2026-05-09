@@ -211,7 +211,7 @@ export default function AnalyticsCharts({
         };
       },
     );
-  }, [portfolioValueData, analyticsData, customBenchmarkByDate, spyBenchmarkByDate]);
+  }, [portfolioValueData, analyticsData, buyHoldByDate, customBenchmarkByDate, spyBenchmarkByDate]);
 
   // ANA-5: 30-day rolling volatility (annualized)
   const rollingVolatilityData = useMemo(() => {
@@ -685,6 +685,11 @@ export default function AnalyticsCharts({
                 <span className="text-gray-500">
                   Buy&Hold: {performance.benchmark_return_pct >= 0 ? '+' : ''}
                   {performance.benchmark_return_pct.toFixed(1)}%
+                </span>
+              )}
+              {showBuyHold && buyHoldByDate.size === 0 && isSinglePosition && (
+                <span className="text-amber-500" title="Yahoo Finance data unavailable for this ticker">
+                  B&H: unavailable
                 </span>
               )}
               {showSpy && performance.spy_return_pct !== undefined && (
