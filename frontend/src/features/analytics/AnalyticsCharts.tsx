@@ -328,6 +328,31 @@ export default function AnalyticsCharts({
     ];
   }, [analyticsData]);
 
+  // Guardrail vs Buy & Hold attribution: per-trade opportunity cost/gain vs pure holding
+  const guardrailAttribution = useMemo(() => {
+    const endPrice = analyticsData?.benchmarks?.buy_hold?.last_price;
+    if (!endPrice || !isSinglePosition) return null;
+    const sellRows = events
+      .filter((e: AnalyticsEvent) => e.type === 'TRADE' && e.side === 'SELL' && e.qty && e.price)
+      .map((e: AnalyticsEvent) => {
+        const qty = Math.abs(e.qty!);
+        const delta = qty * (e.price! - endPrice); // positive = smart sell (stock fell); negative = costly (stock rose)
+        return { ...e, qty, delta };
+      })
+      .sort((a, b) => a.delta - b.delta); // worst first
+    const buyRows = events
+      .filter((e: AnalyticsEvent) => e.type === 'TRADE' && e.side === 'BUY' && e.qty && e.price)
+      .map((e: AnalyticsEvent) => {
+        const qty = Math.abs(e.qty!);
+        const delta = qty * (endPrice - e.price!); // positive = good buy (stock rose); negative = bad timing
+        return { ...e, qty, delta };
+      })
+      .sort((a, b) => b.delta - a.delta); // best first
+    const totalSellDelta = sellRows.reduce((sum, r) => sum + r.delta, 0);
+    const totalBuyDelta = buyRows.reduce((sum, r) => sum + r.delta, 0);
+    return { sellRows, buyRows, totalSellDelta, totalBuyDelta, netDelta: totalSellDelta + totalBuyDelta, endPrice };
+  }, [analyticsData, events, isSinglePosition]);
+
   // Trade efficiency data (trades with anchor price)
   const tradeEfficiencyRows = useMemo(() => {
     return events
@@ -1187,6 +1212,80 @@ export default function AnalyticsCharts({
           )}
         </div>
       </div>
+
+      {/* ── Guardrail vs Buy & Hold Attribution ── */}
+      {guardrailAttribution && (guardrailAttribution.sellRows.length > 0 || guardrailAttribution.buyRows.length > 0) && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center">
+              Guardrail vs Buy &amp; Hold
+              <MetricTooltip text="For each trade, shows what happened vs simply holding. SELL delta = qty × (sell price − end price): negative means the stock rose after selling (opportunity cost). BUY delta = qty × (end price − buy price): positive means the stock rose after buying (gain from buying the dip)." />
+            </h3>
+            <span className="text-xs text-gray-400">
+              End price: ${guardrailAttribution.endPrice.toFixed(2)}
+            </span>
+          </div>
+          {/* Summary row */}
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            <div className="bg-slate-50 rounded-lg p-3 text-center">
+              <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Sell opportunity cost</div>
+              <div className={`text-base font-bold ${guardrailAttribution.totalSellDelta >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                {guardrailAttribution.totalSellDelta >= 0 ? '+' : ''}${guardrailAttribution.totalSellDelta.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </div>
+              <div className="text-[10px] text-gray-400 mt-1">{guardrailAttribution.sellRows.length} sell{guardrailAttribution.sellRows.length !== 1 ? 's' : ''}</div>
+            </div>
+            <div className="bg-slate-50 rounded-lg p-3 text-center">
+              <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Buy gains</div>
+              <div className={`text-base font-bold ${guardrailAttribution.totalBuyDelta >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                {guardrailAttribution.totalBuyDelta >= 0 ? '+' : ''}${guardrailAttribution.totalBuyDelta.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </div>
+              <div className="text-[10px] text-gray-400 mt-1">{guardrailAttribution.buyRows.length} buy{guardrailAttribution.buyRows.length !== 1 ? 's' : ''}</div>
+            </div>
+            <div className="bg-slate-50 rounded-lg p-3 text-center">
+              <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Net guardrail alpha</div>
+              <div className={`text-base font-bold ${guardrailAttribution.netDelta >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                {guardrailAttribution.netDelta >= 0 ? '+' : ''}${guardrailAttribution.netDelta.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </div>
+              <div className="text-[10px] text-gray-400 mt-1">vs pure hold</div>
+            </div>
+          </div>
+          {/* Per-trade table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-[10px] text-gray-400 uppercase tracking-wider border-b border-gray-100">
+                  <th className="pb-2 text-left font-medium pr-4">Date</th>
+                  <th className="pb-2 text-left font-medium pr-4">Side</th>
+                  <th className="pb-2 text-right font-medium pr-4">Qty</th>
+                  <th className="pb-2 text-right font-medium pr-4">Trade $</th>
+                  <th className="pb-2 text-right font-medium pr-4">End $</th>
+                  <th className="pb-2 text-right font-medium">Δ vs Hold</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {[...guardrailAttribution.sellRows, ...guardrailAttribution.buyRows]
+                  .sort((a, b) => a.delta - b.delta)
+                  .map((trade, i) => (
+                  <tr key={i} className="hover:bg-gray-50 text-gray-700">
+                    <td className="py-2 pr-4 text-gray-500">{trade.date}</td>
+                    <td className="pr-4">
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${trade.side === 'BUY' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {trade.side}
+                      </span>
+                    </td>
+                    <td className="pr-4 text-right font-mono">{trade.qty.toFixed(4)}</td>
+                    <td className="pr-4 text-right font-mono">${trade.price!.toFixed(2)}</td>
+                    <td className="pr-4 text-right font-mono">${guardrailAttribution.endPrice.toFixed(2)}</td>
+                    <td className={`text-right font-semibold ${trade.delta >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                      {trade.delta >= 0 ? '+' : ''}${trade.delta.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* ── Trade Efficiency vs Anchor ── */}
       {tradeEfficiencyRows.length > 0 && (
