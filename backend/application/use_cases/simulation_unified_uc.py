@@ -211,12 +211,15 @@ class SimulationUnifiedUC:
 
         report_progress(f"Fetching historical data for {ticker}...", 10.0)
         print(f"Fetching historical data for {ticker} from {fetch_start} to {fetch_end}")
+        import time as _time
+        _t_fetch_start = _time.monotonic()
         try:
             historical_data = self.market_data.fetch_historical_data(
                 ticker, fetch_start, fetch_end, intraday_interval_minutes
             )
         except Exception as e:
             raise Exception(f"Failed to fetch historical data for {ticker}: {str(e)}")
+        print(f"[sim] fetch={_time.monotonic()-_t_fetch_start:.1f}s  bars={len(historical_data)}")
 
         if not historical_data:
             raise Exception(
@@ -662,12 +665,6 @@ class SimulationUnifiedUC:
         if update_frequency < 50:
             update_frequency = 50
 
-        import time as _time
-        _t_eval = 0.0
-        _t_ts = 0.0
-        _t_trigger = 0.0
-        _t_loop_start = _time.monotonic()
-
         for price_data in sim_data.price_data:
             current_price = price_data.price
             # Ensure timestamp is Python datetime, not pandas Timestamp
@@ -880,7 +877,6 @@ class SimulationUnifiedUC:
                 # Simulation uses synthetic tenant/portfolio IDs (must match position creation)
                 sim_tenant_id = "simulation"
                 sim_portfolio_id = "simulation"
-                _t0 = _time.monotonic()
                 evaluation = evaluate_uc.evaluate(
                     tenant_id=sim_tenant_id,
                     portfolio_id=sim_portfolio_id,
@@ -888,7 +884,6 @@ class SimulationUnifiedUC:
                     current_price=current_price,
                     write_timeline=False,  # Simulation writes its own timeline
                 )
-                _t_eval += _time.monotonic() - _t0
 
                 # Write timeline only on trigger events (not every HOLD) for performance
                 if evaluation.get("trigger_detected"):
@@ -1054,10 +1049,8 @@ class SimulationUnifiedUC:
                 print(f"Position evaluation failed: {e}")
 
             # Add trigger analysis only if detailed analysis is enabled or triggered
-            _t0 = _time.monotonic()
             if detailed_trigger_analysis or trigger_info.get("triggered", False):
                 trigger_analysis.append(trigger_info)
-            _t_trigger += _time.monotonic() - _t0
 
             # Calculate portfolio value
             portfolio_value = position.cash + (position.qty * current_price)
@@ -1071,7 +1064,6 @@ class SimulationUnifiedUC:
             if trigger_info.get("triggered", False):
                 print(f"  >>> Adding triggered event to time_series_data: triggered={trigger_info.get('triggered')}, side={trigger_info.get('side')}, price_change={eval_delta_pct:.2f}%")
 
-            _t0 = _time.monotonic()
             time_series_data.append(
                 {
                     "timestamp": current_time.isoformat(),
@@ -1120,7 +1112,6 @@ class SimulationUnifiedUC:
                     "high_guardrail_pct": guardrails.max_stock_alloc_pct if guardrails else None,
                 }
             )
-            _t_ts += _time.monotonic() - _t0
 
             # Debug logging - reduce frequency for better performance
             if len(portfolio_values) % 100 == 0:  # Log every 100th data point instead of 10th
@@ -1151,10 +1142,6 @@ class SimulationUnifiedUC:
         if initial_cash <= 0:
             raise ValueError(f"Invalid initial cash: {initial_cash}")
         total_return = (final_value - initial_cash) / initial_cash
-
-        _t_loop_total = _time.monotonic() - _t_loop_start
-        _t_other = _t_loop_total - _t_eval - _t_ts - _t_trigger
-        print(f"[sim timing] loop={_t_loop_total:.2f}s  eval={_t_eval:.2f}s  ts_build={_t_ts:.2f}s  trigger_append={_t_trigger:.2f}s  other={_t_other:.2f}s  n={total_data_points}")
 
         # Debug logging
         print("Algorithm simulation complete:")

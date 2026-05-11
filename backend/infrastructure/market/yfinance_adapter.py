@@ -1142,11 +1142,20 @@ class YFinanceAdapter(MarketDataRepo):
                     ticker, start_date, end_date, intraday_interval_minutes
                 )
 
-            # Within supported range — try minute data
+            # Within supported range — use native yfinance interval for non-1m data.
+            # This avoids the expensive 7-day-chunk approach which makes N API calls
+            # (one per chunk) and wastes time on failed 1m lookups for historical data.
+            native_interval_map = {5: "5m", 15: "15m", 30: "30m", 60: "1h"}
+            native_interval = native_interval_map.get(intraday_interval_minutes)
+            if native_interval and days_diff > 7:
+                return self._fetch_native_interval_direct(
+                    ticker, start_date, end_date, native_interval, intraday_interval_minutes
+                )
+
             if days_diff <= 7:
                 interval = "1m"  # 1-minute data for short periods
             else:
-                # For longer recent periods, use chunked minute data
+                # Fallback for 1m interval within chunked windows
                 return self._fetch_chunked_minute_data(
                     ticker, start_date, end_date, intraday_interval_minutes
                 )
@@ -1316,6 +1325,83 @@ class YFinanceAdapter(MarketDataRepo):
         except Exception as e:
             print(f"Error fetching historical data for {ticker}: {e}")
             return []
+
+    def _fetch_native_interval_direct(
+        self,
+        ticker: str,
+        start_date: datetime,
+        end_date: datetime,
+        native_interval: str,
+        intraday_interval_minutes: int,
+    ) -> List[PriceData]:
+        """Fetch intraday data using a native yfinance interval in a single API call.
+
+        This is dramatically faster than _fetch_chunked_minute_data for 5m/15m/30m/1h
+        data because it makes one HTTP request instead of N×7-day chunk requests.
+        """
+        start_str = start_date.strftime("%Y-%m-%d")
+        end_str = end_date.strftime("%Y-%m-%d")
+        print(f"Fetching {native_interval} data for {ticker} from {start_str} to {end_str} (single call)")
+
+        stock = self._ticker(ticker)
+        hist = None
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                with self._suppress_yfinance_output():
+                    hist = stock.history(
+                        start=start_str, end=end_str, interval=native_interval, auto_adjust=False
+                    )
+                if not hist.empty:
+                    break
+                if attempt < max_retries - 1:
+                    print(f"Empty {native_interval} data for {ticker} (attempt {attempt + 1}), retrying...")
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    print(f"Native interval fetch failed after {max_retries} attempts: {e}")
+                    break
+                print(f"Attempt {attempt + 1} failed: {e}, retrying...")
+                time.sleep(1)
+
+        if hist is None or hist.empty:
+            print(f"No {native_interval} data for {ticker}, falling back to daily synthetic")
+            return self._fetch_daily_with_synthetic_intraday(
+                ticker, start_date, end_date, intraday_interval_minutes
+            )
+
+        print(f"Got {len(hist)} {native_interval} bars for {ticker}")
+        price_data_list = []
+        for timestamp, row in hist.iterrows():
+            if timestamp.tzinfo is None:
+                timestamp = timestamp.replace(tzinfo=self.tz_utc)
+            else:
+                timestamp = timestamp.astimezone(self.tz_utc)
+
+            is_market_hours = self.storage.is_market_hours(timestamp)
+            close_price = float(row["Close"])
+
+            price_data = PriceData(
+                ticker=ticker,
+                price=close_price,
+                source=PriceSource.LAST_TRADE,
+                timestamp=timestamp,
+                bid=close_price,
+                ask=close_price,
+                volume=int(row["Volume"]) if not pd.isna(row["Volume"]) else None,
+                last_trade_price=close_price,
+                last_trade_time=timestamp,
+                is_market_hours=bool(is_market_hours),
+                is_fresh=True,
+                is_inline=True,
+                open=float(row["Open"]),
+                high=float(row["High"]),
+                low=float(row["Low"]),
+                close=close_price,
+            )
+            price_data_list.append(price_data)
+            self.storage.store_price_data(ticker, price_data)
+
+        return price_data_list
 
     def _fetch_chunked_minute_data(
         self,
