@@ -221,19 +221,20 @@ export default function SimulationLabPage() {
         );
       }
 
-      // Build position_config with user-defined trigger threshold
-      const triggerThresholdDecimal = (config.triggerThresholdPct || 3) / 100; // Convert 3% to 0.03
-      const positionConfig = {
-        trigger_threshold_pct: triggerThresholdDecimal,
-        rebalance_ratio: 1.6667,
-        commission_rate: 0.0001,
-        min_notional: 100.0,
-        allow_after_hours: config.allowAfterHours ?? true,
-        guardrails: {
-          min_stock_alloc_pct: 0.25,
-          max_stock_alloc_pct: 0.75,
-        },
-      };
+      // Build position_config from user-configured strategy parameters
+      const positionConfig = config.strategy === 'portfolio'
+        ? undefined  // backend uses live position config when omitted
+        : {
+            trigger_threshold_pct: (config.triggerThresholdPct || 3) / 100,
+            rebalance_ratio: config.rebalanceRatio ?? 1.6667,
+            commission_rate: config.commissionRate ?? 0.001,
+            min_notional: 100.0,
+            allow_after_hours: config.allowAfterHours ?? true,
+            guardrails: {
+              min_stock_alloc_pct: (config.minStockAllocPct ?? 25) / 100,
+              max_stock_alloc_pct: (config.maxStockAllocPct ?? 75) / 100,
+            },
+          };
 
       const request = {
         ticker: config.asset.toUpperCase().trim(),

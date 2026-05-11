@@ -28,10 +28,12 @@ interface SimulationConfig {
   mode: 'single' | 'sweep';
   resolution: '1min' | '5min' | '15min' | '30min' | '1hour' | 'daily';
   allowAfterHours: boolean;
-  // Trigger thresholds (as percentages, e.g., 3 = 3%)
   triggerThresholdPct: number;
+  rebalanceRatio: number;
+  commissionRate: number;
+  minStockAllocPct: number;
+  maxStockAllocPct: number;
   initialCash: number;
-  // Comparison ticker for SIM-3
   comparisonTicker: string;
 }
 
@@ -39,6 +41,12 @@ export { type SimulationConfig };
 
 export default function SimulationSetup({ onRun, isRunning, runningMsg, initialConfig }: SimulationSetupProps) {
   const { positions } = usePortfolio();
+  const TEMPLATES = {
+    conservative: { triggerThresholdPct: 2, rebalanceRatio: 1.2, commissionRate: 0.001, minStockAllocPct: 30, maxStockAllocPct: 70 },
+    default:      { triggerThresholdPct: 3, rebalanceRatio: 1.6667, commissionRate: 0.001, minStockAllocPct: 25, maxStockAllocPct: 75 },
+    aggressive:   { triggerThresholdPct: 5, rebalanceRatio: 2.0, commissionRate: 0.001, minStockAllocPct: 20, maxStockAllocPct: 80 },
+  };
+
   const defaults: SimulationConfig = {
     asset: positions[0]?.ticker || 'AAPL',
     startDate: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -48,6 +56,10 @@ export default function SimulationSetup({ onRun, isRunning, runningMsg, initialC
     resolution: 'daily',
     allowAfterHours: true,
     triggerThresholdPct: 3,
+    rebalanceRatio: 1.6667,
+    commissionRate: 0.001,
+    minStockAllocPct: 25,
+    maxStockAllocPct: 75,
     initialCash: 10000,
     comparisonTicker: '',
   };
@@ -224,6 +236,7 @@ export default function SimulationSetup({ onRun, isRunning, runningMsg, initialC
                 max={50}
                 step={0.5}
                 className="input pr-7"
+                disabled={config.strategy === 'portfolio'}
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">%</span>
             </div>
@@ -234,66 +247,124 @@ export default function SimulationSetup({ onRun, isRunning, runningMsg, initialC
         </div>
 
         <div>
-          <label className="label">Strategy Configuration</label>
+          <label className="label">Strategy</label>
           <div className="space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-100">
-            <label className="flex items-center cursor-pointer">
-              <input
-                type="radio"
-                name="strategy"
-                value="portfolio"
-                checked={config.strategy === 'portfolio'}
-                onChange={(e) =>
-                  setConfig({ ...config, strategy: e.target.value as SimulationConfig['strategy'] })
-                }
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
-              />
-              <span className="ml-2 text-sm font-medium text-gray-900">
-                Current Portfolio Config
-              </span>
-            </label>
-            <div className="flex items-center gap-3">
-              <input
-                type="radio"
-                name="strategy"
-                value="template"
-                checked={config.strategy === 'template'}
-                onChange={(e) =>
-                  setConfig({ ...config, strategy: e.target.value as SimulationConfig['strategy'] })
-                }
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
-              />
-              <select
-                value={config.template || 'conservative'}
-                onChange={(e) => setConfig({ ...config, template: e.target.value })}
-                disabled={config.strategy !== 'template'}
-                className="flex-1 input py-1 text-sm disabled:opacity-50"
-              >
-                <option value="conservative">Conservative Template</option>
-                <option value="default">Standard Template</option>
-                <option value="aggressive">Aggressive Template</option>
-              </select>
+            <div className="flex gap-4">
+              {(['portfolio', 'template', 'custom'] as const).map((s) => (
+                <label key={s} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="strategy"
+                    value={s}
+                    checked={config.strategy === s}
+                    onChange={() => {
+                      if (s === 'template') {
+                        const tpl = TEMPLATES[(config.template as keyof typeof TEMPLATES) || 'default'];
+                        setConfig({ ...config, strategy: s, ...tpl });
+                      } else {
+                        setConfig({ ...config, strategy: s });
+                      }
+                    }}
+                    className="h-4 w-4 text-primary-600"
+                  />
+                  <span className="text-sm font-medium text-gray-900 capitalize">
+                    {s === 'portfolio' ? 'Current Portfolio' : s === 'template' ? 'Template' : 'Custom'}
+                  </span>
+                </label>
+              ))}
             </div>
-            <label className="flex items-center cursor-pointer">
-              <input
-                type="radio"
-                name="strategy"
-                value="custom"
-                checked={config.strategy === 'custom'}
-                onChange={(e) =>
-                  setConfig({ ...config, strategy: e.target.value as SimulationConfig['strategy'] })
-                }
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
-              />
-              <span className="ml-2 text-sm font-medium text-gray-900">Custom Overrides</span>
-              <button
-                disabled={config.strategy !== 'custom'}
-                className="ml-auto text-xs font-bold text-primary-600 uppercase hover:text-primary-800 disabled:opacity-30"
+
+            {config.strategy === 'template' && (
+              <select
+                value={config.template || 'default'}
+                onChange={(e) => {
+                  const tpl = TEMPLATES[e.target.value as keyof typeof TEMPLATES] || TEMPLATES.default;
+                  setConfig({ ...config, template: e.target.value, ...tpl });
+                }}
+                className="input py-1 text-sm"
               >
-                Configure
-              </button>
-            </label>
+                <option value="conservative">Conservative (2% trigger, ratio 1.2, 30–70%)</option>
+                <option value="default">Standard (3% trigger, ratio 1.667, 25–75%)</option>
+                <option value="aggressive">Aggressive (5% trigger, ratio 2.0, 20–80%)</option>
+              </select>
+            )}
+
+            {config.strategy === 'portfolio' && (
+              <p className="text-xs text-gray-500">
+                Uses the saved config of the selected position. Trigger threshold, rebalance ratio, and guardrails are loaded from the live position.
+              </p>
+            )}
           </div>
         </div>
+
+        {config.strategy !== 'portfolio' && (
+          <div>
+            <label className="label">Strategy Parameters</label>
+            <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
+              <div>
+                <label className="text-xs font-medium text-gray-600 uppercase mb-1 block">Rebalance Ratio</label>
+                <input
+                  type="number"
+                  value={config.rebalanceRatio}
+                  onChange={(e) => setConfig({ ...config, rebalanceRatio: parseFloat(e.target.value) || 1.6667 })}
+                  min={0.5}
+                  max={5}
+                  step={0.1}
+                  className="input"
+                />
+                <p className="text-xs text-gray-400 mt-1">Order sizing multiplier (default 1.6667)</p>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 uppercase mb-1 block">Commission Rate</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={+(config.commissionRate * 100).toFixed(4)}
+                    onChange={(e) => setConfig({ ...config, commissionRate: (parseFloat(e.target.value) || 0.1) / 100 })}
+                    min={0}
+                    max={5}
+                    step={0.05}
+                    className="input pr-7"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">%</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Per-trade commission (default 0.1%)</p>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 uppercase mb-1 block">Min Stock Allocation</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={config.minStockAllocPct}
+                    onChange={(e) => setConfig({ ...config, minStockAllocPct: parseFloat(e.target.value) || 25 })}
+                    min={0}
+                    max={config.maxStockAllocPct - 5}
+                    step={5}
+                    className="input pr-7"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">%</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Lower guardrail: buy when below this</p>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 uppercase mb-1 block">Max Stock Allocation</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={config.maxStockAllocPct}
+                    onChange={(e) => setConfig({ ...config, maxStockAllocPct: parseFloat(e.target.value) || 75 })}
+                    min={config.minStockAllocPct + 5}
+                    max={100}
+                    step={5}
+                    className="input pr-7"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">%</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Upper guardrail: sell when above this</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="pt-4">
           <button
