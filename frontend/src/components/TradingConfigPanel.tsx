@@ -22,7 +22,7 @@ const defaultOrderPolicy: OrderPolicy = {
   qty_step: 0,
   action_below_min: 'hold',
   trigger_threshold_pct: 0.03, // 3%
-  rebalance_ratio: 0.5, // Updated to match simulation default
+  rebalance_ratio: 1.6667,
   commission_rate: 0.0001, // 0.01%
   allow_after_hours: true, // Default to after hours ON
 };
@@ -120,14 +120,14 @@ export default function TradingConfigPanel({
             <label className="label">Rebalance Ratio</label>
             <input
               type="number"
-              value={config.orderPolicy.rebalance_ratio || 0.5}
+              value={config.orderPolicy.rebalance_ratio ?? 1.6667}
               onChange={(e) => updateOrderPolicy('rebalance_ratio', Number(e.target.value))}
               className="input"
               min="0.1"
               max="5"
               step="0.1"
             />
-            <p className="text-xs text-gray-500 mt-1">Order sizing multiplier (default: 0.5)</p>
+            <p className="text-xs text-gray-500 mt-1">Order sizing multiplier (default: 1.6667)</p>
           </div>
 
           <div>

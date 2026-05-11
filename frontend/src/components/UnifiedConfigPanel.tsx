@@ -40,7 +40,7 @@ const defaultConfig: UnifiedConfig = {
   ticker: 'AAPL',
   initialCash: 10000,
   triggerThresholdPct: 0.03, // 3%
-  rebalanceRatio: 0.5,
+  rebalanceRatio: 1.6667,
   commissionRate: 0.0001, // 0.01%
   minNotional: 100,
   allowAfterHours: true, // Default to after hours ON
@@ -181,7 +181,7 @@ export default function UnifiedConfigPanel({
               max="5"
               step="0.1"
             />
-            <p className="text-xs text-gray-500 mt-1">Order sizing multiplier (default: 0.5)</p>
+            <p className="text-xs text-gray-500 mt-1">Order sizing multiplier (default: 1.6667)</p>
           </div>
 
           <div>

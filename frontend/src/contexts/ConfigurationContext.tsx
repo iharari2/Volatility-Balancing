@@ -16,7 +16,7 @@ export interface SharedConfiguration {
 
 const defaultConfiguration: SharedConfiguration = {
   triggerThresholdPct: 0.03, // 3%
-  rebalanceRatio: 0.5,
+  rebalanceRatio: 1.6667,
   commissionRate: 0.0001, // 0.01%
   minNotional: 100,
   allowAfterHours: true,

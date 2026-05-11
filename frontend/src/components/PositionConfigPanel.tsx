@@ -23,7 +23,7 @@ const defaultOrderPolicy: OrderPolicy = {
   qty_step: 0,
   action_below_min: 'hold',
   trigger_threshold_pct: 0.03, // 3%
-  rebalance_ratio: 0.5, // Updated to match simulation default
+  rebalance_ratio: 1.6667,
   commission_rate: 0.0001, // 0.01%
   allow_after_hours: true, // Default to after hours ON
 };
