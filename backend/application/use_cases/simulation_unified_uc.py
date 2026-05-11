@@ -231,16 +231,17 @@ class SimulationUnifiedUC:
         dividend_history = []
         if self.dividend_market_data:
             try:
-                print(f"Fetching dividend history for {ticker} from {fetch_start} to {fetch_end}")
+                _t_div_start = _time.monotonic()
                 dividend_history = self.dividend_market_data.get_dividend_history(
                     ticker, fetch_start, fetch_end
                 )
-                print(f"Found {len(dividend_history)} dividend events")
+                print(f"[sim] div_fetch={_time.monotonic()-_t_div_start:.1f}s  dividends={len(dividend_history)}")
             except Exception as e:
                 print(f"Warning: Failed to fetch dividend history for {ticker}: {str(e)}")
                 dividend_history = []
 
         # Store the fetched data in market data storage for simulation
+        _t_setup_start = _time.monotonic()
         market_storage = MarketDataStorage()
         for price_data in historical_data:
             market_storage.store_price_data(ticker, price_data)
@@ -308,7 +309,10 @@ class SimulationUnifiedUC:
                 }
             )
 
+        print(f"[sim] setup={_time.monotonic()-_t_setup_start:.1f}s  bars_to_process={len(sim_data.price_data)}")
+
         # Run algorithm simulation using actual trading logic
+        _t_loop_start = _time.monotonic()
         algo_result = self._simulate_algorithm_unified(
             sim_data,
             initial_cash,
@@ -322,6 +326,7 @@ class SimulationUnifiedUC:
             simulation_id=simulation_id,  # Pass simulation_id for timeline
             ticker=ticker,  # Pass ticker for timeline
         )
+        print(f"[sim] loop={_time.monotonic()-_t_loop_start:.1f}s")
 
         # Run buy & hold simulation
         buy_hold_result = self._simulate_buy_hold(sim_data, initial_cash)
@@ -408,8 +413,9 @@ class SimulationUnifiedUC:
                     debug_info=result.debug_info,
                 )
 
+                _t_save_start = _time.monotonic()
                 self.simulation_repo.save_simulation_result(domain_result)
-                print(f"Simulation result saved with ID: {domain_result.id}")
+                print(f"[sim] db_save={_time.monotonic()-_t_save_start:.1f}s")
             except Exception as e:
                 print(f"Warning: Failed to save simulation result: {e}")
 
