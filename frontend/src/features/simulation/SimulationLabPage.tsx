@@ -233,6 +233,7 @@ export default function SimulationLabPage() {
             guardrails: {
               min_stock_alloc_pct: (config.minStockAllocPct ?? 25) / 100,
               max_stock_alloc_pct: (config.maxStockAllocPct ?? 75) / 100,
+              max_trade_pct_of_position: (config.maxTradePct ?? 20) / 100,
             },
           };
 
@@ -241,6 +242,7 @@ export default function SimulationLabPage() {
         start_date: startDateISO,
         end_date: endDateISO,
         initial_cash: config.initialCash || 10000,
+        initial_asset_value: config.initialStock > 0 ? config.initialStock : undefined,
         include_after_hours: config.allowAfterHours ?? false,
         intraday_interval_minutes: intradayIntervalMinutes,
         position_config: positionConfig,

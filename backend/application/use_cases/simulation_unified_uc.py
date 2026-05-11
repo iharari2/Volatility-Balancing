@@ -590,10 +590,13 @@ class SimulationUnifiedUC:
             min_notional=position_config["min_notional"],
             allow_after_hours=position_config["allow_after_hours"],
         )
+        _max_trade = position_config["guardrails"].get("max_trade_pct_of_position", 0.20)
         guardrails = GuardrailPolicy(
             min_stock_alloc_pct=position_config["guardrails"]["min_stock_alloc_pct"],
             max_stock_alloc_pct=position_config["guardrails"]["max_stock_alloc_pct"],
             max_orders_per_day=999999,  # Unlimited for simulation (clock uses real date, not sim date)
+            max_sell_pct_per_trade=_max_trade,
+            max_buy_pct_per_trade=_max_trade,
         )
 
         # Calculate initial position based on asset allocation

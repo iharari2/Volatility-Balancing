@@ -290,7 +290,7 @@ def get_position_config(
             "max_trade_pct_of_position": (
                 float(guardrail_config.max_trade_pct_of_position) * 100
                 if guardrail_config and guardrail_config.max_trade_pct_of_position
-                else 50.0
+                else 20.0
             ),
             "commission_rate": (
                 config_repo.get_commission_rate(asset_id=position.asset_symbol) if position else 0.1

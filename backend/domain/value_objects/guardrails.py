@@ -18,5 +18,5 @@ class GuardrailPolicy:
     max_stock_alloc_pct: float = 0.75  # 75% max stock allocation
     max_orders_per_day: int = 5
     # Maximum percentage of position/cash that can be traded in a single order
-    max_sell_pct_per_trade: float = 0.5  # e.g. 0.5 = max 50% of shares in one sell
-    max_buy_pct_per_trade: float = 0.5  # e.g. 0.5 = max 50% of cash in one buy
+    max_sell_pct_per_trade: float = 0.20  # e.g. 0.20 = max 20% of shares in one sell
+    max_buy_pct_per_trade: float = 0.20  # e.g. 0.20 = max 20% of cash in one buy

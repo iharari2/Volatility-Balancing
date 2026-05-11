@@ -33,7 +33,9 @@ interface SimulationConfig {
   commissionRate: number;
   minStockAllocPct: number;
   maxStockAllocPct: number;
+  maxTradePct: number;
   initialCash: number;
+  initialStock: number;
   comparisonTicker: string;
 }
 
@@ -60,7 +62,9 @@ export default function SimulationSetup({ onRun, isRunning, runningMsg, initialC
     commissionRate: 0.001,
     minStockAllocPct: 25,
     maxStockAllocPct: 75,
+    maxTradePct: 20,
     initialCash: 10000,
+    initialStock: 0,
     comparisonTicker: '',
   };
   const [config, setConfig] = useState<SimulationConfig>({ ...defaults, ...initialConfig });
@@ -212,19 +216,42 @@ export default function SimulationSetup({ onRun, isRunning, runningMsg, initialC
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="label">Initial Capital</label>
+            <label className="label">Initial Cash</label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
               <input
                 type="number"
                 value={config.initialCash}
-                onChange={(e) => setConfig({ ...config, initialCash: parseFloat(e.target.value) || 10000 })}
-                min={100}
+                onChange={(e) => setConfig({ ...config, initialCash: parseFloat(e.target.value) || 0 })}
+                min={0}
                 step={1000}
                 className="input pl-7"
               />
             </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Total: ${(config.initialCash + config.initialStock).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            </p>
           </div>
+          <div>
+            <label className="label">Initial Stock ($)</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+              <input
+                type="number"
+                value={config.initialStock}
+                onChange={(e) => setConfig({ ...config, initialStock: parseFloat(e.target.value) || 0 })}
+                min={0}
+                step={1000}
+                className="input pl-7"
+              />
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Value of stock held at sim start
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="label">Trigger Threshold</label>
             <div className="relative">
@@ -242,6 +269,24 @@ export default function SimulationSetup({ onRun, isRunning, runningMsg, initialC
             </div>
             <p className="text-xs text-gray-500 mt-1">
               Buy when price drops {config.triggerThresholdPct}%, sell when it rises {config.triggerThresholdPct}%
+            </p>
+          </div>
+          <div>
+            <label className="label">Max Trade per Trigger</label>
+            <div className="relative">
+              <input
+                type="number"
+                value={config.maxTradePct}
+                onChange={(e) => setConfig({ ...config, maxTradePct: parseFloat(e.target.value) || 20 })}
+                min={1}
+                max={100}
+                step={5}
+                className="input pr-7"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">%</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Max % of total position value traded in a single order (default 20%)
             </p>
           </div>
         </div>

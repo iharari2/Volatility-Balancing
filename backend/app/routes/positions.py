@@ -699,6 +699,7 @@ class StandaloneSimulationRequest(BaseModel):
     start_date: str
     end_date: str
     initial_cash: float = 10000.0
+    initial_asset_value: Optional[float] = None  # Initial stock position in dollars
     include_after_hours: bool = False
     intraday_interval_minutes: int = 30
     position_config: Optional[Dict[str, Any]] = None
@@ -759,7 +760,8 @@ def _build_sim_result(result: Any, ticker: str, simulation_id: str) -> Dict[str,
 
 def _run_sim_job(job_id: str, ticker: str, start_date: datetime, end_date: datetime,
                  initial_cash: float, position_config: dict,
-                 include_after_hours: bool, intraday_interval_minutes: int) -> None:
+                 include_after_hours: bool, intraday_interval_minutes: int,
+                 initial_asset_value: Optional[float] = None) -> None:
     """Run simulation in background thread and store result in _sim_jobs."""
     try:
         simulation_uc = container.simulation_uc
@@ -768,6 +770,7 @@ def _run_sim_job(job_id: str, ticker: str, start_date: datetime, end_date: datet
             start_date=start_date,
             end_date=end_date,
             initial_cash=initial_cash,
+            initial_asset_value=initial_asset_value,
             position_config=position_config,
             include_after_hours=include_after_hours,
             intraday_interval_minutes=intraday_interval_minutes,
@@ -819,7 +822,8 @@ def run_standalone_simulation(
             target=_run_sim_job,
             args=(job_id, request.ticker, start_date, end_date,
                   request.initial_cash, position_config,
-                  request.include_after_hours, request.intraday_interval_minutes),
+                  request.include_after_hours, request.intraday_interval_minutes,
+                  request.initial_asset_value),
             daemon=True,
         )
         t.start()
@@ -1211,7 +1215,7 @@ def get_position_config(
         "trigger_threshold_down_pct": float(trigger.down_threshold_pct) if trigger else -3.0,
         "min_stock_pct": float(guardrail.min_stock_pct) * 100 if guardrail else 25.0,
         "max_stock_pct": float(guardrail.max_stock_pct) * 100 if guardrail else 75.0,
-        "max_trade_pct_of_position": float(guardrail.max_trade_pct_of_position) * 100 if guardrail and guardrail.max_trade_pct_of_position else 50.0,
+        "max_trade_pct_of_position": float(guardrail.max_trade_pct_of_position) * 100 if guardrail and guardrail.max_trade_pct_of_position else 20.0,
         "commission_rate": float(order_policy.commission_rate) if order_policy and order_policy.commission_rate else 0.1,
         "allow_after_hours": order_policy.allow_after_hours if order_policy else False,
         "is_position_specific": any(x is not None for x in [trigger, guardrail, order_policy]),

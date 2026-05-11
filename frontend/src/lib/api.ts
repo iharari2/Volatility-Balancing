@@ -268,9 +268,9 @@ export const simulationApi = {
       ticker: config.ticker || config.asset,
       start_date: startDate,
       end_date: endDate,
-      initial_cash: config.initialCash ?? 10000,
-      initial_asset_value: config.initialAssetValue,
-      initial_asset_units: config.initialAssetUnits,
+      initial_cash: config.initial_cash ?? config.initialCash ?? 10000,
+      initial_asset_value: config.initial_asset_value ?? config.initialAssetValue,
+      initial_asset_units: config.initial_asset_units ?? config.initialAssetUnits,
       include_after_hours: config.allowAfterHours ?? true,
       intraday_interval_minutes: intradayIntervalMinutes,
       position_config: config.position_config || {
