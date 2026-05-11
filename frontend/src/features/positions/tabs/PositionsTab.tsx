@@ -398,7 +398,7 @@ export default function PositionsTab({
                 <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">
                   % Δ Baseline
                 </th>
-                <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest sticky right-0 bg-gray-50/95 backdrop-blur-sm shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
                   Actions
                 </th>
               </tr>
@@ -527,7 +527,7 @@ export default function PositionsTab({
                         {pctVsBaseline.toFixed(2)}%
                       </span>
                     </td>
-                    <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-6 py-4 sticky right-0 bg-white group-hover:bg-primary-50/30 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1">
                         <button
                           onClick={() => navigate(`/trade/${portfolioId}/position/${position.id}`)}
