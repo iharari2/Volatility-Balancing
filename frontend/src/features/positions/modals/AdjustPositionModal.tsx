@@ -34,7 +34,7 @@ const ADJUST_OPTIONS: { type: AdjustType; label: string; description: string; ic
   {
     type: 'set',
     label: 'Set exact quantity',
-    description: 'Override quantity to match your broker's record exactly',
+    description: "Override quantity to match your broker's record exactly",
     icon: <Hash className="h-4 w-4" />,
     operation: 'SET_QTY',
   },
