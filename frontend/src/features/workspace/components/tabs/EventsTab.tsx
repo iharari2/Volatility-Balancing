@@ -321,6 +321,12 @@ export default function EventsTab() {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                       Action
                     </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      Ordered
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      Executed
+                    </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                       Reason
                     </th>
@@ -383,6 +389,16 @@ export default function EventsTab() {
                         >
                           {row.action || 'HOLD'}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-mono">
+                        {row.trade_intent_qty != null
+                          ? <span title={`$${(Math.abs(row.trade_intent_qty) * (row.effective_price ?? 0)).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}>{Math.abs(row.trade_intent_qty).toLocaleString(undefined, { maximumFractionDigits: 4 })} sh</span>
+                          : <span className="text-gray-400">-</span>}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-mono">
+                        {row.execution_qty != null
+                          ? <span title={`$${(Math.abs(row.execution_qty) * (row.effective_price ?? 0)).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}>{Math.abs(row.execution_qty).toLocaleString(undefined, { maximumFractionDigits: 4 })} sh</span>
+                          : <span className="text-gray-400">-</span>}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate" title={row.action_reason}>
                         {row.action_reason || row.guardrail_block_reason || '-'}
@@ -484,6 +500,16 @@ export default function EventsTab() {
                             {formatCurrency(row.position_total_value_after ?? row.position_total_value_before)}
                           </p>
                         </div>
+                        {(row.trade_intent_qty != null || row.execution_qty != null) && (
+                          <div>
+                            <span className="text-gray-500">Ordered / Executed</span>
+                            <p className="font-mono font-medium text-gray-900">
+                              {row.trade_intent_qty != null ? `${Math.abs(row.trade_intent_qty).toLocaleString(undefined, { maximumFractionDigits: 4 })} sh` : '-'}
+                              {' / '}
+                              {row.execution_qty != null ? `${Math.abs(row.execution_qty).toLocaleString(undefined, { maximumFractionDigits: 4 })} sh` : '-'}
+                            </p>
+                          </div>
+                        )}
                         <div>
                           <span className="text-gray-500">Reason</span>
                           <p className="font-medium text-gray-900 truncate" title={row.action_reason}>
