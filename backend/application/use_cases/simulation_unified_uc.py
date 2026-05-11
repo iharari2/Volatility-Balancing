@@ -210,16 +210,17 @@ class SimulationUnifiedUC:
             fetch_end = now
 
         report_progress(f"Fetching historical data for {ticker}...", 10.0)
-        print(f"Fetching historical data for {ticker} from {fetch_start} to {fetch_end}")
         import time as _time
-        _t_fetch_start = _time.monotonic()
+        _timing: dict = {}
+        _t0 = _time.monotonic()
         try:
             historical_data = self.market_data.fetch_historical_data(
                 ticker, fetch_start, fetch_end, intraday_interval_minutes
             )
         except Exception as e:
             raise Exception(f"Failed to fetch historical data for {ticker}: {str(e)}")
-        print(f"[sim] fetch={_time.monotonic()-_t_fetch_start:.1f}s  bars={len(historical_data)}")
+        _timing["fetch_s"] = round(_time.monotonic() - _t0, 2)
+        _timing["bars_fetched"] = len(historical_data)
 
         if not historical_data:
             raise Exception(
@@ -231,27 +232,29 @@ class SimulationUnifiedUC:
         dividend_history = []
         if self.dividend_market_data:
             try:
-                _t_div_start = _time.monotonic()
+                _t0 = _time.monotonic()
                 dividend_history = self.dividend_market_data.get_dividend_history(
                     ticker, fetch_start, fetch_end
                 )
-                print(f"[sim] div_fetch={_time.monotonic()-_t_div_start:.1f}s  dividends={len(dividend_history)}")
+                _timing["div_fetch_s"] = round(_time.monotonic() - _t0, 2)
+                _timing["dividends"] = len(dividend_history)
             except Exception as e:
                 print(f"Warning: Failed to fetch dividend history for {ticker}: {str(e)}")
                 dividend_history = []
 
         # Store the fetched data in market data storage for simulation
-        _t_setup_start = _time.monotonic()
+        _t0 = _time.monotonic()
         market_storage = MarketDataStorage()
         for price_data in historical_data:
             market_storage.store_price_data(ticker, price_data)
+
+        _timing["setup_s"] = round(_time.monotonic() - _t0, 2)
 
         # Debug: Check what data was stored
         debug_storage_info = {
             "stored_count": len(historical_data),
             "first_data": None,
             "last_data": None,
-            "test_message": "DEBUG: Server is running updated code",
         }
         if historical_data:
             debug_storage_info["first_data"] = {
@@ -309,10 +312,10 @@ class SimulationUnifiedUC:
                 }
             )
 
-        print(f"[sim] setup={_time.monotonic()-_t_setup_start:.1f}s  bars_to_process={len(sim_data.price_data)}")
+        _timing["bars_to_process"] = len(sim_data.price_data)
 
         # Run algorithm simulation using actual trading logic
-        _t_loop_start = _time.monotonic()
+        _t0 = _time.monotonic()
         algo_result = self._simulate_algorithm_unified(
             sim_data,
             initial_cash,
@@ -326,7 +329,7 @@ class SimulationUnifiedUC:
             simulation_id=simulation_id,  # Pass simulation_id for timeline
             ticker=ticker,  # Pass ticker for timeline
         )
-        print(f"[sim] loop={_time.monotonic()-_t_loop_start:.1f}s")
+        _timing["loop_s"] = round(_time.monotonic() - _t0, 2)
 
         # Run buy & hold simulation
         buy_hold_result = self._simulate_buy_hold(sim_data, initial_cash)
@@ -350,6 +353,8 @@ class SimulationUnifiedUC:
         dividend_analysis = self._calculate_dividend_analysis(
             ticker, start_date, end_date, sim_data, algo_result
         )
+
+        debug_storage_info["timing"] = _timing
 
         # Create simulation result
         result = SimulationResult(
@@ -413,9 +418,9 @@ class SimulationUnifiedUC:
                     debug_info=result.debug_info,
                 )
 
-                _t_save_start = _time.monotonic()
+                _t0 = _time.monotonic()
                 self.simulation_repo.save_simulation_result(domain_result)
-                print(f"[sim] db_save={_time.monotonic()-_t_save_start:.1f}s")
+                _timing["db_save_s"] = round(_time.monotonic() - _t0, 2)
             except Exception as e:
                 print(f"Warning: Failed to save simulation result: {e}")
 
