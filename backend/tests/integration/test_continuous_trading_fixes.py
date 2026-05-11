@@ -14,7 +14,6 @@ from application.services.continuous_trading_service import (
     ContinuousTradingService,
     TradingStatus,
 )
-from domain.entities.position import Position
 from domain.entities.portfolio import Portfolio
 
 
@@ -23,7 +22,6 @@ def trading_position():
     """Create a real position in the container for testing."""
     tenant_id = "default"
     portfolio_id = "cts_portfolio"
-    position_id = "cts_position"
 
     portfolio = Portfolio(id=portfolio_id, tenant_id=tenant_id, name="CTS Test Portfolio")
     container.portfolio_repo.save(portfolio)
