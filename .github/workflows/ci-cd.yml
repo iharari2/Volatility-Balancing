@@ -59,12 +59,12 @@ jobs:
         run: pip install uv --quiet
 
       - name: Install deps
-        run: uv pip install --system -r backend/requirements.txt pytest pytest-xdist
+        run: uv pip install --system -r backend/requirements.txt pytest pytest-xdist pytest-timeout
 
       - name: Integration tests
         env:
           PYTHONPATH: backend
-        run: pytest backend/tests/integration -q --tb=short -n auto --dist worksteal
+        run: pytest backend/tests/integration -q --tb=short -n auto --dist worksteal --timeout=90
 
   frontend-build:
     runs-on: ubuntu-latest

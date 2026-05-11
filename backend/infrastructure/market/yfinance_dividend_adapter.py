@@ -167,6 +167,8 @@ class YFinanceDividendAdapter(DividendMarketDataRepo):
 
     def check_ex_dividend_today(self, ticker: str) -> Optional[Dividend]:
         """Check if today is ex-dividend date for a ticker."""
+        if self._deterministic_guard(ticker):
+            return None
         try:
             stock = yf.Ticker(ticker)
             info = stock.info
