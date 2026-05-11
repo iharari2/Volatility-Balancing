@@ -763,6 +763,8 @@ def _run_sim_job(job_id: str, ticker: str, start_date: datetime, end_date: datet
                  include_after_hours: bool, intraday_interval_minutes: int,
                  initial_asset_value: Optional[float] = None) -> None:
     """Run simulation in background thread and store result in _sim_jobs."""
+    import time
+    t0 = time.monotonic()
     try:
         simulation_uc = container.simulation_uc
         result = simulation_uc.run_simulation(
@@ -776,13 +778,19 @@ def _run_sim_job(job_id: str, ticker: str, start_date: datetime, end_date: datet
             intraday_interval_minutes=intraday_interval_minutes,
             simulation_id=job_id,
         )
+        elapsed = round(time.monotonic() - t0, 1)
+        built = _build_sim_result(result, ticker, job_id)
+        built["elapsed_seconds"] = elapsed
         _sim_jobs[job_id]["status"] = "completed"
-        _sim_jobs[job_id]["result"] = _build_sim_result(result, ticker, job_id)
+        _sim_jobs[job_id]["result"] = built
+        _sim_jobs[job_id]["elapsed_seconds"] = elapsed
+        print(f"[sim:{job_id[:8]}] completed in {elapsed}s")
     except Exception as exc:
         import traceback
         traceback.print_exc()
         _sim_jobs[job_id]["status"] = "failed"
         _sim_jobs[job_id]["error"] = str(exc)
+        _sim_jobs[job_id]["elapsed_seconds"] = round(time.monotonic() - t0, 1)
 
 
 @router.post("/simulation/run")
@@ -848,6 +856,7 @@ def get_simulation_status(
         "job_id": job_id,
         "status": job["status"],
         "started_at": job.get("started_at"),
+        "elapsed_seconds": job.get("elapsed_seconds"),
     }
     if job["status"] == "completed":
         response["result"] = job["result"]

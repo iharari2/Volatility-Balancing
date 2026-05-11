@@ -266,7 +266,9 @@ export default function SimulationLabPage() {
             ).then(r => r.ok ? r.json() : Promise.reject(new Error(`Poll failed: ${r.status}`)));
 
             if (status.status === 'completed') {
-              resolve(status.result);
+              const r = status.result;
+              if (status.elapsed_seconds != null) r._elapsed_seconds = status.elapsed_seconds;
+              resolve(r);
             } else if (status.status === 'failed') {
               reject(new Error(status.error || 'Simulation failed on server'));
             } else {

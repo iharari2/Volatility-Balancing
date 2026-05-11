@@ -101,6 +101,7 @@ interface SimulationResultsProps {
       price: number;
       normalized_return: number;
     }>;
+    _elapsed_seconds?: number;
   } | null;
 }
 
@@ -239,7 +240,12 @@ export default function SimulationResults({ result, onRerun, onDelete }: Simulat
   return (
     <div className="card space-y-8">
       <div className="flex items-center justify-between pb-4 border-b border-gray-100">
-        <h2 className="text-xl font-bold text-gray-900">Simulation Results</h2>
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">Simulation Results</h2>
+          {result._elapsed_seconds != null && (
+            <p className="text-xs text-gray-400 mt-0.5">Completed in {result._elapsed_seconds}s</p>
+          )}
+        </div>
         <div className="flex gap-2">
           {onRerun && (
             <button
