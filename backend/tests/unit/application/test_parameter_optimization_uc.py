@@ -190,9 +190,10 @@ class TestParameterOptimizationUC:
         mock_historical = [Mock()]
         mock_sim_data = Mock()
         mock_sim_data.price_data = [Mock()]
+        mock_market_storage = Mock()
         with patch.object(
             self.uc, '_prefetch_market_data',
-            return_value=(mock_historical, mock_sim_data, [])
+            return_value=(mock_historical, mock_sim_data, [], mock_market_storage)
         ):
             self.uc.run_optimization(config_id)
 

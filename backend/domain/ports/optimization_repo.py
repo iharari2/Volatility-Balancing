@@ -83,6 +83,16 @@ class OptimizationResultRepo(ABC):
         """Get only failed results for a configuration."""
         pass
 
+    def bulk_save_results(self, results: List[OptimizationResult]) -> None:
+        """Insert multiple new results in one transaction. Default: one-by-one fallback."""
+        for result in results:
+            self.save_result(result)
+
+    def batch_update_results(self, results: List[OptimizationResult]) -> None:
+        """Update multiple existing results in one transaction. Default: one-by-one fallback."""
+        for result in results:
+            self.save_result(result)
+
 
 class HeatmapDataRepo(ABC):
     """Repository interface for heatmap data."""

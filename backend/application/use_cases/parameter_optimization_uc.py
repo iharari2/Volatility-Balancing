@@ -157,16 +157,18 @@ class ParameterOptimizationUC:
             # Generate parameter combinations
             combinations = self._generate_parameter_combinations(config)
 
-            # Create initial results for each combination
-            for combination in combinations:
-                result = OptimizationResult(
+            # Create initial results in one bulk insert (avoids N individual INSERT+COMMIT)
+            initial_results = [
+                OptimizationResult(
                     id=uuid4(),
                     config_id=config_id,
                     parameter_combination=combination,
                     metrics={},
                     status=OptimizationResultStatus.PENDING,
                 )
-                self.result_repo.save_result(result)
+                for combination in combinations
+            ]
+            self.result_repo.bulk_save_results(initial_results)
 
             # Process each combination with real simulation
             self._process_parameter_combinations(config, combinations)
@@ -382,7 +384,7 @@ class ParameterOptimizationUC:
             except Exception as e:
                 print(f"[Optimization] Warning: Failed to fetch dividends: {e}")
 
-        return historical_data, sim_data, dividend_history
+        return historical_data, sim_data, dividend_history, market_storage
 
     def _build_position_config(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Map flat optimization parameters to nested position_config dict.
@@ -517,9 +519,11 @@ class ParameterOptimizationUC:
         self, config: OptimizationConfig, combinations: List[ParameterCombination]
     ) -> None:
         """Process parameter combinations using real simulation engine."""
-        # Prefetch market data once
+        # Prefetch market data once — reused across all combinations
         try:
-            historical_data, sim_data, dividend_history = self._prefetch_market_data(config)
+            historical_data, sim_data, dividend_history, market_storage = (
+                self._prefetch_market_data(config)
+            )
         except Exception as e:
             print(f"[Optimization] Failed to prefetch market data: {e}")
             traceback.print_exc()
@@ -535,6 +539,10 @@ class ParameterOptimizationUC:
             r.parameter_combination.combination_id: r for r in existing_results
         }
 
+        # Batch saves: accumulate results and flush every BATCH_SIZE to reduce DB round-trips
+        BATCH_SIZE = 5
+        pending_saves: list = []
+
         for i, combination in enumerate(combinations):
             print(f"[Optimization] Processing combination {i + 1}/{total}: "
                   f"{combination.parameters}")
@@ -548,7 +556,7 @@ class ParameterOptimizationUC:
                 # Build position config from flat parameters
                 position_config = self._build_position_config(combination.parameters)
 
-                # Run real simulation with pre-fetched data
+                # Run simulation with pre-fetched data and pre-built storage (no rebuild per combo)
                 sim_result = self.simulation_uc.run_simulation_with_data(
                     ticker=config.ticker,
                     start_date=config.start_date,
@@ -559,6 +567,7 @@ class ParameterOptimizationUC:
                     initial_cash=config.initial_cash,
                     position_config=position_config,
                     lightweight=True,
+                    market_storage=market_storage,
                 )
 
                 # Map simulation result to optimization metrics
@@ -574,7 +583,6 @@ class ParameterOptimizationUC:
                     "dividend_events": getattr(sim_result, "dividend_events", []),
                 }
                 result.mark_completed(execution_time=elapsed)
-                self.result_repo.save_result(result)
 
                 print(f"[Optimization] Combination {i + 1}/{total} completed in {elapsed:.2f}s: "
                       f"return={metrics.get(OptimizationMetric.TOTAL_RETURN, 0):.2f}%, "
@@ -585,7 +593,12 @@ class ParameterOptimizationUC:
                 print(f"[Optimization] Combination {i + 1}/{total} failed after {elapsed:.2f}s: {e}")
                 traceback.print_exc()
                 result.mark_failed(str(e))
-                self.result_repo.save_result(result)
+
+            pending_saves.append(result)
+            is_last = (i == total - 1)
+            if len(pending_saves) >= BATCH_SIZE or is_last:
+                self.result_repo.batch_update_results(pending_saves)
+                pending_saves = []
 
         # Update config status to completed
         config.update_status(OptimizationStatus.COMPLETED)

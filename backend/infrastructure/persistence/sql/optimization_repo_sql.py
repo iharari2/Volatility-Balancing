@@ -379,6 +379,35 @@ class SQLOptimizationResultRepo(OptimizationResultRepo):
                 session.add(_result_to_model(result))
             session.commit()
 
+    def bulk_save_results(self, results: List[OptimizationResult]) -> None:
+        """Insert multiple new results in a single transaction."""
+        if not results:
+            return
+        with self._sf() as session:
+            for result in results:
+                session.add(_result_to_model(result))
+            session.commit()
+
+    def batch_update_results(self, results: List[OptimizationResult]) -> None:
+        """Update multiple existing results in a single transaction."""
+        if not results:
+            return
+        with self._sf() as session:
+            ids = [str(r.id) for r in results]
+            existing_map = {
+                m.id: m
+                for m in session.query(OptimizationResultModel)
+                .filter(OptimizationResultModel.id.in_(ids))
+                .all()
+            }
+            for result in results:
+                model = existing_map.get(str(result.id))
+                if model:
+                    self._update_model(model, result)
+                else:
+                    session.add(_result_to_model(result))
+            session.commit()
+
     def _update_model(self, model: OptimizationResultModel, entity: OptimizationResult):
         model.parameter_combination = {
             "parameters": entity.parameter_combination.parameters,

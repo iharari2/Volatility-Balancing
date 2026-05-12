@@ -123,6 +123,14 @@ class InMemoryOptimizationResultRepo(OptimizationResultRepo):
             if result.config_id == config_id and result.status == OptimizationResultStatus.FAILED
         ]
 
+    def bulk_save_results(self, results: List[OptimizationResult]) -> None:
+        for result in results:
+            self._results[result.parameter_combination.combination_id] = result
+
+    def batch_update_results(self, results: List[OptimizationResult]) -> None:
+        for result in results:
+            self._results[result.parameter_combination.combination_id] = result
+
 
 class InMemoryHeatmapDataRepo(HeatmapDataRepo):
     """In-memory implementation of heatmap data repository."""

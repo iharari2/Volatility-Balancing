@@ -437,6 +437,7 @@ class SimulationUnifiedUC:
         initial_cash: float = 10000.0,
         position_config: Optional[Dict[str, Any]] = None,
         lightweight: bool = False,
+        market_storage: Optional[MarketDataStorage] = None,
     ) -> SimulationResult:
         """Run simulation with pre-fetched market data.
 
@@ -469,10 +470,11 @@ class SimulationUnifiedUC:
         if not sim_data.price_data:
             raise ValueError(f"No price data available for {ticker} in the specified date range")
 
-        # Build a fresh MarketDataStorage from the provided historical data
-        market_storage = MarketDataStorage()
-        for price_point in historical_data:
-            market_storage.store_price_data(ticker, price_point)
+        # Use pre-built storage if provided (optimization reuses across combinations)
+        if market_storage is None:
+            market_storage = MarketDataStorage()
+            for price_point in historical_data:
+                market_storage.store_price_data(ticker, price_point)
 
         # Run algorithm simulation
         algo_result = self._simulate_algorithm_unified(
