@@ -373,8 +373,10 @@ class _Container:
             orders_repo=self.orders,
         )
 
-        # Update simulation UC with evaluation timeline now that it's initialized
-        self.simulation_uc.evaluation_timeline_repo = self.evaluation_timeline
+        # Intentionally NOT wiring evaluation_timeline_repo to simulation_uc.
+        # Each triggered trade was making 2 SQL round-trips to Neon (~150ms each),
+        # adding 20+s to long simulations. All trade data is already captured in
+        # trigger_analysis and time_series_data returned in the result.
 
         # --- New Clean Architecture: Adapters and Orchestrators ---
         # Create adapters

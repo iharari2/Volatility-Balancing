@@ -755,6 +755,7 @@ def _build_sim_result(result: Any, ticker: str, simulation_id: str) -> Dict[str,
         "time_series_data": result.time_series_data,
         "trade_log": result.trade_log,
         "trigger_analysis": result.trigger_analysis,
+        "debug_storage_info": result.debug_storage_info,
     }
 
 
